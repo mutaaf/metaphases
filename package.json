@@ -1,0 +1,28 @@
+{
+  "name": "metaphases",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "up": "bash scripts/up.sh",
+    "dev": "bash scripts/up.sh --dev",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
+    "deploy": "npm run build && wrangler deploy",
+    "universe": "python3 scripts/build_universe.py"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261023.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.0",
+    "wrangler": "^4.40.0"
+  }
+}

@@ -1,0 +1,385 @@
+// Metaphases API — a thin, cached layer over free data sources.
+//   /api/calendar?from&to   earnings events (Finnhub), filtered to tracked + large reporters
+//   /api/ticker/:symbol     the deep sheet: Compass grade, setup grade, reaction history, street view
+//   /api/macro              macro event strip (FRED release calendar + FOMC) and the Market Mood index
+// Every route is "graceful in failure" (Compass UX principle #2/#3): partial data + warnings, never a blank 500.
+import universe from "../data/universe.json";
+import type { CalendarResponse, EarningsEvent, MacroResponse, Session, TickerResponse, Reaction, MoodComponent, MacroEvent } from "../shared/types";
+import { compassGrade, setupGrade, rsi, sma } from "../shared/grades";
+import { FOMC, HOLIDAYS } from "../shared/market";
+
+interface Env {
+  FINNHUB_API_KEY: string;
+  FRED_API_KEY: string;
+  ASSETS: Fetcher;
+}
+
+const U = universe as Record<string, { n: string; mc: number }>;
+const FH = "https://finnhub.io/api/v1";
+const UA = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", Accept: "application/json" };
+
+// ── tiny cache helper on the edge Cache API (free, per-colo) ─────────────
+async function cached<T>(key: string, ttl: number, ctx: ExecutionContext, fn: () => Promise<T>): Promise<T> {
+  const cache = caches.default;
+  const req = new Request(`https://cache.metaphases.internal/${encodeURIComponent(key)}`);
+  const hit = await cache.match(req);
+  if (hit) return (await hit.json()) as T;
+  const val = await fn();
+  ctx.waitUntil(cache.put(req, new Response(JSON.stringify(val), { headers: { "Cache-Control": `public, max-age=${ttl}`, "Content-Type": "application/json" } })));
+  return val;
+}
+
+async function getJson<T = any>(url: string, headers: Record<string, string> = {}): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(url, { headers, cf: { cacheTtl: 60 } } as RequestInit);
+    if (r.status === 429 && attempt < 3) { await new Promise((ok) => setTimeout(ok, 700 * (attempt + 1))); continue; }
+    if (!r.ok) throw new Error(`${new URL(url).hostname} ${r.status}`);
+    return (await r.json()) as T;
+  }
+}
+
+/** Run async jobs with bounded concurrency (Finnhub's free tier dislikes bursts). */
+async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
+  const out: PromiseSettledResult<R>[] = new Array(items.length);
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) {
+      const k = i++;
+      try { out[k] = { status: "fulfilled", value: await fn(items[k]) }; } catch (reason) { out[k] = { status: "rejected", reason }; }
+    }
+  }));
+  return out;
+}
+
+const json = (data: unknown, maxAge = 300) =>
+  new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${maxAge}`, "Access-Control-Allow-Origin": "*" } });
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+const addDays = (s: string, n: number) => { const d = new Date(s + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+const todayNY = () => new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+
+// ── /api/calendar ───────────────────────────────────────────────────────
+const BIG_REVENUE = 1e9; // untracked companies still appear if they're this large
+
+async function calendarDay(day: string, env: Env, ctx: ExecutionContext): Promise<EarningsEvent[]> {
+  const today = iso(todayNY());
+  const ttl = day < addDays(today, -3) ? 21600 : 1800; // settled history caches longer
+  return cached(`cal:v2:${day}`, ttl, ctx, async () => {
+    const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${day}&to=${day}&token=${env.FINNHUB_API_KEY}`);
+    const out: EarningsEvent[] = [];
+    for (const e of data.earningsCalendar ?? []) {
+      const tracked = e.symbol in U;
+      if (!tracked && !((e.revenueEstimate ?? 0) >= BIG_REVENUE || (e.revenueActual ?? 0) >= BIG_REVENUE)) continue;
+      if (!tracked && /[.\-]/.test(e.symbol)) continue; // skip foreign share classes without logos
+      out.push({ s: e.symbol, d: e.date, h: (e.hour || "") as Session, q: e.quarter, y: e.year, eE: e.epsEstimate, eA: e.epsActual, rE: e.revenueEstimate, rA: e.revenueActual, t: tracked ? 1 : 0 });
+    }
+    return out;
+  });
+}
+
+async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const from = url.searchParams.get("from") ?? iso(new Date());
+  const to = url.searchParams.get("to") ?? addDays(from, 34);
+  const days: string[] = [];
+  for (let d = from; d <= to && days.length < 45; d = addDays(d, 1)) {
+    const wd = new Date(d + "T12:00:00Z").getUTCDay();
+    if (wd !== 0 && wd !== 6) days.push(d);
+  }
+  const warnings: string[] = [];
+  const results = await pool(days, 6, (d) => calendarDay(d, env, ctx));
+  const events: EarningsEvent[] = [];
+  results.forEach((r, i) => (r.status === "fulfilled" ? events.push(...r.value) : warnings.push(`Couldn't load ${days[i]} — showing the rest.`)));
+  const body: CalendarResponse = { from, to, events, asOf: new Date().toISOString(), warnings };
+  return json(body, 600);
+}
+
+// ── Yahoo candles ───────────────────────────────────────────────────────
+interface Candles { t: number[]; o: number[]; h: number[]; l: number[]; c: number[] }
+async function candles(symbol: string, range: string, ctx: ExecutionContext): Promise<Candles> {
+  return cached(`yc:${symbol}:${range}`, 3600, ctx, async () => {
+    const hosts = ["query1", "query2"];
+    let lastErr: unknown;
+    for (const h of hosts) {
+      try {
+        const d = await getJson<any>(`https://${h}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`, UA);
+        const r = d.chart.result[0];
+        const q = r.indicators.quote[0];
+        const out: Candles = { t: [], o: [], h: [], l: [], c: [] };
+        r.timestamp.forEach((t: number, i: number) => {
+          if (q.close[i] == null) return;
+          out.t.push(t); out.o.push(q.open[i]); out.h.push(q.high[i]); out.l.push(q.low[i]); out.c.push(q.close[i]);
+        });
+        return out;
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
+  });
+}
+const nyDate = (t: number) => new Date(t * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+
+// ── /api/ticker/:symbol ────────────────────────────────────────────────
+async function ticker(symbol: string, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const k = env.FINNHUB_API_KEY;
+  const warnings: string[] = [];
+  const today = iso(todayNY());
+  const settle = async <T>(label: string, p: Promise<T>): Promise<T | null> => {
+    try { return await p; } catch { warnings.push(label); return null; }
+  };
+  const fh = <T>(path: string, ttl: number) => cached<T>(`fh:${path}`, ttl, ctx, () => getJson<T>(`${FH}/${path}${path.includes("?") ? "&" : "?"}token=${k}`));
+
+  const [profile, quote, metric, recs, surprises, upcoming, nasdaq, chart] = await Promise.all([
+    settle("Company profile unavailable.", fh<any>(`stock/profile2?symbol=${symbol}`, 86400)),
+    settle("Live quote unavailable.", fh<any>(`quote?symbol=${symbol}`, 120)),
+    settle("Fundamentals unavailable — quality grade skipped.", fh<any>(`stock/metric?symbol=${symbol}&metric=all`, 21600)),
+    settle("Analyst ratings unavailable.", fh<any[]>(`stock/recommendation?symbol=${symbol}`, 43200)),
+    settle("Earnings history unavailable.", fh<any[]>(`stock/earnings?symbol=${symbol}`, 21600)),
+    settle("Upcoming date unavailable.", fh<any>(`calendar/earnings?symbol=${symbol}&from=${addDays(today, -40)}&to=${addDays(today, 120)}`, 3600)),
+    settle("Past report dates unavailable — reaction history skipped.", cached<any>(`nq:surprise:${symbol}`, 43200, ctx, () => getJson(`https://api.nasdaq.com/api/company/${symbol}/earnings-surprise`, UA))),
+    settle("Price history unavailable — setup grade skipped.", candles(symbol, "2y", ctx)),
+  ]);
+
+  const cal: any[] = upcoming?.earningsCalendar ?? [];
+  const nextE = cal.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
+  const lastE = cal.filter((e) => e.date < today).sort((a, b) => b.date.localeCompare(a.date))[0];
+  const habit: Session = (nextE?.hour || lastE?.hour || "") as Session;
+
+  // Past prints: Nasdaq gives report dates; Finnhub gives estimate/actual. Join on order (both newest-first).
+  const rows: any[] = nasdaq?.data?.earningsSurpriseTable?.rows ?? [];
+  const history: Reaction[] = [];
+  const closeOn = (day: string, offset: number) => {
+    if (!chart) return null;
+    const dates = chart.t.map(nyDate);
+    let i = dates.findIndex((d) => d >= day);
+    if (i < 0) return null;
+    if (dates[i] !== day && offset === 0) return null;
+    i += offset;
+    return i >= 0 && i < chart.c.length ? chart.c[i] : null;
+  };
+  rows.slice(0, 8).forEach((r, i) => {
+    const [mm, dd, yy] = String(r.dateReported).split("/");
+    const date = `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+    const f = surprises?.[i];
+    const session: Session = lastE && lastE.date === date ? (lastE.hour as Session) : habit;
+    let move: number | null = null;
+    const before = session === "bmo" ? closeOn(date, -1) : closeOn(date, 0);
+    const after = session === "bmo" ? closeOn(date, 0) : closeOn(date, 1);
+    if (before && after) move = ((after - before) / before) * 100;
+    const epsA = typeof r.eps === "number" ? r.eps : parseFloat(r.eps);
+    const epsE = parseFloat(r.consensusForecast);
+    history.push({
+      date, session, period: r.fiscalQtrEnd,
+      epsE: Number.isFinite(epsE) ? epsE : f?.estimate ?? null,
+      epsA: Number.isFinite(epsA) ? epsA : f?.actual ?? null,
+      surprisePct: parseFloat(r.percentageSurprise) || f?.surprisePercent || null,
+      move,
+    });
+  });
+  // Fall back to Finnhub's four quarters if Nasdaq was unreachable.
+  if (!history.length && surprises?.length) {
+    for (const f of surprises.slice(0, 4)) history.push({ date: f.period, session: "", period: f.period, epsE: f.estimate, epsA: f.actual, surprisePct: f.surprisePercent, move: null });
+  }
+  // A print reported in the last ~40 days might be on Finnhub's calendar before Nasdaq's table catches up.
+  if (lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date)) {
+    const b = lastE.hour === "bmo" ? closeOn(lastE.date, -1) : closeOn(lastE.date, 0);
+    const a = lastE.hour === "bmo" ? closeOn(lastE.date, 0) : closeOn(lastE.date, 1);
+    history.unshift({ date: lastE.date, session: lastE.hour, period: `Q${lastE.quarter} ${lastE.year}`, epsE: lastE.epsEstimate, epsA: lastE.epsActual, surprisePct: lastE.epsEstimate ? ((lastE.epsActual - lastE.epsEstimate) / Math.abs(lastE.epsEstimate)) * 100 : null, move: b && a ? ((a - b) / b) * 100 : null });
+  }
+
+  const judged = history.filter((h) => h.epsA != null && h.epsE != null);
+  const beats = judged.filter((h) => (h.epsA as number) >= (h.epsE as number)).length;
+  const beatRate = judged.length ? { beats, total: judged.length } : null;
+  const moves = history.map((h) => h.move).filter((m): m is number => m != null);
+  const expectedMove = moves.length ? moves.reduce((a, b) => a + Math.abs(b), 0) / moves.length : null;
+
+  const compass = metric?.metric ? compassGrade(metric.metric) : { score: null, grade: null, factors: [] };
+  const setup = chart && chart.c.length > 60
+    ? setupGrade({ close: chart.c, high: chart.h, low: chart.l, beatRate: beatRate ? beatRate.beats / beatRate.total : null })
+    : { score: null, grade: null, factors: [], trend: "—", rsi: null, atrPct: null, from52wHigh: null };
+
+  let street: TickerResponse["street"] = null;
+  if (recs?.length) {
+    const cur = recs[0];
+    const pct = (r: any) => { const t = r.strongBuy + r.buy + r.hold + r.sell + r.strongSell; return t ? ((r.strongBuy + r.buy) / t) * 100 : 0; };
+    street = { buy: cur.strongBuy + cur.buy, hold: cur.hold, sell: cur.sell + cur.strongSell, period: cur.period, buyPctChange3m: recs[3] ? pct(cur) - pct(recs[3]) : null };
+  }
+
+  const name = profile?.name || U[symbol]?.n || symbol;
+  const read: string[] = [];
+  if (nextE) {
+    const when = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "(time not yet confirmed)" }[nextE.hour as Session] ?? "";
+    read.push(`${name} reports Q${nextE.quarter} on ${new Date(nextE.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })} ${when}.`);
+  }
+  if (nextE?.epsEstimate != null && history[0]?.epsA != null) {
+    read.push(`Wall Street expects $${nextE.epsEstimate.toFixed(2)} a share, versus $${history[0].epsA.toFixed(2)} last quarter.`);
+  }
+  if (beatRate) read.push(`It has beaten the estimate in ${beats} of its last ${judged.length} reports.`);
+  if (expectedMove != null) read.push(`The stock has moved about ±${expectedMove.toFixed(1)}% on a typical report — that's the size of swing to be ready for.`);
+  if (setup.grade) read.push(`Into the print it's in ${/^[aeiou]/i.test(setup.trend) ? "an" : "a"} ${setup.trend.toLowerCase()}${setup.rsi != null ? ` with RSI ${setup.rsi.toFixed(0)}` : ""}.`);
+  if (compass.grade) read.push(`As a long-term holding it grades ${compass.grade} on Compass quality.`);
+
+  const body: TickerResponse = {
+    symbol,
+    profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, marketCap: profile.marketCapitalization, exchange: profile.exchange, ipo: profile.ipo } : null,
+    quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
+    next: nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate } : null,
+    compass, setup, history, expectedMove, beatRate, street,
+    spark: chart ? chart.c.slice(-126) : [],
+    read, warnings,
+  };
+  return json(body, 300);
+}
+
+// ── /api/macro ─────────────────────────────────────────────────────────
+const RELEASES: { id: number; key: string; name: string; kind: MacroEvent["kind"]; blurb: string }[] = [
+  { id: 50, key: "jobs", name: "Jobs report", kind: "jobs", blurb: "How many jobs the economy added last month, plus the unemployment rate. Strong hiring can mean higher rates for longer." },
+  { id: 10, key: "cpi", name: "CPI inflation", kind: "inflation", blurb: "How fast consumer prices are rising. Hotter-than-expected readings tend to hit growth stocks hardest." },
+  { id: 46, key: "ppi", name: "PPI", kind: "inflation", blurb: "Inflation at the wholesale level — an early hint at where consumer prices are heading." },
+  { id: 54, key: "pce", name: "PCE inflation", kind: "inflation", blurb: "The Fed's preferred inflation gauge. It moves rate expectations." },
+  { id: 9, key: "retail", name: "Retail sales", kind: "consumer", blurb: "Are shoppers still spending? Consumer spending is about two-thirds of the US economy." },
+  { id: 53, key: "gdp", name: "GDP growth", kind: "growth", blurb: "The broadest scorecard of the economy's growth over a quarter." },
+  { id: 192, key: "jolts", name: "Job openings", kind: "jobs", blurb: "How many positions employers are trying to fill — a read on labor-market tightness." },
+];
+
+async function macro(env: Env, ctx: ExecutionContext): Promise<Response> {
+  const warnings: string[] = [];
+  const today = iso(todayNY());
+  const horizon = addDays(today, 150);
+  const events: MacroEvent[] = [];
+  const rel = await Promise.allSettled(
+    RELEASES.map((r) =>
+      cached(`fred:${r.id}:${today}`, 43200, ctx, () =>
+        getJson<any>(`https://api.stlouisfed.org/fred/release/dates?release_id=${r.id}&realtime_start=${addDays(today, -40)}&realtime_end=${horizon}&include_release_dates_with_no_data=true&file_type=json&api_key=${env.FRED_API_KEY}`),
+      ).then((d) => ({ r, dates: (d.release_dates ?? []).map((x: any) => x.date as string) })),
+    ),
+  );
+  for (const x of rel) {
+    if (x.status !== "fulfilled") continue;
+    for (const date of x.value.dates) events.push({ key: x.value.r.key, name: x.value.r.name, date, kind: x.value.r.kind, blurb: x.value.r.blurb });
+  }
+  if (rel.some((x) => x.status === "rejected")) warnings.push("Some economic release dates couldn't be loaded.");
+  for (const f of FOMC) events.push({ key: "fomc", name: "FOMC decision", date: f.date, kind: "fed", blurb: `The Federal Reserve announces interest rates at 2:00 PM ET${f.sep ? ", with fresh economic projections (the 'dot plot')" : ""}.${f.tentative ? " Date is tentative." : ""}` });
+  events.sort((a, b) => a.date.localeCompare(b.date));
+
+  let mood: MacroResponse["mood"] = null;
+  try {
+    mood = await cached(`mood:v1:${today}:${new Date().getUTCHours()}`, 3600, ctx, () => marketMood(ctx));
+  } catch {
+    warnings.push("Market Mood is resting — price data didn't load.");
+  }
+  const body: MacroResponse = { events, mood, holidays: HOLIDAYS, asOf: new Date().toISOString(), warnings };
+  return json(body, 900);
+}
+
+/** Market Mood: our own fear↔greed gauge, built the Market Digest way — explainable components, each 0-100. */
+async function marketMood(ctx: ExecutionContext): Promise<NonNullable<MacroResponse["mood"]>> {
+  const syms = ["SPY", "^VIX", "RSP", "HYG", "LQD", "TLT"] as const;
+  const series = await Promise.all(syms.map((s) => candles(s, "1y", ctx)));
+  const [spy, vix, rsp, hyg, lqd, tlt] = series.map((s) => s.c);
+  const clamp = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
+  const ret = (xs: number[], n: number, end: number) => (xs[end] / xs[end - n] - 1) * 100;
+
+  const at = (back: number): MoodComponent[] => {
+    const cut = (xs: number[]) => xs.slice(0, xs.length - back);
+    const s = cut(spy), v = cut(vix), r = cut(rsp), h = cut(hyg), l = cut(lqd), t = cut(tlt);
+    const e = (xs: number[]) => xs.length - 1;
+    const ma125 = sma(s, 125) ?? s[e(s)];
+    const mom = ((s[e(s)] - ma125) / ma125) * 100;
+    const vma = sma(v, 50) ?? v[e(v)];
+    const vixRel = ((v[e(v)] - vma) / vma) * 100;
+    const breadth = ret(r, 20, e(r)) - ret(s, 20, e(s));
+    const credit = ret(h, 20, e(h)) - ret(l, 20, e(l));
+    const haven = ret(s, 20, e(s)) - ret(t, 20, e(t));
+    const strength = rsi(s.slice(-120)) ?? 50;
+    return [
+      { key: "momentum", label: "Momentum", score: clamp(50 + mom * 6), reading: `S&P ${mom >= 0 ? "+" : ""}${mom.toFixed(1)}% vs 125-day avg`, why: "Stocks well above their half-year average signal confidence; well below signals fear." },
+      { key: "volatility", label: "Volatility", score: clamp(50 - vixRel * 1.6), reading: `VIX ${v[e(v)].toFixed(1)} (${vixRel >= 0 ? "+" : ""}${vixRel.toFixed(0)}% vs 50-day)`, why: "The VIX is the market's 'fear gauge' — it spikes when investors pay up for protection." },
+      { key: "breadth", label: "Breadth", score: clamp(50 + breadth * 10), reading: `Equal-weight ${breadth >= 0 ? "leads" : "lags"} by ${Math.abs(breadth).toFixed(1)} pts`, why: "When the average stock keeps up with the giants, the rally is broad and healthy." },
+      { key: "credit", label: "Junk bond demand", score: clamp(50 + credit * 18), reading: `High-yield ${credit >= 0 ? "beats" : "trails"} investment-grade by ${Math.abs(credit).toFixed(1)} pts`, why: "Investors reach for riskier bonds when they feel safe — and flee them when they don't." },
+      { key: "haven", label: "Safe-haven demand", score: clamp(50 + haven * 5), reading: `Stocks ${haven >= 0 ? "beat" : "trail"} Treasuries by ${Math.abs(haven).toFixed(1)} pts (20d)`, why: "Money rushing into Treasuries is a classic sign of fear." },
+      { key: "strength", label: "Price strength", score: clamp(strength * 1.15 - 7), reading: `S&P RSI ${strength.toFixed(0)}`, why: "RSI above 70 means stocks are running hot; under 30 means washed out." },
+    ];
+  };
+  const score = (cs: MoodComponent[]) => Math.round(cs.reduce((a, c) => a + c.score, 0) / cs.length);
+  const components = at(0);
+  const history: number[] = [];
+  for (let b = 59; b >= 0; b--) history.push(score(at(b)));
+  const s = score(components);
+  const label = s < 25 ? "Extreme fear" : s < 45 ? "Fear" : s <= 55 ? "Neutral" : s <= 75 ? "Greed" : "Extreme greed";
+  return { score: s, label, components, history };
+}
+
+// ── Share metadata: crawlers don't run JS, so rewrite <head> at the edge per URL ──
+const PAGES: Record<string, { title: string; desc: string }> = {
+  "/": { title: "Metaphases · Every earnings report, phase by phase", desc: "Who reports, when, how they've moved before — and how much of your money rides on it. A calmer, deeper earnings calendar." },
+  "/watchlist": { title: "Your watchlist, in phases · Metaphases", desc: "Every company you track: when it reports next, its setup and Compass grades, and whether it's under your buy price." },
+  "/compass": { title: "Compass: what reports with your money · Metaphases", desc: "Paste your stocks and funds. See which earnings reports actually move your money over the next two months — looking through your ETFs." },
+  "/retrace": { title: "Retrace: how the reports really landed · Metaphases", desc: "Every report this month graded against Wall Street's consensus: beat rates, sector scorecards, the biggest surprises." },
+  "/learn": { title: "Learn the language of earnings · Metaphases", desc: "EPS, consensus, typical move, P/E, RSI — every term on Metaphases in plain English." },
+};
+const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
+
+async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ title: string; desc: string } | null> {
+  const t = url.pathname.match(/^\/t\/([A-Za-z.\-]{1,10})$/)?.[1] ?? url.searchParams.get("t");
+  if (t) {
+    const sym = t.toUpperCase();
+    try {
+      const r = await ticker(sym, env, ctx);
+      const d = (await r.json()) as TickerResponse;
+      const name = d.profile?.name ?? U[sym]?.n ?? sym;
+      const when = d.next ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
+      const title = when ? `${sym} reports ${when} ${SESSION_WORDS[d.next!.session]} · Metaphases`.replace("  ", " ") : `${name} (${sym}) earnings · Metaphases`;
+      const bits = [
+        d.beatRate ? `Beat ${d.beatRate.beats} of its last ${d.beatRate.total}` : null,
+        d.expectedMove != null ? `typical move ±${d.expectedMove.toFixed(1)}%` : null,
+        d.setup.grade ? `setup ${d.setup.grade}` : null,
+        d.compass.grade ? `Compass quality ${d.compass.grade}` : null,
+      ].filter(Boolean);
+      const desc = `${name}${d.next?.epsE != null ? ` — Street expects $${d.next.epsE.toFixed(2)} EPS` : ""}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
+      return { title, desc };
+    } catch { return { title: `${sym} earnings · Metaphases`, desc: PAGES["/"].desc }; }
+  }
+  const day = url.searchParams.get("day");
+  if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    const label = new Date(day + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
+    try {
+      const evs = (await calendarDay(day, env, ctx)).filter((e) => e.t).sort((a, b) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0));
+      const top = evs.slice(0, 4).map((e) => e.s).join(", ");
+      return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };
+    } catch { return { title: `Earnings on ${label} · Metaphases`, desc: PAGES["/"].desc }; }
+  }
+  return PAGES[url.pathname] ?? null;
+}
+
+async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const url = new URL(req.url);
+  const res = await env.ASSETS.fetch(new Request(new URL("/", url), req));
+  const meta = await shareMeta(url, env, ctx);
+  if (!meta) return res;
+  const canonical = `https://metaphases.com${url.pathname}${url.search}`;
+  const set = (attr: string) => ({ element(el: Element) { el.setAttribute(attr, attr === "href" ? canonical : el.getAttribute("property")?.endsWith("description") || el.getAttribute("name")?.endsWith("description") ? meta.desc : el.getAttribute("property") === "og:url" ? canonical : meta.title); } });
+  return new HTMLRewriter()
+    .on("title", { element(el) { el.setInnerContent(meta.title); } })
+    .on('meta[property="og:title"], meta[name="twitter:title"]', set("content"))
+    .on('meta[name="description"], meta[property="og:description"], meta[name="twitter:description"]', set("content"))
+    .on('meta[property="og:url"]', set("content"))
+    .on('link[rel="canonical"]', set("href"))
+    .transform(new Response(res.body, { status: 200, headers: (() => { const h = new Headers(res.headers); h.set("Content-Type", "text/html; charset=utf-8"); h.set("Cache-Control", "public, max-age=300"); return h; })() }));
+}
+
+export default {
+  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(req.url);
+    try {
+      if (url.pathname === "/api/calendar") return await calendar(url, env, ctx);
+      if (url.pathname === "/api/macro") return await macro(env, ctx);
+      const m = url.pathname.match(/^\/api\/ticker\/([A-Za-z.\-]{1,10})$/);
+      if (m) return await ticker(m[1].toUpperCase(), env, ctx);
+      if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 0);
+      const isPage = req.method === "GET" && !/\.[a-z0-9]{2,6}$/i.test(url.pathname);
+      if (isPage) return await page(req, env, ctx);
+      return env.ASSETS.fetch(req);
+    } catch (e) {
+      return new Response(JSON.stringify({ error: "We couldn't reach the market data service. Try again in a moment.", detail: String(e) }), { status: 502, headers: { "Content-Type": "application/json" } });
+    }
+  },
+} satisfies ExportedHandler<Env>;
