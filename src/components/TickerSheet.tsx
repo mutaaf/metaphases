@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { Factor, Reaction, TickerResponse } from "../../shared/types";
 import { useTicker } from "../lib/api";
-import { co, heldVia, nameOf, ETF_ASOF } from "../lib/data";
+import { co, curOf, heldVia, nameOf, ETF_ASOF } from "../lib/data";
 import { daysBetween, fmtLong, todayISO } from "../lib/dates";
-import { eps, mcap, money, pct } from "../lib/format";
+import { currencyName, eps, epsIn, isUsd, money, moneyIn, pct } from "../lib/format";
 import { actions, useStore } from "../lib/store";
 import { BASE } from "../lib/router";
 import { AiPreviewMount } from "./ai/mount";
@@ -103,6 +103,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   const w = watch.find((x) => x.s === symbol);
   const c = co(symbol);
   const name = data?.profile?.name ?? nameOf(symbol);
+  const estCur = data?.next?.currency ?? curOf(symbol);
   const via = heldVia(symbol, holdings);
   const direct = holdings.find((h) => h.s === symbol);
   const today = todayISO();
@@ -128,7 +129,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
         <header className="sheet-head">
           <Tile s={symbol} size={56} force="logo" />
           <div className="sheet-id">
-            <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{data?.profile?.marketCap ? ` · ${mcap(data.profile.marketCap)}` : ""}</span>
+            <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{data?.profile?.marketCap ? ` · ${moneyIn(data.profile.marketCap * 1e6, data.profile.currency)}` : ""}</span>
             <h2>{name}</h2>
             {everyday && <p className="sheet-does">{whatTheyDo(name, data?.profile?.industry ?? c?.ind)}</p>}
             {data?.quote ? (
@@ -160,10 +161,11 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                   <span className="muted"><Term k={data.next.session || "bmo"}>{PHASE_LABEL[data.next.session]}</Term>{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>
                 </div>
                 <dl className="nc-stats">
-                  <div><dt><Term k="consensus">EPS est</Term></dt><dd>{eps(data.next.epsE)}</dd></div>
-                  <div><dt><Term k="revenue">Revenue est</Term></dt><dd>{money(data.next.revE)}</dd></div>
+                  <div><dt><Term k="consensus">EPS est</Term></dt><dd>{epsIn(data.next.epsE, estCur)}</dd></div>
+                  <div><dt><Term k="revenue">Revenue est</Term></dt><dd>{moneyIn(data.next.revE, estCur)}</dd></div>
                   <div><dt><Term k="expectedmove">Typical move</Term></dt><dd>{data.expectedMove != null ? `±${data.expectedMove.toFixed(1)}%` : "—"}</dd></div>
                 </dl>
+                {!isUsd(estCur) && <p className="nc-cur muted small">Estimates are in <Term k="reportingcurrency">{currencyName(estCur)}</Term>, not US dollars. Past results below are in US dollars.</p>}
               </section>
             )}
 

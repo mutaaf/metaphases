@@ -1,6 +1,7 @@
 // 9:16 story cards (1080×1920) for sharing to Instagram / WhatsApp stories. Pure SVG builders —
 // the worker rasterizes them with resvg-wasm (worker/og.ts). Same brand as the 1200×630 card.
 import type { Session } from "./types";
+import { epsIn } from "./currency";
 
 const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const INK = "#111114", PAPER = "#edeae2", ACCENT = "#2346d8", MUTED = "#6b675e";
@@ -40,7 +41,7 @@ ${body}
 const lines = (ls: string[], x: number, y: number, size: number, lh: number, attrs: string) =>
   ls.map((l, i) => `<text x="${x}" y="${y + i * lh}" font-size="${size}" ${attrs}>${xml(l)}</text>`).join("\n");
 
-export interface StoryTicker { symbol: string; name: string; does: string; when: string; session: Session; epsE: number | null; move: number | null; grade: string | null; beats: number | null; total: number | null }
+export interface StoryTicker { symbol: string; name: string; does: string; when: string; session: Session; epsE: number | null; cur?: string; move: number | null; grade: string | null; beats: number | null; total: number | null }
 
 export function storyTickerSvg(d: StoryTicker): string {
   const symSize = d.symbol.length > 4 ? 190 : 240;
@@ -53,7 +54,7 @@ ${phase(d.session, 880, 470, 92)}
 ${lines(wrap(d.name, 26), 96, 650, 52, 62, `font-family="Schibsted Grotesk" font-weight="700" fill="#3b3a37"`)}
 ${lines(wrap(d.does, 34), 96, 770, 40, 54, `font-family="Schibsted Grotesk" fill="#3b3a37"`)}
 ${lines(wrap(`Reports ${d.when}`, 26), 96, 960, 72, 80, `font-family="Instrument Serif" font-style="italic" fill="${ACCENT}"`)}
-${stat(1180, "WALL STREET EXPECTS", d.epsE != null ? `$${d.epsE.toFixed(2)} a share` : "—")}
+${stat(1180, "WALL STREET EXPECTS", d.epsE != null ? `${epsIn(d.epsE, d.cur)} a share` : "—")}
 ${stat(1350, "USUALLY MOVES", d.move != null ? `±${d.move.toFixed(1)}%` : "—")}
 ${stat(1520, "QUALITY GRADE · BEAT RECORD", `${d.grade ?? "—"} · ${d.beats != null && d.total ? `${d.beats} of ${d.total}` : "—"}`)}`;
   return frame("This week's report", body);

@@ -47,9 +47,9 @@ export interface Reaction {
 
 export interface TickerResponse {
   symbol: string;
-  profile: { name: string; logo: string; industry: string; country: string; web: string; marketCap: number; exchange: string; ipo: string } | null;
+  profile: { name: string; logo: string; industry: string; country: string; web: string; marketCap: number; /** Currency of marketCap (Finnhub profile; local for many foreign filers). */ currency?: string; exchange: string; ipo: string } | null;
   quote: { price: number; change: number; changePct: number; prevClose: number; asOf: number } | null;
-  next: { date: string; session: Session; quarter: number; year: number; epsE: number | null; revE: number | null } | null;
+  next: { date: string; session: Session; quarter: number; year: number; epsE: number | null; revE: number | null; /** ISO code of epsE/revE. "" = not dollars, currency unknown. */ currency?: string } | null;
   compass: { score: number | null; grade: Grade | null; factors: Factor[] };
   setup: { score: number | null; grade: Grade | null; factors: Factor[]; trend: string; rsi: number | null; atrPct: number | null; from52wHigh: number | null };
   history: Reaction[];

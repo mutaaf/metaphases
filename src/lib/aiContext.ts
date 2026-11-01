@@ -7,7 +7,7 @@ import type { Holding } from "./store";
 
 const slimEvent = (e: EarningsEvent) => {
   const c = co(e.s);
-  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.h, eE: e.eE, eA: e.eA, rE: e.rE, rA: e.rA, res: resultOf(e) ?? undefined };
+  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.h, eE: e.eE, eA: e.eA, rE: e.rE, rA: e.rA, cur: c?.ec, res: resultOf(e) ?? undefined };
 };
 
 export function slimMacro(m: MacroResponse | null | undefined, from: string, to: string) {

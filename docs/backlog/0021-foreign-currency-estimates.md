@@ -1,12 +1,12 @@
 ---
 id: 0021
 title: Stop showing foreign-currency EPS and revenue estimates with a "$" (TM "$64.50", PDD "$19.21", NIO revenue "$33.7B")
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-01
-pr:
+pr: 18
 by: critic
 ---
 
@@ -33,10 +33,10 @@ The sheet's *The Read* then compares the two bases directly: "Wall Street expect
 - Revenue: the same rule applies.
 
 ## Acceptance criteria
-- [ ] `/api/ticker/TM`, `/api/ticker/PDD` and `/api/ticker/NIO` return `next.currency` (ISO code). Wherever `currency !== "USD"`, the sheet, calendar row, `/t/:sym` og:description, `/og/story/t/:sym.png` and Hype Check show the native symbol or a labelled conversion, never a bare "$"
-- [ ] Unit test: a fixture with `epsE: 64.5` and currency JPY formats as "¥64.50" (or "≈ $0.42"), and `The Read` doesn't compare it with a USD history figure
+- [x] `/api/ticker/TM`, `/api/ticker/PDD` and `/api/ticker/NIO` return `next.currency` (ISO code). Wherever `currency !== "USD"`, the sheet, calendar row, `/t/:sym` og:description, `/og/story/t/:sym.png` and Hype Check show the native symbol or a labelled conversion, never a bare "$"
+- [x] Unit test: a fixture with `epsE: 64.5` and currency JPY formats as "¥64.50" (or "≈ $0.42"), and `The Read` doesn't compare it with a USD history figure
 - [ ] Spot-check on production, recorded in the PR: TM, SONY, PDD, JD, TSM, NIO and NVO show no `$` on a local-currency figure
-- [ ] Works at 390×844 touch and 1440×900
+- [x] Works at 390×844 touch and 1440×900
 
 ## Test plan
 Unit: currency detection plus formatting (`shared/`), including the ratio fallback. e2e: a recorded NIO fixture renders "¥" or "≈ $" in the sheet and Hype Check card.

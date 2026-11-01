@@ -36,6 +36,13 @@ for i, (sym, base) in enumerate(universe.items()):
         done[sym] = {"n": p["name"], "logo": p.get("logo") or "", "mc": round(p.get("marketCapitalization") or 0),
                      "ind": p.get("finnhubIndustry") or "", "sec": base.get("sector") or p.get("finnhubIndustry") or "",
                      "c": p.get("country") or "", "web": p.get("weburl") or "", "sp": base["sp500"]}
+        # Estimate currency (Finnhub calendar EPS/revenue for foreign filers is in it, not USD). Only
+        # stored when it isn't USD. If Finnhub gives no estimateCurrency, keep the last-known value.
+        ec = (p.get("estimateCurrency") or "").upper().replace("RMB", "CNY")
+        if not ec and old.get(sym, {}).get("ec"):
+            ec = old[sym]["ec"]
+        if ec and ec != "USD":
+            done[sym]["ec"] = ec
     else:
         print("no profile", sym)
     if i % 25 == 0:

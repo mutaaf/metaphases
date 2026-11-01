@@ -2,7 +2,7 @@ import universeRaw from "../../data/universe.json";
 import etfRaw from "../../data/etf_holdings.json";
 import type { EarningsEvent } from "../../shared/types";
 
-export interface Co { n: string; logo: string; mc: number; ind: string; sec: string; c: string; web: string; sp: boolean }
+export interface Co { n: string; logo: string; mc: number; ind: string; sec: string; c: string; web: string; sp: boolean; ec?: string }
 // Non-S&P names carry Finnhub industry labels; fold them into the 11 GICS sectors.
 const GICS: Record<string, string> = {
   Technology: "Information Technology", Semiconductors: "Information Technology", "Financial Services": "Financials", Banking: "Financials",
@@ -23,6 +23,8 @@ export const ETF_ASOF = (etfRaw as { asOf: string }).asOf;
 
 export const co = (s: string): Co | undefined => UNIVERSE[s];
 export const nameOf = (s: string) => UNIVERSE[s]?.n ?? s;
+/** Currency of a company's estimates ("USD" unless the universe knows it reports in another). */
+export const curOf = (s: string): string => UNIVERSE[s]?.ec ?? "USD";
 /** Popularity proxy: market cap (millions). Untracked large reporters fall in after the universe. */
 export const popularity = (e: EarningsEvent) => (UNIVERSE[e.s]?.mc ?? 0) + (e.rE ?? 0) / 1e9;
 

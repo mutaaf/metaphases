@@ -11,9 +11,9 @@ import { AiSpark, MoonLoader } from "../components/ai/mount";
 import { brainLabel, openAiSettings, streamAi, useAiSettings } from "../lib/ai";
 import { tickerContext } from "../lib/aiContext";
 import { useTicker } from "../lib/api";
-import { heldVia, nameOf, UNIVERSE } from "../lib/data";
+import { curOf, heldVia, nameOf, UNIVERSE } from "../lib/data";
 import { todayISO } from "../lib/dates";
-import { eps, money } from "../lib/format";
+import { currencyName, epsIn, isUsd, money } from "../lib/format";
 import { extractTickers, questionsFor, redFlags, type Flag } from "../lib/hype";
 import { movePlain, whatTheyDo, whenPlain } from "../lib/plain";
 import { BASE, param, setParam } from "../lib/router";
@@ -80,7 +80,7 @@ function HypeCard({ sym, caption }: { sym: string; caption: string }) {
         <div><dt>Next report</dt><dd>{data.next ? <><Phase h={data.next.session} size={14} /> {whenPlain(data.next.date, data.next.session, today)}</> : "Not announced yet"}</dd></div>
         <div><dt><Term k="compass">Quality grade</Term></dt><dd><GradeBadge g={data.compass.grade} /> <span className="muted small">long-term business quality</span></dd></div>
         <div><dt><Term k="expectedmove">Earnings-day swing</Term></dt><dd>{movePlain(data.expectedMove)}</dd></div>
-        {data.next?.epsE != null && <div><dt><Term k="consensus">Wall Street expects</Term></dt><dd>{eps(data.next.epsE)} a share this quarter</dd></div>}
+        {data.next?.epsE != null && <div><dt><Term k="consensus">Wall Street expects</Term></dt><dd>{epsIn(data.next.epsE, data.next.currency ?? curOf(sym))} a share this quarter{!isUsd(data.next.currency ?? curOf(sym)) && <> <span className="muted small">(in <Term k="reportingcurrency">{currencyName(data.next.currency ?? curOf(sym))}</Term>, not dollars)</span></>}</dd></div>}
       </dl>
       {owned > 0 && (
         <p className="hc-owned">You already own about <b>{money(owned)}</b> of it{via.length ? <> through {via.map((v) => v.etf).join(", ")}</> : null}{direct ? " (directly)" : ""}. Buying more adds to a bet you've already made.</p>
