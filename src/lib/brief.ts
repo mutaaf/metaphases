@@ -9,6 +9,7 @@ export interface BriefReporter { s: string; name: string; d: string; h: Session;
 export interface Brief {
   week: string[]; // Mon…Fri
   total: number; // every company reporting this week (share classes count once)
+  tracked: number; // of those, companies on the Metaphases watch list (matches the calendar's "Most popular" count)
   missingDays: string[]; // weekdays whose earnings didn't load (calendar warnings)
   macroComplete: boolean; // false when the economic calendar can't vouch for this week
   sp: number; // S&P 500 members reporting
@@ -70,6 +71,7 @@ export function buildBrief(
   return {
     week,
     total: companies.size,
+    tracked: ranked.length,
     missingDays,
     macroComplete,
     sp: spNames.size,

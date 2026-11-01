@@ -93,7 +93,7 @@ test("the week's brief: open on desktop, collapsed on phone, remembered, and its
   const head = brief.locator(".brief-head");
   await expect(head).toContainText("This week");
   await expect(head).toContainText("Nov 2–6");
-  await expect(head).toContainText("336 companies report");
+  await expect(head).toContainText(/\d+ popular companies report \(336 in all\)/);
   await expect(head).toHaveAttribute("aria-expanded", isMobile ? "false" : "true");
   if (isMobile) await head.click();
   await expect(brief.locator(".brief-co")).toHaveCount(5);
@@ -120,7 +120,7 @@ test("the brief follows navigation to another week", async ({ page }) => {
   await page.getByRole("button", { name: "Next", exact: true }).click();
   const head = page.locator(".brief-head");
   await expect(head).toContainText("Week of Nov 9–13");
-  await expect(head).toContainText(/\d+ companies report · (\d+|none) of the 10 largest/);
+  await expect(head).toContainText(/\d+ popular companies report \(\d+ in all\) · (\d+|none) of the 10 largest/);
   await expect(head).not.toContainText("336 companies");
 });
 

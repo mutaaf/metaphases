@@ -52,7 +52,7 @@ export function WeekBrief({ week, current, cal, calLoading, calError, macro, mac
             : !ready ? <Skeleton w={180} h={14} />
             : allMissing ? "Earnings for this week didn't load"
             : quiet ? "A quiet week"
-            : <>{atLeast}<b>{b.total}</b> {b.total === 1 ? "company reports" : "companies report"} · {bigLine} S&amp;P 500 companies</>}
+            : <>{atLeast}<b>{b.tracked}</b> popular {b.tracked === 1 ? "company reports" : "companies report"} ({b.total} in all) · {bigLine} S&amp;P 500 companies</>}
         </span>
         <span className={`chev ${open ? "up" : ""}`}><Icon name="down" size={12} /></span>
       </button>
