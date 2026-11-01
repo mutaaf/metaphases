@@ -1,7 +1,7 @@
 ---
 id: 0001
 title: The week's brief, a Market Digest-style preview atop the calendar
-status: ready
+status: in-progress
 priority: P1
 size: M
 lens: depth
