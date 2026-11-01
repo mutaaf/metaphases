@@ -1,12 +1,12 @@
 ---
 id: 0001
 title: The week's brief, a Market Digest-style preview atop the calendar
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: depth
 created: 2026-10-31
-pr:
+pr: 1
 by: operator
 ---
 
