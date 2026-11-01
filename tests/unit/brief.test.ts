@@ -39,9 +39,20 @@ describe("buildBrief", () => {
     mood: { score: 40, label: "Fear", components: [], history: [60, 51, 50, 49, 48, 47, 40] },
     holidays: [], asOf: "", warnings: [],
   };
-  const b = buildBrief(week, events, macro, U);
+  const T = "2026-10-31";
+  const b = buildBrief(week, events, [], macro, U, T);
 
-  it("counts every company reporting this week, and only this week", () => expect(b.total).toBe(6));
+  it("counts every company reporting this week, and only this week; share classes once", () => expect(b.total).toBe(5));
+  it("a complete week has no missing days and a covered economic calendar", () => { expect(b.missingDays).toEqual([]); expect(b.macroComplete).toBe(true); });
+  it("days that failed to load (calendar warnings) are flagged, holidays aside", () => {
+    const p = buildBrief(weekOf("2026-11-23"), [], ["Couldn't load 2026-11-24 — showing the rest.", "Couldn't load 2026-11-26 — showing the rest.", "Couldn't load 2026-12-01 — showing the rest."], macro, U, T);
+    expect(p.missingDays).toEqual(["2026-11-24"]);
+  });
+  it("the economic calendar can't vouch for weeks outside its window or when it warns", () => {
+    expect(buildBrief(weekOf("2026-08-03"), events, [], macro, U, T).macroComplete).toBe(false);
+    expect(buildBrief(weekOf("2027-06-07"), events, [], macro, U, T).macroComplete).toBe(false);
+    expect(buildBrief(week, events, [], { ...macro, warnings: ["FRED offline"] }, U, T).macroComplete).toBe(false);
+  });
   it("ranks the biggest reporters by market cap, one row per company", () => {
     expect(b.top.map((t) => t.s)).toEqual(["BIG", "GOOG", "NOSP", "SML"]);
     expect(b.top[0]).toMatchObject({ d: "2026-11-05", h: "bmo", name: "Big Co" });
@@ -54,13 +65,15 @@ describe("buildBrief", () => {
   it("lists this week's macro events in date order", () => expect(b.macro.map((m) => m.key)).toEqual(["jolts", "jobs"]));
   it("reports Market Mood with its 5-trading-day change", () => expect(b.mood).toEqual({ score: 40, label: "Fear", change5d: -11 }));
   it("is graceful without macro data", () => {
-    const n = buildBrief(week, events, null, U);
+    const n = buildBrief(week, events, [], null, U, T);
+    expect(n.macroComplete).toBe(false);
     expect(n.mood).toBeNull();
     expect(n.macro).toEqual([]);
   });
   it("an empty holiday week has no reporters but names the holiday", () => {
     const thanksgiving = weekOf("2026-11-23");
-    const e = buildBrief(thanksgiving, [], null, U);
+    const e = buildBrief(thanksgiving, [], [], null, U, T);
+    expect(e.missingDays).toEqual([]);
     expect(e.total).toBe(0);
     expect(e.top).toEqual([]);
     expect(e.holidays).toEqual([{ date: "2026-11-26", name: "Thanksgiving" }]);
@@ -69,7 +82,7 @@ describe("buildBrief", () => {
 
 describe("buildBrief on recorded fixtures (week of Nov 2, 2026)", () => {
   const cal = fx<CalendarResponse>("calendar-2026-11.json");
-  const b = buildBrief(week, cal.events, fx<MacroResponse>("macro.json"), UNIVERSE);
+  const b = buildBrief(week, cal.events, cal.warnings, fx<MacroResponse>("macro.json"), UNIVERSE, "2026-10-31");
   it("matches the fixture's own counts", () => {
     expect(b.total).toBe(336);
     expect(b.top[0].s).toBe("AAPL");

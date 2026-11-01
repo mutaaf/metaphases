@@ -31,6 +31,9 @@ export const GLOSSARY: Record<string, { term: string; def: string; eg?: string }
   lookthrough: { term: "Look-through", def: "Seeing the companies inside your funds. If you own VOO, you own a slice of Apple — so Apple's report affects you too." },
   retrace: { term: "Retrace", def: "Grading the record after the fact: how reports actually landed versus what was expected. Borrowed from Market Digest, which grades its own picks against next-day prices." },
   sp500: { term: "S&P 500", def: "An index of about 500 of the largest US public companies. When people say \"the market\", they usually mean this." },
+  ppi: { term: "PPI", def: "Producer Price Index — what businesses pay for goods and services. It often shows inflation before consumers feel it." },
+  pce: { term: "PCE inflation", def: "Personal Consumption Expenditures prices — the inflation measure the Federal Reserve targets (2% a year)." },
+  gdp: { term: "GDP growth", def: "Gross Domestic Product — the total value of everything the US economy produces. Its growth rate is the broadest read on whether the economy is expanding." },
   fomc: { term: "FOMC", def: "The Federal Reserve committee that sets US interest rates. It meets eight times a year." },
   cpi: { term: "CPI", def: "Consumer Price Index — the most-watched measure of inflation." },
 };

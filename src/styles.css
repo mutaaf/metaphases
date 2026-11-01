@@ -398,7 +398,6 @@ button.chip:hover { border-color: var(--ink); }
 .colophon a { color: var(--accent); text-decoration: none; }
 
 /* ── Week brief ── */
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .brief { border: 1px solid var(--line); background: var(--paper); margin: 0 0 18px; }
 .brief-head { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; padding: 10px 16px; background: none; border: 0; color: var(--ink); text-align: left; cursor: pointer; }
 .brief-when { color: var(--accent); flex: none; }

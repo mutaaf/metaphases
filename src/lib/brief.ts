@@ -1,13 +1,16 @@
 // The week's brief: a 30-second read of who reports and what else moves markets this week.
 // Pure and deterministic — built from data the calendar already loaded, no extra API calls.
 import type { EarningsEvent, MacroResponse, MacroEvent, Session } from "../../shared/types";
+import { addDays } from "./dates";
 import { HOLIDAYS } from "../../shared/market";
 import type { Co } from "./data";
 
 export interface BriefReporter { s: string; name: string; d: string; h: Session; mc: number }
 export interface Brief {
   week: string[]; // Mon…Fri
-  total: number; // every company reporting this week
+  total: number; // every company reporting this week (share classes count once)
+  missingDays: string[]; // weekdays whose earnings didn't load (calendar warnings)
+  macroComplete: boolean; // false when the economic calendar can't vouch for this week
   sp: number; // S&P 500 members reporting
   largest: { reporting: string[]; of: number }; // which of the 10 largest S&P 500 companies report
   top: BriefReporter[]; // up to 5 biggest by market cap
@@ -33,11 +36,19 @@ export function largestSP(universe: Record<string, Co>, n = 10): string[][] {
   return [...byName.values()].sort((a, b) => b.mc - a.mc).slice(0, n).map((g) => g.syms.sort());
 }
 
-export function buildBrief(week: string[], events: EarningsEvent[], macro: MacroResponse | null, universe: Record<string, Co>): Brief {
+/** The worker publishes FRED release dates from 40 days back to 150 days ahead (worker/index.ts). */
+export const MACRO_WINDOW = { back: 40, ahead: 150 };
+
+export function buildBrief(
+  week: string[], events: EarningsEvent[], calWarnings: string[], macro: MacroResponse | null, universe: Record<string, Co>, today: string,
+): Brief {
   const from = week[0], to = week[week.length - 1];
   const inWeek = (d: string) => d >= from && d <= to;
   const evs = events.filter((e) => inWeek(e.d));
   const syms = new Set(evs.map((e) => e.s));
+  const companies = new Set(evs.map((e) => universe[e.s]?.n ?? e.s));
+  const missingDays = [...new Set(calWarnings.flatMap((w) => w.match(/\d{4}-\d{2}-\d{2}/g) ?? []))].filter((d) => inWeek(d) && !HOLIDAYS.some((x) => x.date === d)).sort();
+  const macroComplete = !!macro && macro.warnings.length === 0 && from >= addDays(today, -MACRO_WINDOW.back) && to <= addDays(today, MACRO_WINDOW.ahead);
 
   // One row per company: share classes (GOOG/GOOGL) collapse to the first by market cap.
   const seen = new Set<string>();
@@ -58,7 +69,9 @@ export function buildBrief(week: string[], events: EarningsEvent[], macro: Macro
 
   return {
     week,
-    total: syms.size,
+    total: companies.size,
+    missingDays,
+    macroComplete,
     sp: spNames.size,
     largest: { reporting, of: big.length },
     top,

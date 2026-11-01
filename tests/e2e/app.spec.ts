@@ -96,8 +96,8 @@ test("the week's brief: open on desktop, collapsed on phone, remembered, and its
   await expect(brief.locator(".brief-co")).toHaveCount(5);
   await expect(brief.locator(".brief-co").first()).toContainText("AAPL");
   await expect(brief.locator(".brief-macro")).toContainText("Jobs report");
-  await expect(brief.locator(".brief-stat").first()).toContainText("1 of the 10 largest");
-  await expect(brief).toContainText(/Market mood is \d+/);
+  await expect(brief.locator(".brief-stat").first()).toContainText("including 1 of the 10 largest (Apple Inc.)");
+  await expect(brief).toContainText(/Market mood reads \d+/);
 
   // The choice survives a reload.
   await head.click();
@@ -115,6 +115,18 @@ test("the brief follows navigation to another week", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "week view" }).click();
   await page.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(page.locator(".brief-head")).toContainText("Week of · Nov 9–13");
-  await expect(page.locator(".brief-head")).not.toContainText("336 companies report");
+  const head = page.locator(".brief-head");
+  await expect(head).toContainText("Week of Nov 9–13");
+  await expect(head).toContainText(/\d+ companies report · (\d+|none) of the 10 largest/);
+  await expect(head).not.toContainText("336 companies");
+});
+
+test("the brief is honest when a week's earnings didn't load", async ({ page }) => {
+  // The recorded November fixture couldn't load Nov 26 – Dec 4 (see its warnings).
+  await page.goto("/?d=2026-11-30");
+  await page.getByRole("button", { name: "week view" }).click();
+  const head = page.locator(".brief-head");
+  await expect(head).toContainText("Week of Nov 30–Dec 4");
+  await expect(head).toContainText("Earnings for this week didn't load");
+  await expect(head).not.toContainText("quiet");
 });

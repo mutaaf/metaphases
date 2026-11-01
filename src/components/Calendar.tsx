@@ -300,7 +300,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
         </div>
       </div>
 
-      <WeekBrief week={bWeek} current={bWeek.includes(next)} events={all} loading={loading} error={error} macro={macro.data} />
+      <WeekBrief week={bWeek} current={bWeek.includes(next)} cal={data} calLoading={loading} calError={error} macro={macro.data} macroLoading={macro.loading} />
 
       {error && <Notice tone="error">{error} Your watchlist and holdings are safe — pull to retry.</Notice>}
       {data?.warnings.map((w) => <Notice key={w} tone="warn">{w}</Notice>)}
