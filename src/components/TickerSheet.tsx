@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Factor, Reaction, TickerResponse } from "../../shared/types";
 import { useTicker } from "../lib/api";
 import { co, heldVia, nameOf, ETF_ASOF } from "../lib/data";
@@ -7,6 +7,7 @@ import { eps, mcap, money, pct } from "../lib/format";
 import { actions, useStore } from "../lib/store";
 import { BASE } from "../lib/router";
 import { AiPreviewMount } from "./ai/mount";
+import { useDialog } from "../lib/dialog";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
 
 function FactorList({ factors }: { factors: Factor[] }) {
@@ -98,13 +99,13 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   const via = heldVia(symbol, holdings);
   const direct = holdings.find((h) => h.s === symbol);
   const today = todayISO();
+  const sheetRef = useRef<HTMLElement>(null);
+  useDialog(sheetRef, onClose, { initialFocus: "self" });
 
   useEffect(() => {
     const prev = document.title;
     document.title = `${symbol} earnings: the full read · Metaphases`;
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", esc);
-    return () => { document.title = prev; document.removeEventListener("keydown", esc); };
+    return () => { document.title = prev; };
   }, [symbol]);
 
   const up = (data?.quote?.changePct ?? 0) >= 0;
@@ -112,10 +113,11 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   const shareText = data?.next
     ? `${name} reports ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`} — ${data.beatRate ? `beat ${data.beatRate.beats} of its last ${data.beatRate.total}` : "see the setup"}${data.expectedMove ? `, typical move ±${data.expectedMove.toFixed(1)}%` : ""}.`
     : `${name}: earnings track record, quality grade and setup.`;
+  const doShare = () => share(`${symbol} on Metaphases`, shareText, `${location.origin}${BASE}/t/${symbol}`, () => { setCopied(true); setTimeout(() => setCopied(false), 1800); });
 
   return (
     <div className="drawer-scrim" onClick={onClose}>
-      <aside className="drawer sheet" onClick={(e) => e.stopPropagation()} aria-label={`${name} earnings`}>
+      <aside className="drawer sheet" ref={sheetRef} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`${name} earnings`}>
         <header className="sheet-head">
           <Tile s={symbol} size={56} force="logo" />
           <div className="sheet-id">
@@ -127,8 +129,8 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
           </div>
           <div className="sheet-actions">
             <button className={`btn btn-box ${w ? "on" : ""}`} onClick={() => actions.toggleWatch(symbol)} aria-pressed={!!w}><Icon name="star" size={14} /> {w ? "Watching" : "Watch"}</button>
-            <button className="btn btn-box sq" onClick={() => share(`${symbol} on Metaphases`, shareText, `${location.origin}${BASE}/t/${symbol}`, () => { setCopied(true); setTimeout(() => setCopied(false), 1800); })} aria-label="Share"><Icon name="share" size={14} /></button>
-            <button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
+            <button className="btn btn-box sq" onClick={doShare} aria-label={`Share ${symbol}'s read`}><Icon name="share" size={14} /></button>
+            <button className="icon-btn sheet-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
           </div>
         </header>
         {copied && <div className="toast">Link copied — it unfurls with {symbol}'s next report.</div>}
@@ -216,6 +218,19 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                 <textarea placeholder="Why you're watching…" defaultValue={w.note ?? ""} onBlur={(e) => actions.updateWatch(symbol, { note: e.target.value })} />
               </section>
             )}
+
+            <section className="sheet-cta" aria-label="Next steps">
+              <div>
+                <b>{w ? `${symbol} is on your watchlist.` : `Keep ${symbol} in your orbit.`}</b>
+                <span className="muted small">{w ? "Its report shows up on your watchlist and in the My watchlist filter." : "Star it to track the report, the setup and your buy price."}</span>
+              </div>
+              <div className="cta-row">
+                {w
+                  ? <button className="cta cta-secondary" onClick={() => actions.toggleWatch(symbol)} aria-pressed={true}><Icon name="star" size={14} /> On your watchlist</button>
+                  : <button className="cta cta-primary" onClick={() => actions.toggleWatch(symbol)} aria-pressed={false}><Icon name="star" size={14} /> Add to watchlist</button>}
+                <button className={`cta ${w ? "cta-primary" : "cta-secondary"}`} onClick={doShare}><Icon name="share" size={14} /> Share this read</button>
+              </div>
+            </section>
 
             <footer className="sheet-foot muted small">
               Grades are rules-based and explained, never a recommendation. Data: Finnhub, Nasdaq, Yahoo Finance.

@@ -63,7 +63,7 @@ test("search finds a company by name and opens it", async ({ page, isMobile }) =
 
 test("Compass maps a sample portfolio's exposure through funds", async ({ page }) => {
   await page.goto("./compass");
-  await page.getByRole("button", { name: /sample portfolio/i }).click();
+  await page.getByRole("button", { name: /sample portfolio/i }).first().click();
   await expect(page.locator(".stat b").first()).toContainText("$");
   await expect(page.locator(".ex-row").first()).toBeVisible();
 });
@@ -78,7 +78,7 @@ test("no horizontal scroll and no console errors", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && !/Failed to load resource/.test(m.text()) && errors.push(m.text()));
-  for (const p of ["./", "./watchlist", "./compass", "./retrace", "./learn"]) {
+  for (const p of ["./", "./watchlist", "./compass", "./retrace", "./learn", "./about"]) {
     await page.goto(p);
     await page.waitForLoadState("networkidle");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

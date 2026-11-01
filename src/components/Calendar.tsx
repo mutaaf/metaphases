@@ -11,6 +11,8 @@ import { Icon, Notice, Phase, PHASE_LABEL, Skeleton, Term, Tile } from "./bits";
 import { WeekBrief } from "./WeekBrief";
 import { AskWeekButton } from "./ai/mount";
 import { briefWeek } from "../lib/brief";
+import { useDialog } from "../lib/dialog";
+import { HomeHero } from "./Hero";
 
 const HOLIDAY = Object.fromEntries(HOLIDAYS.map((h) => [h.date, h.name]));
 const PER_CELL = 3;
@@ -65,6 +67,7 @@ function TileButton({ e, size = 44 }: { e: EarningsEvent; size?: number }) {
       onClick={(ev) => { ev.stopPropagation(); setParam("t", e.s); }}
       onMouseEnter={() => prefetchTicker(e.s)}
       title={`${nameOf(e.s)} (${e.s}) · ${PHASE_LABEL[e.h]}${e.eE != null ? ` · est. ${eps(e.eE)}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}`}
+      aria-label={`${nameOf(e.s)}, ${PHASE_LABEL[e.h].toLowerCase()}, ${r ? r : "upcoming"}${starred ? ", on your watchlist" : ""}`}
     >
       <Tile s={e.s} size={size} />
       <span className="tbtn-phase"><Phase h={e.h} size={11} /></span>
@@ -147,15 +150,21 @@ function groupBySession(evs: EarningsEvent[]) {
 }
 
 export function DayDrawer({ day, events, macro, onClose }: { day: string; events: EarningsEvent[]; macro: MacroEvent[]; onClose: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  useDialog(ref, onClose);
+  const openDayView = () => { onClose(); actions.setPref("view", "day"); setParam("d", day); };
   return (
     <div className="drawer-scrim" onClick={onClose}>
-      <aside className="drawer" onClick={(e) => e.stopPropagation()} aria-label={`Earnings on ${fmtLong(day)}`}>
+      <aside className="drawer" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Earnings on ${fmtLong(day)}`}>
         <header className="drawer-head">
           <div>
             <span className="eyebrow">{events.length} reporting</span>
             <h2>{fmtLong(day)}</h2>
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
+          <div className="drawer-actions">
+            <button className="cta cta-secondary sm" onClick={openDayView}>Open day view</button>
+            <button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
+          </div>
         </header>
         {macro.map((m) => <Notice key={m.key}><b>{m.name}.</b> {m.blurb}</Notice>)}
         {groupBySession(events).map((g) => (
@@ -268,6 +277,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
 
   return (
     <>
+      <HomeHero monthCount={view === "month" && data ? monthEvents.length : null} monthLabel={`${MONTHS[a.getMonth()]} ${a.getFullYear()}`} />
       <div className="page-head">
         <div className="title-row">
           <h1 className="headline">

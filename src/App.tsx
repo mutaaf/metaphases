@@ -1,13 +1,20 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { CalendarPage } from "./components/Calendar";
 import { MacroStrip } from "./components/MacroStrip";
-import { CompassPage, LearnPage, RetracePage, Search, WatchlistPage } from "./components/Pages";
 import { TickerSheet } from "./components/TickerSheet";
-import { Icon, Mark, Phase } from "./components/bits";
+import { Icon, Mark, Phase, Skeleton } from "./components/bits";
 import { appPath, href, navigate, param, setParam, useLocation } from "./lib/router";
 import { actions, useStore } from "./lib/store";
 import { nowNY } from "./lib/dates";
 import { AiLayer, AiTopButton } from "./components/ai/mount";
+
+// The calendar ships in the main bundle; every other page loads on demand.
+const WatchlistPage = lazy(() => import("./pages/Watchlist"));
+const CompassPage = lazy(() => import("./pages/Compass"));
+const RetracePage = lazy(() => import("./pages/Retrace"));
+const LearnPage = lazy(() => import("./pages/Learn"));
+const AboutPage = lazy(() => import("./pages/About"));
+const Search = lazy(() => import("./pages/Search"));
 
 const NAV = [
   { path: "/", label: "Calendar" },
@@ -15,7 +22,19 @@ const NAV = [
   { path: "/compass", label: "Compass" },
   { path: "/retrace", label: "Retrace" },
   { path: "/learn", label: "Learn" },
+  { path: "/about", label: "About" },
 ];
+
+function PageSkeleton() {
+  return (
+    <div className="page" aria-busy="true" aria-label="Loading">
+      <Skeleton w={120} h={11} />
+      <Skeleton w="62%" h={56} />
+      <Skeleton w="48%" h={18} />
+      <Skeleton h={240} />
+    </div>
+  );
+}
 
 export default function App() {
   const loc = useLocation();
@@ -42,33 +61,44 @@ export default function App() {
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, []);
 
+  // New page → top of the page (not when only the query changes, e.g. opening a sheet).
+  useEffect(() => { if (!location.hash) window.scrollTo({ top: 0 }); }, [path]);
+
   const t = param("t");
   const dark = prefs.theme === "dark" || (prefs.theme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
-  const page = path === "/watchlist" ? <WatchlistPage onSearch={() => setSearch(true)} /> : path === "/compass" ? <CompassPage /> : path === "/retrace" ? <RetracePage /> : path === "/learn" ? <LearnPage /> : <CalendarPage onSearch={() => setSearch(true)} />;
+  const openSearch = () => setSearch(true);
+  const page =
+    path === "/watchlist" ? <WatchlistPage onSearch={openSearch} /> :
+    path === "/compass" ? <CompassPage /> :
+    path === "/retrace" ? <RetracePage /> :
+    path === "/learn" ? <LearnPage /> :
+    path === "/about" ? <AboutPage /> :
+    <CalendarPage onSearch={openSearch} />;
   const ny = nowNY();
 
   return (
     <div className="app" data-loc={loc}>
+      <a className="skip-link" href="#main">Skip to content</a>
       <header className="top">
-        <a className="brand" href={href("/")} onClick={(e) => { e.preventDefault(); navigate("/"); }}><Mark /> <span>Metaphases</span></a>
+        <a className="brand" href={href("/")} onClick={(e) => { e.preventDefault(); navigate("/"); }} aria-label="Metaphases home"><Mark /> <span>Metaphases</span></a>
         <nav className="nav" aria-label="Sections">
           {NAV.map((n) => (
-            <a key={n.path} href={href(n.path)} className={path === n.path ? "on" : ""} onClick={(e) => { e.preventDefault(); navigate(n.path); }}>{n.label}</a>
+            <a key={n.path} href={href(n.path)} className={path === n.path ? "on" : ""} aria-current={path === n.path ? "page" : undefined} onClick={(e) => { e.preventDefault(); navigate(n.path); }}>{n.label}</a>
           ))}
         </nav>
-        <button className="top-search" onClick={() => setSearch(true)} aria-label="Search ticker"><Icon name="search" size={14} /> <span>Search ticker</span> <kbd>⌘K</kbd></button>
+        <button className="top-search" onClick={openSearch} aria-label="Search ticker"><Icon name="search" size={14} /> <span>Search ticker</span> <kbd>⌘K</kbd></button>
         <AiTopButton />
-        <a className="top-icon" href="https://github.com/mutaaf/metaphases" target="_blank" rel="noreferrer" aria-label="Source on GitHub"><Icon name="github" /></a>
+        <a className="top-icon gh" href="https://github.com/mutaaf/metaphases" target="_blank" rel="noreferrer" aria-label="Source on GitHub"><Icon name="github" /></a>
         <button className="top-icon" onClick={() => actions.setPref("theme", dark ? "light" : "dark")} aria-label={dark ? "Switch to light" : "Switch to dark"}><Icon name={dark ? "sun" : "moon"} /></button>
       </header>
       <div className="frame">
         <MacroStrip />
-        <main>{page}</main>
+        <main id="main" tabIndex={-1}><Suspense fallback={<PageSkeleton />}>{page}</Suspense></main>
         <footer className="legend">
           <div className="legend-keys">
             <span className="eyebrow">Legend:</span>
             <span className="lk res-beat">Beat</span><span className="lk res-mixed">Mixed</span><span className="lk res-miss">Miss</span>
-            <span className="lk">No mark · upcoming</span>
+            <span className="lk lk-upcoming">No mark · upcoming</span>
             <span className="lk"><Phase h="bmo" size={11} /> Before open</span>
             <span className="lk"><Phase h="dmh" size={11} /> During hours</span>
             <span className="lk"><Phase h="amc" size={11} /> After close</span>
@@ -78,11 +108,11 @@ export default function App() {
         </footer>
       </div>
       <footer className="colophon">
-        <span className="eyebrow">Charted in Texas by <a href="https://mutaafaziz.com">Mutaaf Aziz</a> · grades are explained, never advice · sibling of Market Digest &amp; Compass</span>
+        <span className="eyebrow">Charted in Texas by <a href="https://mutaafaziz.com">Mutaaf Aziz</a> · grades are explained, never advice · <a href={href("/about")} onClick={(e) => { e.preventDefault(); navigate("/about"); }}>sibling of Market Digest &amp; Compass</a></span>
         <span className="eyebrow">{ny.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }).toUpperCase()}</span>
       </footer>
       {t && <TickerSheet symbol={t.toUpperCase()} onClose={() => setParam("t", null)} />}
-      {search && <Search onClose={() => setSearch(false)} />}
+      {search && <Suspense fallback={null}><Search onClose={() => setSearch(false)} /></Suspense>}
       <AiLayer />
     </div>
   );

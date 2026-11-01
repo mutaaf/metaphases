@@ -1,0 +1,62 @@
+/* Breakpoints come last so they override every section. */
+/* ── Mobile (390px first-class, per Compass UX principle #1) ── */
+@media (max-width: 980px) {
+  .top-search span, .top-search kbd { display: none; }
+  .top-search { min-width: 0; padding: 0 16px; }
+  .macro-detail, .grade-pair, .two-col { grid-template-columns: 1fr; }
+  .macro-list { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 760px) {
+  body { font-size: 14.5px; }
+  /* Two-row top bar: brand + search + theme, then the full section nav (scrolls, with an edge fade). */
+  .top { height: auto; flex-wrap: wrap; }
+  .brand { height: 48px; padding: 0 14px; border-right: 0; } .brand span { display: inline; font-size: 11px; letter-spacing: .2em; }
+  .top-search { height: 48px; min-width: 0; margin-left: auto; padding: 0 14px; border-left: 1px solid var(--line); }
+  .top-icon { width: 48px; height: 48px; } .top-icon.gh { display: none; }
+  .nav { order: 9; flex-basis: 100%; height: 42px; padding: 0 8px; border-top: 1px solid var(--line); -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .nav a { padding: 8px 10px; font-size: 10.5px; letter-spacing: .12em; }
+  .nav a + a::before { display: none; }
+  /* Legend: compact two-column key instead of a tall wrap. */
+  .legend-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; }
+  .legend-keys > .eyebrow, .lk-upcoming { display: none; }
+  .lk { justify-content: flex-start; }
+  main { padding: 0 16px 16px; }
+  .page-head { margin: 0 -16px 16px; padding: 20px 16px 14px; }
+  .macro-row { padding: 10px 16px; gap: 14px; flex-wrap: wrap; }
+  .macro-events { order: 3; flex-basis: 100%; gap: 18px; }
+  .macro-row .btn-ghost { margin-left: auto; padding: 8px 10px; }
+  .mood-detail, .macro-list { padding: 18px 16px; }
+  .mood-comps li { grid-template-columns: 110px 1fr 28px; }
+  .toolbar { gap: 10px; } .tgroup { flex-wrap: wrap; }
+  .brief-head { flex-wrap: wrap; gap: 4px 12px; padding: 10px 14px; }
+  .brief-head .chev { margin-left: auto; }
+  .brief-sum { order: 3; flex-basis: 100%; }
+  .brief-body { grid-template-columns: 1fr; }
+  .brief-col { padding: 12px 14px 14px; }
+  .brief-col + .brief-col { border-left: 0; border-top: 1px dashed var(--line-2); }
+  .btn-box.label { min-width: 0; flex: 1; letter-spacing: .1em; }
+  .tgroup:last-child { width: 100%; }
+  /* Month grid becomes an agenda: one row per trading day. */
+  .grid.month, .grid.week { grid-template-columns: 1fr; }
+  .grid .wd { display: none; }
+  .grid.month .cell { min-height: 0; border-right: 0; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 14px; }
+  .grid.month .cell .cell-head { width: 100%; }
+  .grid.month .cell.out { display: none; }
+  .cell-wd { display: inline; }
+  .grid.week .wcol { min-height: 0; border-right: 0; border-bottom: 1px solid var(--line); }
+  .erow { grid-template-columns: 34px minmax(0, 1fr) 76px 84px; }
+  .erow > .eyebrow, .erow-num:nth-of-type(2) { display: none; }
+  .two-col .erow { grid-template-columns: 34px minmax(0, 1fr) 76px 84px; }
+  .drawer { padding: 0 16px 40px env(safe-area-inset-bottom); border-left: 0; }
+  .sheet-head { grid-template-columns: auto 1fr; padding-top: 16px; }
+  .sheet-actions { grid-column: 1 / -1; }
+  .sheet-actions .btn-box { flex: 1; justify-content: center; }
+  .nc-stats dd { font-size: 18px; }
+  .wl-row { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .wl-row .wl-num, .wl-row .wl-grades { display: none; }
+  .ex-row { grid-template-columns: 70px 30px minmax(0, 1fr) 76px; }
+  .ex-via { display: none; }
+  .legend, .colophon { padding: 14px 16px; }
+  .menu-pop { width: calc(100vw - 32px); }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
