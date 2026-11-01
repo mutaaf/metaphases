@@ -24,7 +24,7 @@ If `build/` + `fix/` PRs merged in the last 24h ≥ `control.json → agents.bui
    review covering correctness, invariants, numbers presented as advice, failure states, phone layout and
    missing tests. Fix every valid finding.
 8. **Merge.** Auto-merge lands it on green, and Workers Builds deploys `main`.
-9. **Verify live.** After about 3 minutes, `curl /api/health` and check that `build` changed. Load the
+9. **Verify live.** Within about 15 minutes (the auto-deployer polls every 10), `curl /api/health` and check that `build` changed. Load the
    affected surface in Playwright against production. If production is broken, immediately open a `fix/`
    PR reverting your merge and record a lesson. If the build id never changes, the deploy pipeline isn't
    connected: say so in your final line and don't retry.
