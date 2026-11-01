@@ -57,8 +57,20 @@ export interface TickerResponse {
   beatRate: { beats: number; total: number } | null;
   street: { buy: number; hold: number; sell: number; period: string; buyPctChange3m: number | null } | null;
   spark: number[]; // ~6 months of closes
+  /** ~1 year of daily closes, downsampled to ≤ 260 points, with 50/200-day averages aligned to the same points. */
+  chart: { t: number[]; c: number[]; s50: (number | null)[]; s200: (number | null)[] } | null;
+  /** Last ≤ 8 fiscal quarters from Finnhub's free quarterly series (oldest first). rev ≈ salesPerShare × shares. */
+  quarters: Quarter[];
   read: string[]; // plain-English bullets
   warnings: string[];
+}
+
+export interface Quarter {
+  period: string; // fiscal quarter end, YYYY-MM-DD
+  eps: number | null; // GAAP EPS
+  rev: number | null; // approximate revenue in dollars
+  gm: number | null; // gross margin, %
+  om: number | null; // operating margin, %
 }
 
 export interface MacroEvent {

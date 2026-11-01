@@ -6,6 +6,7 @@ import { navigate, setParam } from "../lib/router";
 import { actions, useStore } from "../lib/store";
 import { GradeBadge, Icon, Phase, Skeleton, Term, Tile } from "../components/bits";
 import { PageHero } from "../components/Hero";
+import { IcsButtons } from "../components/Depth";
 
 export const POPULAR = ["AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "NFLX"];
 
@@ -72,6 +73,7 @@ export default function WatchlistPage({ onSearch }: { onSearch: () => void }) {
         <>
           <div className="wl">{watch.map((w) => <WatchRow key={w.s} s={w.s} buy={w.buy} note={w.note} />)}</div>
           <PopularChips label="Add a popular one:" />
+          <IcsButtons symbols={watch.map((w) => w.s)} />
         </>
       )}
     </div>

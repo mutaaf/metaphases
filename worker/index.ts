@@ -9,6 +9,7 @@ import type { CalendarResponse, EarningsEvent, MacroResponse, Session, TickerRes
 import { compassGrade, setupGrade, rsi, sma } from "../shared/grades";
 import { FOMC, HOLIDAYS } from "../shared/market";
 import { handleAi } from "./ai";
+import { buildIcs, cardSvg, quartersFrom, shapeChart, type IcsItem } from "../shared/depth";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -246,6 +247,8 @@ async function ticker(symbol: string, env: Env, ctx: ExecutionContext): Promise<
     next: nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate } : null,
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
+    chart: chart ? shapeChart(chart.t, chart.c) : null,
+    quarters: quartersFrom(metric?.series?.quarterly, profile?.shareOutstanding ?? null),
     read, warnings,
   };
   return json(body, 300);
@@ -341,7 +344,7 @@ const PAGES: Record<string, { title: string; desc: string }> = {
 };
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
-async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ title: string; desc: string } | null> {
+async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ title: string; desc: string; image?: string } | null> {
   const path = url.pathname.slice(BASE.length) || "/";
   const t = path.match(/^\/t\/([A-Za-z.\-]{1,10})$/)?.[1] ?? url.searchParams.get("t");
   if (t) {
@@ -359,7 +362,7 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
         d.compass.grade ? `Compass quality ${d.compass.grade}` : null,
       ].filter(Boolean);
       const desc = `${name}${d.next?.epsE != null ? ` — Street expects $${d.next.epsE.toFixed(2)} EPS` : ""}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
-      return { title, desc };
+      return { title, desc, image: `${SITE}${BASE}/og/t/${sym}.png` };
     } catch { return { title: `${sym} earnings · Metaphases`, desc: PAGES["/"].desc }; }
   }
   const day = url.searchParams.get("day");
@@ -388,7 +391,58 @@ async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Resp
     .on('meta[name="description"], meta[property="og:description"], meta[name="twitter:description"]', set("content"))
     .on('meta[property="og:url"]', set("content"))
     .on('link[rel="canonical"]', set("href"))
+    .on('meta[property="og:image"], meta[name="twitter:image"]', { element(el) { if (meta.image) el.setAttribute("content", meta.image); } })
+    .on('meta[property="og:image:alt"]', { element(el) { if (meta.image) el.setAttribute("content", meta.title); } })
     .transform(new Response(res.body, { status: 200, headers: (() => { const h = new Headers(res.headers); h.set("Content-Type", "text/html; charset=utf-8"); h.set("Cache-Control", "public, max-age=300"); return h; })() }));
+}
+
+// ── /api/ics: subscribe to a watchlist's report dates in any calendar app ──
+async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const syms = Array.from(new Set((url.searchParams.get("s") ?? "").toUpperCase().split(/[,\s]+/).filter((x) => /^[A-Z.\-]{1,10}$/.test(x)))).slice(0, 50);
+  const today = iso(todayNY());
+  const to = addDays(today, 120);
+  const results = await pool(syms, 6, (sym) =>
+    cached<any>(`fh:ics:${sym}:${today}`, 21600, ctx, () => getJson(`${FH}/calendar/earnings?symbol=${sym}&from=${today}&to=${to}&token=${env.FINNHUB_API_KEY}`)),
+  );
+  const items: IcsItem[] = [];
+  results.forEach((r, i) => {
+    if (r.status !== "fulfilled") return;
+    const sym = syms[i];
+    for (const e of (r.value?.earningsCalendar ?? []) as any[]) {
+      if (e.date < today) continue;
+      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: e.epsEstimate ?? null, url: `${SITE}${BASE}/t/${sym}` });
+    }
+  });
+  items.sort((a, b) => a.date.localeCompare(b.date));
+  return new Response(buildIcs(items, new Date()), {
+    headers: { "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": 'inline; filename="metaphases-earnings.ics"', "Cache-Control": "public, max-age=21600" },
+  });
+}
+
+// ── /og/t/:sym.(svg|png): per-ticker share card ─────────────────────────
+async function cardFor(sym: string, env: Env, ctx: ExecutionContext): Promise<string> {
+  const d = (await (await ticker(sym, env, ctx)).json()) as TickerResponse;
+  const when = d.next ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
+  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null });
+}
+
+async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
+  try {
+    const day = iso(todayNY());
+    const svg = await cached(`og:svg:v1:${sym}:${day}`, 21600, ctx, () => cardFor(sym, env, ctx));
+    if (fmt === "svg") return new Response(svg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=21600" } });
+    const key = new Request(`https://cache.metaphases.internal/og-png-v1-${sym}-${day}`);
+    const hit = await caches.default.match(key);
+    if (hit) return hit;
+    const { renderPng } = await import("./og");
+    const png = await renderPng(svg, ctx);
+    const res = new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=21600" } });
+    ctx.waitUntil(caches.default.put(key, res.clone()));
+    return res;
+  } catch {
+    return fallback();
+  }
 }
 
 // ── /api/health: one probe per upstream, so agents and the operator can see what's degraded ──
@@ -421,6 +475,9 @@ export default {
       if (p === "/api/macro") return await macro(env, ctx);
       if (p === "/api/health") return await health(env, ctx);
       if (p.startsWith("/api/ai/")) { const r = await handleAi(p, req, env); if (r) return r; }
+      if (p === "/api/ics") return await ics(url, env, ctx);
+      const og = p.match(/^\/og\/t\/([A-Za-z.\-]{1,10})\.(svg|png)$/);
+      if (og) return await ogCard(og[1].toUpperCase(), og[2] as "svg" | "png", req, env, ctx);
       const m = p.match(/^\/api\/ticker\/([A-Za-z.\-]{1,10})$/);
       if (m) return await ticker(m[1].toUpperCase(), env, ctx);
       if (p.startsWith("/api/")) return json({ error: "Not found" }, 0);

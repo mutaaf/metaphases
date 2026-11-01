@@ -18,6 +18,7 @@
     "refresh:data": "python3 scripts/build_universe.py && python3 scripts/refresh_etfs.py"
   },
   "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

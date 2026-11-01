@@ -8,6 +8,7 @@ import { actions, useStore } from "../lib/store";
 import { BASE } from "../lib/router";
 import { AiPreviewMount } from "./ai/mount";
 import { useDialog } from "../lib/dialog";
+import { IcsButtons, Peers, PriceChart, QuarterTrend } from "./Depth";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
 
 function FactorList({ factors }: { factors: Factor[] }) {
@@ -129,6 +130,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
           </div>
           <div className="sheet-actions">
             <button className={`btn btn-box ${w ? "on" : ""}`} onClick={() => actions.toggleWatch(symbol)} aria-pressed={!!w}><Icon name="star" size={14} /> {w ? "Watching" : "Watch"}</button>
+            {data?.next && <IcsButtons symbols={[symbol]} compact />}
             <button className="btn btn-box sq" onClick={doShare} aria-label={`Share ${symbol}'s read`}><Icon name="share" size={14} /></button>
             <button className="icon-btn sheet-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
           </div>
@@ -167,6 +169,15 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
               </section>
             )}
 
+            {data.chart && (
+              <section className="card">
+                <h4 className="eyebrow">The past year, report by report</h4>
+                <PriceChart data={data} />
+              </section>
+            )}
+
+            {data.next && <Peers symbol={symbol} date={data.next.date} />}
+
             {(direct || via.length > 0) && (
               <section className="owned">
                 <h4 className="eyebrow"><Term k="lookthrough">You already own this</Term></h4>
@@ -202,6 +213,8 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                 <Reactions history={data.history} expected={data.expectedMove} />
               </section>
             )}
+
+            <QuarterTrend quarters={data.quarters ?? []} history={data.history} />
 
             {data.street && (
               <section className="card">

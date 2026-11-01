@@ -40,11 +40,13 @@ export function Tile({ s, size = 44, force }: { s: string; size?: number; force?
   const [broken, setBroken] = useState(false);
   const c = co(s);
   const mode = force ?? prefs.tiles;
-  const showLogo = mode === "logo" && c?.logo && !broken;
+  // Untracked reporters ("Everything" filter) try Finnhub's logo URL pattern; onError falls back to the monogram.
+  const logo = c?.logo || (/^[A-Z]{1,5}$/.test(s) ? `https://static2.finnhub.io/file/publicdatany/finnhubimage/stock_logo/${s}.png` : "");
+  const showLogo = mode === "logo" && logo && !broken;
   return (
     <span className={`tile ${showLogo ? "" : "tile-mono"}`} style={{ width: size, height: size }}>
       {showLogo ? (
-        <img src={c!.logo} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />
+        <img src={logo} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />
       ) : (
         <b style={{ fontSize: s.length > 4 ? size * 0.2 : size * 0.25 }}>{s}</b>
       )}

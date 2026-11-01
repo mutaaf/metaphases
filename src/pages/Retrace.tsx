@@ -7,6 +7,7 @@ import { navigate } from "../lib/router";
 import { Icon, Notice, Phase, Skeleton, Term } from "../components/bits";
 import { EventRow } from "../components/Calendar";
 import { PageHero } from "../components/Hero";
+import { SeasonScoreboard } from "../components/Depth";
 
 export default function RetracePage() {
   const today = todayISO();
@@ -66,6 +67,7 @@ export default function RetracePage() {
         </section>
       ) : (
         <>
+          {offset === 0 && <SeasonScoreboard />}
           <div className="stat-row">
             <div className="stat"><span className="eyebrow">Reported</span><b>{done.length}</b></div>
             <div className="stat"><span className="eyebrow"><Term k="eps">EPS</Term> beat rate</span><b>{Math.round((epsBeat / done.length) * 100)}%</b></div>

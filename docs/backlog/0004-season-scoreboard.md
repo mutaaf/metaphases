@@ -1,7 +1,7 @@
 ---
 id: 0004
 title: Earnings-season scoreboard (how far through the season, beat rate vs normal)
-status: ready
+status: in-progress
 priority: P1
 size: M
 lens: depth
