@@ -1,5 +1,5 @@
 ---
-id: 0007
+id: 0010
 title: Stop the ticker sheet overflowing sideways on phones
 status: ready
 priority: P0
