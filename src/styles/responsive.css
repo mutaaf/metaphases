@@ -52,6 +52,10 @@
   .sheet-actions { grid-column: 1 / -1; }
   .sheet-actions .btn-box { flex: 1; justify-content: center; }
   .nc-stats dd { font-size: 18px; }
+  .sheet-actions .btn-box.sq { flex: 0 0 44px; }
+  /* Glossary pops in the next-report card span the card instead of hanging off the right edge. */
+  .next-card .term { position: static; }
+  .next-card .term-pop { left: 12px; right: 12px; width: auto; top: auto; margin-top: 22px; z-index: 5; }
   .wl-row { grid-template-columns: 44px minmax(0, 1fr) auto; }
   .wl-row .wl-num, .wl-row .wl-grades { display: none; }
   .ex-row { grid-template-columns: 70px 30px minmax(0, 1fr) 76px; }

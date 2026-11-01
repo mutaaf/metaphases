@@ -47,6 +47,8 @@
 .qt-eps { background: var(--accent); }
 .qt-eps.neg { background: var(--miss); }
 .qt-labels { display: grid; gap: 10px; margin-top: 4px; font: 400 9.5px var(--mono); color: var(--muted); text-align: center; letter-spacing: .04em; white-space: nowrap; }
+/* Labels wider than their column overflow evenly on both sides, staying centred under their bar. */
+.qt-labels span { display: flex; justify-content: center; min-width: 0; }
 .qt-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; }
 .qt-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; }
 .lg-rev { background: color-mix(in srgb, var(--ink) 18%, transparent); }
