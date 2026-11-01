@@ -337,6 +337,7 @@ const PAGES: Record<string, { title: string; desc: string }> = {
   "/compass": { title: "Compass: what reports with your money · Metaphases", desc: "Paste your stocks and funds. See which earnings reports actually move your money over the next two months — looking through your ETFs." },
   "/retrace": { title: "Retrace: how the reports really landed · Metaphases", desc: "Every report this month graded against Wall Street's consensus: beat rates, sector scorecards, the biggest surprises." },
   "/learn": { title: "Learn the language of earnings · Metaphases", desc: "EPS, consensus, typical move, P/E, RSI — every term on Metaphases in plain English." },
+  "/about": { title: "Where Metaphases comes from · Metaphases", desc: "A calmer earnings calendar with a memory: the best ideas from Market Digest and Compass, free, explained, never advice. Data, lineage and how the agents keep it running." },
 };
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 

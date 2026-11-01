@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMacro } from "../lib/api";
 import { daysBetween, fmtLong, fmtShort, todayISO } from "../lib/dates";
 import { Icon, Skeleton, Spark, Term } from "./bits";
+import { BASE } from "../lib/router";
 
 const MOOD_TONES = ["#B23A2E", "#D0805A", "#C9B48F", "#8FB59E", "#2F7D57"];
 
@@ -17,6 +18,7 @@ export function MoodMeter({ score, compact }: { score: number; compact?: boolean
 export function MacroStrip() {
   const { data, loading, error } = useMacro();
   const [open, setOpen] = useState(false);
+  const [saved, setSaved] = useState(false);
   const today = todayISO();
   const upcoming = (data?.events ?? []).filter((e) => e.date >= today);
   // One of each kind for the strip, nearest first.
@@ -80,7 +82,21 @@ export function MacroStrip() {
             </ul>
           </div>
           <div className="macro-list">
-            <span className="eyebrow">The next 60 days in the economy</span>
+            <div className="ml-head">
+              <span className="eyebrow">The next 60 days in the economy</span>
+              <button
+                className="cta cta-secondary sm"
+                onClick={() => {
+                  const evs = upcoming.filter((e) => daysBetween(today, e.date) <= 60);
+                  import("../lib/ics").then(({ downloadText, macroIcs }) => {
+                    downloadText("metaphases-economy.ics", macroIcs(evs, `${location.origin}${BASE}/`));
+                    setSaved(true);
+                  });
+                }}
+              >
+                <Icon name="plus" size={12} /> {saved ? "Saved: open the file" : "Add these to my calendar"}
+              </button>
+            </div>
             <ol>
               {upcoming.filter((e) => daysBetween(today, e.date) <= 60).map((e) => (
                 <li key={e.key + e.date} className={`kind-${e.kind}`}>
