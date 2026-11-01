@@ -15,6 +15,8 @@
     "run_worker_first": true
   },
   "routes": [{ "pattern": "mutaafaziz.com/metaphases*", "zone_name": "mutaafaziz.com" }],
+  // Workers AI: the free default brain for Metaphases' AI features (BYOK keys bypass it).
+  "ai": { "binding": "AI" },
   "observability": { "enabled": true },
   "version_metadata": { "binding": "CF_VERSION" }
 }

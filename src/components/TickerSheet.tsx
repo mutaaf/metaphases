@@ -6,6 +6,7 @@ import { daysBetween, fmtLong, todayISO } from "../lib/dates";
 import { eps, mcap, money, pct } from "../lib/format";
 import { actions, useStore } from "../lib/store";
 import { BASE } from "../lib/router";
+import { AiPreviewMount } from "./ai/mount";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
 
 function FactorList({ factors }: { factors: Factor[] }) {
@@ -154,6 +155,8 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                 </dl>
               </section>
             )}
+
+            <AiPreviewMount data={data} />
 
             {data.read.length > 0 && (
               <section className="read">

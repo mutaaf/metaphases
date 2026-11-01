@@ -7,6 +7,7 @@ import { Icon, Mark, Phase } from "./components/bits";
 import { appPath, href, navigate, param, setParam, useLocation } from "./lib/router";
 import { actions, useStore } from "./lib/store";
 import { nowNY } from "./lib/dates";
+import { AiLayer, AiTopButton } from "./components/ai/mount";
 
 const NAV = [
   { path: "/", label: "Calendar" },
@@ -56,6 +57,7 @@ export default function App() {
           ))}
         </nav>
         <button className="top-search" onClick={() => setSearch(true)} aria-label="Search ticker"><Icon name="search" size={14} /> <span>Search ticker</span> <kbd>⌘K</kbd></button>
+        <AiTopButton />
         <a className="top-icon" href="https://github.com/mutaaf/metaphases" target="_blank" rel="noreferrer" aria-label="Source on GitHub"><Icon name="github" /></a>
         <button className="top-icon" onClick={() => actions.setPref("theme", dark ? "light" : "dark")} aria-label={dark ? "Switch to light" : "Switch to dark"}><Icon name={dark ? "sun" : "moon"} /></button>
       </header>
@@ -81,6 +83,7 @@ export default function App() {
       </footer>
       {t && <TickerSheet symbol={t.toUpperCase()} onClose={() => setParam("t", null)} />}
       {search && <Search onClose={() => setSearch(false)} />}
+      <AiLayer />
     </div>
   );
 }

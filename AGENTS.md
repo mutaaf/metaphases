@@ -32,6 +32,12 @@ The thresholds in `shared/grades.ts` must stay identical to Market Digest's `GRA
 ## Invariants
 - **Allowed runtime hosts:**
   - Worker side: `finnhub.io`, `api.stlouisfed.org`, `query1/query2.finance.yahoo.com`, `api.nasdaq.com`.
+  - Worker side, AI only (BYOK): `api.anthropic.com`, `api.openai.com`, `generativelanguage.googleapis.com`, `api.x.ai`. Base URLs are fixed in `worker/ai/providers.ts`; the browser never calls them directly.
+- **AI (`worker/ai/*`, `src/components/ai/*`):**
+  - The default brain is Workers AI (binding `AI`), free and limited to 30 requests per IP per hour.
+  - BYOK keys travel only as the `x-mp-key` header and are never stored, cached, logged or echoed (unit tests enforce this).
+  - The model sees only facts we pass it (`buildMessages`). The system prompt forbids advice, price targets, confidence % and invented data.
+  - AI never auto-spends: previews generate only on a tap. AI UI is lazy-loaded.
   - Client side: `static2.finnhub.io` (logos), `fonts.googleapis.com`, `fonts.gstatic.com`.
   - Adding a host requires an operator `proposal/`.
 - **No analytics, trackers, ads, accounts or paid services.** User state stays in localStorage behind try/catch.
