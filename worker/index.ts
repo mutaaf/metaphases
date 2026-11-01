@@ -8,11 +8,13 @@ import universe from "../data/universe.json";
 import type { CalendarResponse, EarningsEvent, MacroResponse, Session, TickerResponse, Reaction, MoodComponent, MacroEvent } from "../shared/types";
 import { compassGrade, setupGrade, rsi, sma } from "../shared/grades";
 import { FOMC, HOLIDAYS } from "../shared/market";
+import { handleAi } from "./ai";
 
 interface Env {
   FINNHUB_API_KEY: string;
   FRED_API_KEY: string;
   ASSETS: Fetcher;
+  AI?: { run(model: string, input: unknown, opts?: unknown): Promise<unknown> };
   CF_VERSION?: { id: string; tag?: string; timestamp?: string };
 }
 
@@ -417,6 +419,7 @@ export default {
       if (p === "/api/calendar") return await calendar(url, env, ctx);
       if (p === "/api/macro") return await macro(env, ctx);
       if (p === "/api/health") return await health(env, ctx);
+      if (p.startsWith("/api/ai/")) { const r = await handleAi(p, req, env); if (r) return r; }
       const m = p.match(/^\/api\/ticker\/([A-Za-z.\-]{1,10})$/);
       if (m) return await ticker(m[1].toUpperCase(), env, ctx);
       if (p.startsWith("/api/")) return json({ error: "Not found" }, 0);

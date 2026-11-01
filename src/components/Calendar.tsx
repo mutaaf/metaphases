@@ -9,6 +9,7 @@ import { navigate, param, setParam, useLocation } from "../lib/router";
 import { actions, useStore } from "../lib/store";
 import { Icon, Notice, Phase, PHASE_LABEL, Skeleton, Term, Tile } from "./bits";
 import { WeekBrief } from "./WeekBrief";
+import { AskWeekButton } from "./ai/mount";
 import { briefWeek } from "../lib/brief";
 
 const HOLIDAY = Object.fromEntries(HOLIDAYS.map((h) => [h.date, h.name]));
@@ -285,6 +286,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
         <div className="toolbar">
           <div className="tgroup">
             <FilterMenu counts={counts} />
+            <AskWeekButton />
             <button className="btn btn-box sq" onClick={onSearch} title="Add a ticker to your watchlist" aria-label="Add ticker"><Icon name="plus" /></button>
             <button className={`btn btn-box sq ${prefs.tiles === "logo" ? "on" : ""}`} onClick={() => actions.setPref("tiles", "logo")} title="Show logos" aria-label="Show logos"><Icon name="image" /></button>
             <button className={`btn btn-box sq mono ${prefs.tiles === "ticker" ? "on" : ""}`} onClick={() => actions.setPref("tiles", "ticker")} title="Show tickers" aria-label="Show tickers">AB</button>
