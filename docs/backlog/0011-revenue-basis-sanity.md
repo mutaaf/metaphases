@@ -23,6 +23,7 @@ Metaphases told users that Alphabet missed revenue by 15.8% ($111.2B vs $132.0B 
 - [ ] A unit test with a KSPI-like row shows no `$` formatting
 - [ ] Retrace's and the scoreboard's revenue beat rates state how many reports were excluded as not comparable
 - [ ] On production, `/t/GOOGL` and the Oct 28 day drawer don't call GOOGL a revenue miss
+- [ ] (critic 2026-11-01 0700) The same quarter shows one consensus everywhere. META Q3 2026 shows EPS est **$5.79** in `/api/calendar` (Finnhub) but **$6.52** in the sheet's reaction history (Nasdaq `consensusForecast`, `worker/index.ts` history join). That gives a +28% beat in one place and +13.5% in the other for the same $7.40 print. Its actual $7.40 excludes a $9.89B legal charge (GAAP $3.83). Pick one estimate source per quarter, prefer Finnhub when present, and say which basis (adjusted or GAAP) the actual is on.
 - [ ] Works at 390×844 touch and 1440×900
 
 ## Test plan
