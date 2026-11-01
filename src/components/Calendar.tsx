@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { EarningsEvent, MacroEvent } from "../../shared/types";
 import { EARLY_CLOSE, HOLIDAYS } from "../../shared/market";
 import { useCalendar, useMacro, prefetchTicker } from "../lib/api";
-import { co, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
+import { co, curOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
 import { addDays, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
-import { eps, money, pct } from "../lib/format";
+import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
 import { actions, useStore } from "../lib/store";
 import { Icon, Notice, Phase, PHASE_LABEL, Skeleton, Term, Tile } from "./bits";
@@ -127,6 +127,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
   const r = resultOf(e);
   const s = surprise(e);
   const c = co(e.s);
+  const cur = curOf(e.s);
   return (
     <button className="erow" onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
       <Tile s={e.s} size={34} />
@@ -135,8 +136,8 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         <span className="muted">{nameOf(e.s)}</span>
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}
-      <span className="erow-num"><span className="eyebrow">EPS est</span>{eps(e.eE)}</span>
-      <span className="erow-num"><span className="eyebrow">{e.eA != null ? "Actual" : "Rev est"}</span>{e.eA != null ? eps(e.eA) : money(e.rE)}</span>
+      <span className="erow-num"><span className="eyebrow">EPS est</span>{epsIn(e.eE, cur)}</span>
+      <span className="erow-num"><span className="eyebrow">{e.eA != null ? "Actual" : "Rev est"}</span>{e.eA != null ? epsIn(e.eA, cur) : moneyIn(e.rE, cur)}</span>
       <span className="erow-res">
         {r ? <span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : PHASE_LABEL[e.h]}</span>}
       </span>

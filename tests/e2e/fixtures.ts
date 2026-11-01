@@ -30,6 +30,8 @@ export const test = base.extend<{ lens: "trader" | "everyday" | "unset" }>({
     });
     await page.route("**/api/ticker/*", (r) => {
       const sym = r.request().url().split("/").pop()!.toUpperCase();
+      // NIO is recorded on its own (a foreign filer whose estimates are in CNY); everything else reuses NVDA.
+      if (sym === "NIO") return r.fulfill({ contentType: "application/json", body: fx("ticker-NIO.json") });
       r.fulfill({ contentType: "application/json", body: fx("ticker-NVDA.json").replaceAll('"NVDA"', JSON.stringify(sym)) });
     });
     await page.route("**/og/story/**", (r) => r.fulfill({ contentType: "image/png", body: PNG }));

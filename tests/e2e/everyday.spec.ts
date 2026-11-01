@@ -130,4 +130,29 @@ test.describe("everyday", () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), p).toBeLessThanOrEqual(1);
     }
   });
+
+  // 0021: foreign filers' estimates are in their reporting currency — never a bare "$".
+  test("NIO's estimates show in Chinese yuan in the sheet, Hype Check and the day drawer", async ({ page }) => {
+    await page.goto("./?t=NIO");
+    const sheet = page.locator(".sheet");
+    const card = sheet.locator(".next-card");
+    await expect(card).toContainText("CN¥33.7B");
+    await expect(card).toContainText("-CN¥0.01");
+    await expect(card).toContainText(/Chinese yuan/);
+    await expect(card).not.toContainText("$33.7B");
+    await expect(sheet.locator(".read")).not.toContainText("$-0.01");
+    await expect(sheet.locator(".read")).not.toContainText("versus");
+    expect(await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth)))).toBeLessThanOrEqual(1);
+
+    await page.goto("./check?text=" + encodeURIComponent("$NIO is going to the MOON 🚀"));
+    const hc = page.locator(".hc-card").first();
+    await expect(hc).toContainText("-CN¥0.01 a share this quarter");
+    await expect(hc).toContainText(/Chinese yuan/);
+    await expect(hc).not.toContainText("$-0.01");
+
+    await page.goto("./?d=2026-11-16&day=2026-11-16");
+    const row = page.locator(".erow", { hasText: "PDD" }).first();
+    await expect(row).toContainText("CN¥19.21");
+    await expect(row).not.toContainText("$19.21");
+  });
 });

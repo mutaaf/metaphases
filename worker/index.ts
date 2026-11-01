@@ -11,6 +11,7 @@ import { FOMC, HOLIDAYS } from "../shared/market";
 import { storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../shared/story";
 import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
+import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, type IcsItem } from "../shared/depth";
 
 interface Env {
@@ -23,7 +24,7 @@ interface Env {
 
 const BASE = "/metaphases";
 const SITE = "https://mutaafaziz.com";
-const U = universe as Record<string, { n: string; mc: number }>;
+const U = universe as Record<string, { n: string; mc: number; c?: string; ec?: string }>;
 const FH = "https://finnhub.io/api/v1";
 const UA = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", Accept: "application/json" };
 
@@ -155,7 +156,7 @@ function slimMetric(raw: any) {
 
 /** The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON. */
 async function tickerData(symbol: string, env: Env, ctx: ExecutionContext): Promise<TickerResponse> {
-  return cached<TickerResponse>(`tk:v1:${symbol}`, 300, ctx, () => buildTicker(symbol, env, ctx));
+  return cached<TickerResponse>(`tk:v2:${symbol}`, 300, ctx, () => buildTicker(symbol, env, ctx));
 }
 
 async function ticker(symbol: string, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -187,8 +188,18 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const lastE = cal.filter((e) => e.date < today).sort((a, b) => b.date.localeCompare(a.date))[0];
   const habit: Session = (nextE?.hour || lastE?.hour || "") as Session;
 
-  // Past prints: Nasdaq gives report dates; Finnhub gives estimate/actual. Join on order (both newest-first).
+  // Finnhub's estimates for foreign filers are in the reporting currency; Nasdaq's history is USD.
   const rows: any[] = nasdaq?.data?.earningsSurpriseTable?.rows ?? [];
+  const currency = estimateCurrency({
+    estimateCurrency: profile?.estimateCurrency, currency: profile?.currency, known: U[symbol]?.ec,
+    country: profile?.country || U[symbol]?.c, epsE: nextE?.epsEstimate ?? null,
+    usdEps: rows.slice(0, 4).map((r) => (typeof r.eps === "number" ? r.eps : parseFloat(r.eps))),
+  });
+  const usd = isUsd(currency);
+  // The sheet explains a non-USD basis next to the estimates (next.currency); no partial-data warning needed.
+
+  // Past prints: Nasdaq gives report dates; Finnhub gives estimate/actual. Join on order (both newest-first).
+  // Finnhub figures only fill gaps when they're in dollars too.
   const history: Reaction[] = [];
   const closeOn = (day: string, offset: number) => {
     if (!chart) return null;
@@ -202,7 +213,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   rows.slice(0, 8).forEach((r, i) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");
     const date = `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
-    const f = surprises?.[i];
+    const f = usd ? surprises?.[i] : undefined;
     const session: Session = lastE && lastE.date === date ? (lastE.hour as Session) : habit;
     let move: number | null = null;
     const before = session === "bmo" ? closeOn(date, -1) : closeOn(date, 0);
@@ -219,11 +230,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     });
   });
   // Fall back to Finnhub's four quarters if Nasdaq was unreachable.
-  if (!history.length && surprises?.length) {
+  if (!history.length && surprises?.length && usd) {
     for (const f of surprises.slice(0, 4)) history.push({ date: f.period, session: "", period: f.period, epsE: f.estimate, epsA: f.actual, surprisePct: f.surprisePercent, move: null });
   }
   // A print reported in the last ~40 days might be on Finnhub's calendar before Nasdaq's table catches up.
-  if (lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date)) {
+  if (usd && lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date)) {
     const b = lastE.hour === "bmo" ? closeOn(lastE.date, -1) : closeOn(lastE.date, 0);
     const a = lastE.hour === "bmo" ? closeOn(lastE.date, 0) : closeOn(lastE.date, 1);
     history.unshift({ date: lastE.date, session: lastE.hour, period: `Q${lastE.quarter} ${lastE.year}`, epsE: lastE.epsEstimate, epsA: lastE.epsActual, surprisePct: lastE.epsEstimate ? ((lastE.epsActual - lastE.epsEstimate) / Math.abs(lastE.epsEstimate)) * 100 : null, move: b && a ? ((a - b) / b) * 100 : null });
@@ -253,9 +264,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const when = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "(time not yet confirmed)" }[nextE.hour as Session] ?? "";
     read.push(`${name} reports Q${nextE.quarter} on ${new Date(nextE.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })} ${when}.`);
   }
-  if (nextE?.epsEstimate != null && history[0]?.epsA != null) {
-    read.push(`Wall Street expects $${nextE.epsEstimate.toFixed(2)} a share, versus $${history[0].epsA.toFixed(2)} last quarter.`);
-  }
+  const estLine = readEstimate(name, nextE?.epsEstimate, currency, history[0]?.epsA);
+  if (estLine) read.push(estLine);
   if (beatRate) read.push(`It has beaten the estimate in ${beats} of its last ${judged.length} reports.`);
   if (expectedMove != null) read.push(`The stock has moved about ±${expectedMove.toFixed(1)}% on a typical report — that's the size of swing to be ready for.`);
   if (setup.grade) read.push(`Into the print it's in ${/^[aeiou]/i.test(setup.trend) ? "an" : "a"} ${setup.trend.toLowerCase()}${setup.rsi != null ? ` with RSI ${setup.rsi.toFixed(0)}` : ""}.`);
@@ -263,9 +273,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
 
   const body: TickerResponse = {
     symbol,
-    profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, marketCap: profile.marketCapitalization, exchange: profile.exchange, ipo: profile.ipo } : null,
+    profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, marketCap: profile.marketCapitalization, currency: typeof profile.currency === "string" ? profile.currency : "USD", exchange: profile.exchange, ipo: profile.ipo } : null,
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
-    next: nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate } : null,
+    next: nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate, currency } : null,
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
@@ -383,7 +393,7 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
         d.setup.grade ? `setup ${d.setup.grade}` : null,
         d.compass.grade ? `Compass quality ${d.compass.grade}` : null,
       ].filter(Boolean);
-      const desc = `${name}${d.next?.epsE != null ? ` — Street expects $${d.next.epsE.toFixed(2)} EPS` : ""}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
+      const desc = `${name}${d.next?.epsE != null ? ` — Street expects ${epsIn(d.next.epsE, d.next.currency)} EPS` : ""}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
       return { title, desc, image: `${SITE}${BASE}/og/t/${sym}.png` };
     } catch { return { title: `${sym} earnings · Metaphases`, desc: PAGES["/"].desc }; }
   }
@@ -432,7 +442,7 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
     const sym = syms[i];
     for (const e of (r.value?.earningsCalendar ?? []) as any[]) {
       if (e.date < today) continue;
-      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: e.epsEstimate ?? null, url: `${SITE}${BASE}/t/${sym}` });
+      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: e.epsEstimate ?? null, cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}` });
     }
   });
   items.sort((a, b) => a.date.localeCompare(b.date));
@@ -445,16 +455,16 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
 async function cardFor(sym: string, env: Env, ctx: ExecutionContext): Promise<string> {
   const d = await tickerData(sym, env, ctx);
   const when = d.next ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
-  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null });
+  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null, cur: d.next?.currency });
 }
 
 async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const svg = await cached(`og:svg:v1:${sym}:${day}`, 21600, ctx, () => cardFor(sym, env, ctx));
+    const svg = await cached(`og:svg:v2:${sym}:${day}`, 21600, ctx, () => cardFor(sym, env, ctx));
     if (fmt === "svg") return new Response(svg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=21600" } });
-    const key = new Request(`https://cache.metaphases.internal/og-png-v1-${sym}-${day}`);
+    const key = new Request(`https://cache.metaphases.internal/og-png-v2-${sym}-${day}`);
     const hit = await caches.default.match(key);
     if (hit) return hit;
     const { renderPng } = await import("./og");
@@ -472,7 +482,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const svg = await cached(`story:svg:v1:${kind}:${day}`, 21600, ctx, async () => {
+    const svg = await cached(`story:svg:v2:${kind}:${day}`, 21600, ctx, async () => {
       const t = kind.match(/^t\/([A-Z.\-]{1,10})$/);
       if (t) {
         const sym = t[1];
@@ -481,7 +491,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
         return storyTickerSvg({
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
           when: d.next ? whenPlain(d.next.date, d.next.session, day) : "date not announced yet",
-          session: d.next?.session ?? "", epsE: d.next?.epsE ?? null, move: d.expectedMove, grade: d.compass.grade,
+          session: d.next?.session ?? "", epsE: d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
           beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null,
         });
       }
@@ -494,7 +504,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
       }
       throw new Error("no story");
     });
-    const key = new Request(`https://cache.metaphases.internal/story-png-v1-${encodeURIComponent(kind)}-${day}`);
+    const key = new Request(`https://cache.metaphases.internal/story-png-v2-${encodeURIComponent(kind)}-${day}`);
     const hit = await caches.default.match(key);
     if (hit) return hit;
     const { renderPng } = await import("./og");

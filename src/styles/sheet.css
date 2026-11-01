@@ -24,6 +24,7 @@
 .nc-stats > div { min-width: 0; display: grid; align-content: space-between; }
 .nc-stats dt { overflow-wrap: break-word; font: 400 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: color-mix(in srgb, var(--bg) 60%, transparent); }
 .nc-stats dd { margin: 4px 0 0; font: 800 22px var(--display); letter-spacing: -.02em; }
+.nc-cur { grid-column: 1 / -1; margin: 4px 0 0; line-height: 1.45; }
 .next-card .term-btn { color: inherit; text-decoration-color: color-mix(in srgb, var(--bg) 45%, transparent); }
 .read ul { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .read li { position: relative; padding-left: 22px; font-size: 15px; line-height: 1.5; }

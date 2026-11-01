@@ -2,6 +2,7 @@
 // rendered as compact readable lines, trimmed to a budget. The system prompt carries the
 // non-negotiables from AGENTS.md: plain English, cite the numbers, never advice, never invent.
 import type { ChatMessage } from "./providers";
+import { epsIn, isUsd, moneyIn } from "../../shared/currency";
 
 export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask" | "hype";
 export const TASKS: AiTask[] = ["ticker", "week", "exposure", "retrace", "ask", "hype"];
@@ -40,14 +41,16 @@ const money = (v: unknown) => {
   const a = Math.abs(v);
   return a >= 1e12 ? `$${(v / 1e12).toFixed(2)}T` : a >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : a >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${v.toFixed(0)}`;
 };
+/** A 3-letter currency code from untrusted context, or undefined (= USD). */
+const cur3 = (c: unknown): string | undefined => (typeof c === "string" && /^[A-Z]{3}$/.test(c) ? c : c === "" ? "" : undefined);
 const clip = (s: unknown, len = 80) => String(s ?? "").replace(/[\r\n]+/g, " ").slice(0, len);
 
 function tickerFacts(t: Obj): string[] {
   const L: string[] = [];
   const name = clip(t.profile?.name ?? t.symbol, 60);
-  L.push(`Company: ${name} (${clip(t.symbol, 10)}), ${clip(t.profile?.industry ?? "", 40)}, market cap ${t.profile?.marketCap ? money(t.profile.marketCap * 1e6) : "—"}.`);
+  L.push(`Company: ${name} (${clip(t.symbol, 10)}), ${clip(t.profile?.industry ?? "", 40)}, market cap ${t.profile?.marketCap ? moneyIn(t.profile.marketCap * 1e6, cur3(t.profile.currency)) : "—"}.`);
   if (t.quote) L.push(`Price $${n(t.quote.price)} (${n(t.quote.changePct)}% today).`);
-  if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} on ${clip(t.next.date, 10)} ${clip(t.next.session || "time TBD", 4)}; consensus EPS $${n(t.next.epsE)}, revenue estimate ${money(t.next.revE)}.`);
+  if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} on ${clip(t.next.date, 10)} ${clip(t.next.session || "time TBD", 4)}; consensus EPS ${epsIn(t.next.epsE, cur3(t.next.currency))}, revenue estimate ${moneyIn(t.next.revE, cur3(t.next.currency))}${isUsd(cur3(t.next.currency)) ? "" : ` (estimates in ${cur3(t.next.currency) || "local currency"}, not USD; never compare them with USD figures)`}.`);
   else L.push("Next report date: not available.");
   if (t.beatRate) L.push(`Beat the EPS estimate in ${t.beatRate.beats} of the last ${t.beatRate.total} reports.`);
   if (typeof t.expectedMove === "number") L.push(`Typical stock move on a report: ±${n(t.expectedMove, 1)}%.`);
@@ -64,6 +67,8 @@ function tickerFacts(t: Obj): string[] {
 }
 
 function eventLine(e: Obj): string {
+  const c = cur3(e.cur);
+  if (!isUsd(c)) return `${clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""} EPS est ${epsIn(e.eE, c)}${e.eA != null ? ` actual ${epsIn(e.eA, c)}` : ""}${e.rE ? ` rev est ${moneyIn(e.rE, c)}` : ""}${e.rA ? ` rev actual ${moneyIn(e.rA, c)}` : ""} (figures in ${c || "local currency"}, not USD)${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}`;
   return `${clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""}${e.mc ? ` mcap ${money(e.mc * 1e6)}` : ""} EPS est ${n(e.eE)}${e.eA != null ? ` actual ${n(e.eA)}` : ""}${e.rE ? ` rev est ${money(e.rE)}` : ""}${e.rA ? ` rev actual ${money(e.rA)}` : ""}${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}`;
 }
 
