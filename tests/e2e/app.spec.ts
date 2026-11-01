@@ -86,3 +86,50 @@ test("no horizontal scroll and no console errors", async ({ page }) => {
   }
   expect(errors).toEqual([]);
 });
+
+test("the week's brief: open on desktop, collapsed on phone, remembered, and its reporters open the sheet", async ({ page, isMobile }) => {
+  await page.goto("/");
+  const brief = page.locator(".brief");
+  const head = brief.locator(".brief-head");
+  await expect(head).toContainText("This week");
+  await expect(head).toContainText("Nov 2–6");
+  await expect(head).toContainText("336 companies report");
+  await expect(head).toHaveAttribute("aria-expanded", isMobile ? "false" : "true");
+  if (isMobile) await head.click();
+  await expect(brief.locator(".brief-co")).toHaveCount(5);
+  await expect(brief.locator(".brief-co").first()).toContainText("AAPL");
+  await expect(brief.locator(".brief-macro")).toContainText("Jobs report");
+  await expect(brief.locator(".brief-stat").first()).toContainText("including 1 of the 10 largest (Apple Inc.)");
+  await expect(brief).toContainText(/Market mood reads \d+/);
+
+  // The choice survives a reload.
+  await head.click();
+  await expect(head).toHaveAttribute("aria-expanded", "false");
+  await page.reload();
+  await expect(page.locator(".brief-head")).toHaveAttribute("aria-expanded", "false");
+  await page.locator(".brief-head").click();
+
+  await brief.locator(".brief-co").first().click();
+  await expect(page).toHaveURL(/t=AAPL/);
+  await expect(page.locator(".sheet")).toBeVisible();
+});
+
+test("the brief follows navigation to another week", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "week view" }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  const head = page.locator(".brief-head");
+  await expect(head).toContainText("Week of Nov 9–13");
+  await expect(head).toContainText(/\d+ companies report · (\d+|none) of the 10 largest/);
+  await expect(head).not.toContainText("336 companies");
+});
+
+test("the brief is honest when a week's earnings didn't load", async ({ page }) => {
+  // The recorded November fixture couldn't load Nov 26 – Dec 4 (see its warnings).
+  await page.goto("/?d=2026-11-30");
+  await page.getByRole("button", { name: "week view" }).click();
+  const head = page.locator(".brief-head");
+  await expect(head).toContainText("Week of Nov 30–Dec 4");
+  await expect(head).toContainText("Earnings for this week didn't load");
+  await expect(head).not.toContainText("quiet");
+});

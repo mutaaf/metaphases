@@ -3,14 +3,14 @@ import { useSyncExternalStore } from "react";
 
 export interface WatchItem { s: string; buy?: number; note?: string; added: string }
 export interface Holding { s: string; v: number } // symbol, dollar value
-export interface Prefs { theme: "auto" | "light" | "dark"; tiles: "logo" | "ticker"; view: "month" | "week" | "day"; filter: string; sector: string }
+export interface Prefs { theme: "auto" | "light" | "dark"; tiles: "logo" | "ticker"; view: "month" | "week" | "day"; filter: string; sector: string; brief: "auto" | "open" | "closed" }
 
 const KEY = "metaphases:v1";
 interface State { watch: WatchItem[]; holdings: Holding[]; prefs: Prefs }
 const DEFAULT: State = {
   watch: [{ s: "AAPL", added: "2026-10-31" }, { s: "NVDA", added: "2026-10-31" }, { s: "DIS", added: "2026-10-31" }],
   holdings: [],
-  prefs: { theme: "auto", tiles: "logo", view: "month", filter: "popular", sector: "" },
+  prefs: { theme: "auto", tiles: "logo", view: "month", filter: "popular", sector: "", brief: "auto" },
 };
 
 let state: State = (() => {

@@ -8,6 +8,8 @@ import { eps, money, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
 import { actions, useStore } from "../lib/store";
 import { Icon, Notice, Phase, PHASE_LABEL, Skeleton, Term, Tile } from "./bits";
+import { WeekBrief } from "./WeekBrief";
+import { briefWeek } from "../lib/brief";
 
 const HOLIDAY = Object.fromEntries(HOLIDAYS.map((h) => [h.date, h.name]));
 const PER_CELL = 3;
@@ -216,6 +218,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const store = useStore();
   const [openDay, setOpenDay] = useState<string | null>(param("day"));
   const next = nextTradingDay(today);
+  const bWeek = useMemo(() => briefWeek(weeks, anchor), [weeks, anchor]);
 
   const inMonth = (d: string) => parse(d).getMonth() === a.getMonth();
   const monthEvents = view === "month" ? filtered.filter((e) => inMonth(e.d)) : filtered;
@@ -296,6 +299,8 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
           </div>
         </div>
       </div>
+
+      <WeekBrief week={bWeek} current={bWeek.includes(next)} cal={data} calLoading={loading} calError={error} macro={macro.data} macroLoading={macro.loading} />
 
       {error && <Notice tone="error">{error} Your watchlist and holdings are safe — pull to retry.</Notice>}
       {data && data.warnings.length > 0 && (
