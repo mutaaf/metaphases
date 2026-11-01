@@ -8,6 +8,8 @@ import universe from "../data/universe.json";
 import type { CalendarResponse, EarningsEvent, MacroResponse, Session, TickerResponse, Reaction, MoodComponent, MacroEvent } from "../shared/types";
 import { compassGrade, setupGrade, rsi, sma } from "../shared/grades";
 import { FOMC, HOLIDAYS } from "../shared/market";
+import { storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../shared/story";
+import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, type IcsItem } from "../shared/depth";
 
@@ -359,6 +361,8 @@ const PAGES: Record<string, { title: string; desc: string }> = {
   "/compass": { title: "Compass: what reports with your money · Metaphases", desc: "Paste your stocks and funds. See which earnings reports actually move your money over the next two months — looking through your ETFs." },
   "/retrace": { title: "Retrace: how the reports really landed · Metaphases", desc: "Every report this month graded against Wall Street's consensus: beat rates, sector scorecards, the biggest surprises." },
   "/learn": { title: "Learn the language of earnings · Metaphases", desc: "EPS, consensus, typical move, P/E, RSI — every term on Metaphases in plain English." },
+  "/today": { title: "Today, in 60 seconds · Metaphases", desc: "The market's mood, the reports that touch your money and this week's big event — in plain English, one swipe at a time." },
+  "/check": { title: "Hype Check: saw a stock on socials? · Metaphases", desc: "Paste a TikTok, Instagram or X caption. See what the company actually does, when it reports, how wild it swings and the red flags — before you buy. Never advice." },
   "/about": { title: "Where Metaphases comes from · Metaphases", desc: "A calmer earnings calendar with a memory: the best ideas from Market Digest and Compass, free, explained, never advice. Data, lineage and how the agents keep it running." },
 };
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
@@ -463,6 +467,45 @@ async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, c
   }
 }
 
+// ── /og/story/*.png: 9:16 story cards for Instagram / WhatsApp stories ─────
+async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
+  try {
+    const day = iso(todayNY());
+    const svg = await cached(`story:svg:v1:${kind}:${day}`, 21600, ctx, async () => {
+      const t = kind.match(/^t\/([A-Z.\-]{1,10})$/);
+      if (t) {
+        const sym = t[1];
+        const d = (await (await ticker(sym, env, ctx)).json()) as TickerResponse;
+        const name = d.profile?.name ?? U[sym]?.n ?? sym;
+        return storyTickerSvg({
+          symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
+          when: d.next ? whenPlain(d.next.date, d.next.session, day) : "date not announced yet",
+          session: d.next?.session ?? "", epsE: d.next?.epsE ?? null, move: d.expectedMove, grade: d.compass.grade,
+          beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null,
+        });
+      }
+      const m = (await (await macro(env, ctx)).json()) as MacroResponse;
+      if (kind === "mood" && m.mood) { const p = moodPlain(m.mood.score); return storyMoodSvg(m.mood.score, p.headline, p.line); }
+      if (kind === "week") {
+        const rank: Record<string, number> = { fomc: 5, cpi: 4, jobs: 3, pce: 2, gdp: 2 };
+        const ev = m.events.filter((e) => e.date >= day && e.date <= addDays(day, 9)).sort((a, b) => (rank[b.key] ?? 0) - (rank[a.key] ?? 0))[0];
+        if (ev) return storyMacroSvg(ev.name, whenPlain(ev.date, "", day).replace(" (time not confirmed yet)", ""), ev.blurb);
+      }
+      throw new Error("no story");
+    });
+    const key = new Request(`https://cache.metaphases.internal/story-png-v1-${encodeURIComponent(kind)}-${day}`);
+    const hit = await caches.default.match(key);
+    if (hit) return hit;
+    const { renderPng } = await import("./og");
+    const res = new Response(await renderPng(svg, ctx, 1080), { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=21600" } });
+    ctx.waitUntil(caches.default.put(key, res.clone()));
+    return res;
+  } catch {
+    return fallback();
+  }
+}
+
 // ── /api/health: one probe per upstream, so agents and the operator can see what's degraded ──
 async function health(env: Env, ctx: ExecutionContext): Promise<Response> {
   const today = iso(todayNY());
@@ -496,6 +539,8 @@ export default {
       if (p === "/api/health") return await health(env, ctx);
       if (p.startsWith("/api/ai/")) { const r = await handleAi(p, req, env); if (r) return r; }
       if (p === "/api/ics") return await ics(url, env, ctx);
+      const story = p.match(/^\/og\/story\/(t\/[A-Za-z.\-]{1,10}|mood|week)\.png$/);
+      if (story) return await storyCard(story[1].toUpperCase().replace(/^T\//, "t/").replace(/^MOOD$/, "mood").replace(/^WEEK$/, "week"), req, env, ctx);
       const og = p.match(/^\/og\/t\/([A-Za-z.\-]{1,10})\.(svg|png)$/);
       if (og) return await ogCard(og[1].toUpperCase(), og[2] as "svg" | "png", req, env, ctx);
       const m = p.match(/^\/api\/ticker\/([A-Za-z.\-]{1,10})$/);

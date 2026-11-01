@@ -26,11 +26,11 @@ async function fonts(ctx: ExecutionContext): Promise<Uint8Array[]> {
   );
 }
 
-export async function renderPng(svg: string, ctx: ExecutionContext): Promise<Uint8Array> {
+export async function renderPng(svg: string, ctx: ExecutionContext, width = 1200): Promise<Uint8Array> {
   ready ??= initWasm(resvgWasm as unknown as WebAssembly.Module).catch((e) => { ready = null; throw e; });
   const [, fontBuffers] = await Promise.all([ready, fonts(ctx)]);
   const r = new Resvg(svg, {
-    fitTo: { mode: "width", value: 1200 },
+    fitTo: { mode: "width", value: width },
     font: { fontBuffers, loadSystemFonts: false, defaultFontFamily: "Schibsted Grotesk" },
     background: "#edeae2",
   });

@@ -6,10 +6,11 @@ Read this before you change anything. Autonomous agents (scout, critic, builder,
 
 **Metaphases: every earnings report, phase by phase.** It's the calmest, deepest earnings calendar on the web: as simple to read as a wall calendar, as deep as a desk terminal when you tap.
 
-Three kinds of people use it, and every change should serve at least one:
+Four kinds of people use it, and every change should serve at least one:
 1. **The glancer** wants to know who reports this week and when. The month grid must stay scannable in two seconds.
 2. **The trader** wants to know how a stock moved last time, how it's set up and what the street expects. That lives in the ticker sheet.
 3. **The investor** (Compass's user) wants to know whether this report touches their money and whether it's a quality company. That lives in Compass look-through and quality grades.
+4. **The social-first everyday investor** — the operator's own household: a medium investor who gets her market news from Instagram, TikTok and X, on her phone. She doesn't want a terminal; she wants to know *does this affect me?* and *is this hyped stock real?* That lives in the **Everyday lens** (plain English, trader jargon one tap away), **Today** (60-second story cards that share as 9:16 images), **Hype Check** (`/check`, also the PWA share target — share a post from any app straight into it) and the phone **tab bar** (Today · Calendar · Hype Check · My Money). Design for her at 390×844 first; nothing she sees should need a glossary, and nothing may read as advice. "A viral post isn't research" is the stance.
 
 Sibling of **Market Digest** and **Compass** (`github.com/mutaaf`, private `market-digest`). Their ideas are first-class here:
 - **Setup grade** comes from Market Digest's scorers.

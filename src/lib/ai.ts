@@ -6,7 +6,7 @@ import { BASE } from "./router";
 import { parseSse, type StreamEvent } from "./sse";
 
 export type AiProvider = "edge" | "anthropic" | "openai" | "gemini" | "xai";
-export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask";
+export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask" | "hype";
 
 export interface AiSettings { provider: AiProvider; key: string; model: string; models: string[]; verified: boolean }
 

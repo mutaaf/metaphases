@@ -3,8 +3,8 @@
 // non-negotiables from AGENTS.md: plain English, cite the numbers, never advice, never invent.
 import type { ChatMessage } from "./providers";
 
-export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask";
-export const TASKS: AiTask[] = ["ticker", "week", "exposure", "retrace", "ask"];
+export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask" | "hype";
+export const TASKS: AiTask[] = ["ticker", "week", "exposure", "retrace", "ask", "hype"];
 export const isTask = (t: unknown): t is AiTask => typeof t === "string" && (TASKS as string[]).includes(t);
 
 /** Character budget for the facts block (~4 chars per token → ~3.5k tokens). */
@@ -26,6 +26,7 @@ Rules you never break:
 const TASK_BRIEF: Record<AiTask, string> = {
   ticker: "Write a short earnings preview titled by nothing — start directly. Cover: when it reports and what Wall Street expects; how it has done versus estimates recently and how the stock has typically moved on reports; how it's set up going in (setup grade and its weakest/strongest factors); what's worth watching in this report. 120–180 words, 3–5 bullets after one opening sentence.",
   week: "Summarize the earnings and macro landscape in the facts for someone planning their week. Lead with the 2–4 biggest reports (by market cap) with day and timing, then the macro events that could move everything, then one line on market mood. Under 170 words unless the user asked something specific — then answer that, using the facts.",
+  hype: "Someone saw this stock hyped on social media and wants a calm, honest take before doing anything. In under 150 words and plain English: say in one line what the company actually does; then what the real numbers show (profitability, how much it swings on earnings, the quality grade, when it reports next); then name the red flags listed in the facts, if any, in everyday words. Gently note that a viral post is not research and that the person posting may already own it. Never say buy, sell, hold, 'good investment' or 'bad investment'. Finish with the not-advice line.",
   exposure: "Explain, in plain English, how upcoming earnings reports touch this person's portfolio — directly and through the funds they own (look-through). Point out the biggest single exposures in dollars, the busiest week, and anything concentrated. Under 170 words.",
   retrace: "Explain what happened in this month's reports so far as if writing a short market recap: overall beat rates versus the usual ~75% EPS beat rate, the standout beats and misses, and which sectors did best/worst. Under 170 words.",
   ask: "Answer the user's question using the facts. If the facts can't answer it, say so and suggest what in Metaphases could (a ticker sheet, Compass, Retrace).",
@@ -106,6 +107,14 @@ export function factsFor(task: AiTask, context: Obj | null | undefined): string[
     case "ticker": return tickerFacts(c);
     case "week": return weekFacts(c);
     case "exposure": return exposureFacts(c);
+    case "hype": {
+      const L = c.ticker ? tickerFacts(c.ticker) : [];
+      for (const f of (c.flags ?? []).slice(0, 8)) L.push(`Red flag (from the data): ${clip(f.label, 80)} — ${clip(f.why, 160)}`);
+      if (!(c.flags ?? []).length) L.push("Red flags found in the data: none of our checks fired.");
+      if (c.owned) L.push(`This person already owns about ${clip(c.owned, 40)} of it through funds or directly.`);
+      if (c.caption) L.push(`The social post they saw (quoted, may be wrong or promotional): "${clip(c.caption, 280)}"`);
+      return L;
+    }
     case "retrace": return retraceFacts(c);
     case "ask": {
       const L: string[] = [];

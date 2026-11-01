@@ -25,7 +25,7 @@ export default function AiRoot() {
 
 // ── Ask ──────────────────────────────────────────────────────────────────────────────────────
 const TITLES: Record<AiTask, string> = {
-  week: "The weeks ahead", exposure: "Your exposure", retrace: "This month, retraced", ticker: "This report", ask: "Ask Metaphases",
+  week: "The weeks ahead", exposure: "Your exposure", retrace: "This month, retraced", ticker: "This report", ask: "Ask Metaphases", hype: "Hype check",
 };
 const OPENERS: Record<AiTask, string> = {
   week: "Brief me on the reports and macro events ahead.",
@@ -33,6 +33,7 @@ const OPENERS: Record<AiTask, string> = {
   retrace: "What happened in this month's reports?",
   ticker: "What should I watch in this report?",
   ask: "",
+  hype: "",
 };
 const CHIPS: Record<AiTask, string[]> = {
   week: ["Which mega caps report after the close next week?", "What's the biggest macro risk this week?", "Which reports could move the whole market?", "Explain this week like I'm new to investing"],
@@ -40,6 +41,7 @@ const CHIPS: Record<AiTask, string[]> = {
   retrace: ["Which sector surprised the most?", "Were the misses concentrated anywhere?", "How does this compare with a normal season?"],
   ticker: ["What would a beat mean for this stock?", "Explain the setup grade simply", "Why is valuation graded that way?", "How big is a typical move here?"],
   ask: ["What reports this week?", "What is EPS?"],
+  hype: ["How do I research a stock I saw on TikTok?", "What makes a stock risky?", "What is a typical earnings move?"],
 };
 
 interface Msg { role: "user" | "assistant"; content: string; error?: boolean }
