@@ -9,6 +9,9 @@ import { BASE } from "../lib/router";
 import { AiPreviewMount } from "./ai/mount";
 import { useDialog } from "../lib/dialog";
 import { IcsButtons, Peers, PriceChart, QuarterTrend } from "./Depth";
+import { whatTheyDo } from "../lib/plain";
+import { isEveryday } from "./Everyday";
+import { navigate } from "../lib/router";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
 
 function FactorList({ factors }: { factors: Factor[] }) {
@@ -92,7 +95,10 @@ function Street({ s }: { s: NonNullable<TickerResponse["street"]> }) {
 
 export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () => void }) {
   const { data, loading, error, retry } = useTicker(symbol);
-  const { watch, holdings } = useStore();
+  const { watch, holdings, prefs } = useStore();
+  const everyday = isEveryday(prefs.lens);
+  const [traderDetails, setTraderDetails] = useState(false);
+  const showTrader = !everyday || traderDetails;
   const [copied, setCopied] = useState(false);
   const w = watch.find((x) => x.s === symbol);
   const c = co(symbol);
@@ -124,6 +130,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
           <div className="sheet-id">
             <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{data?.profile?.marketCap ? ` · ${mcap(data.profile.marketCap)}` : ""}</span>
             <h2>{name}</h2>
+            {everyday && <p className="sheet-does">{whatTheyDo(name, data?.profile?.industry ?? c?.ind)}</p>}
             {data?.quote ? (
               <span className="quote"><b>${data.quote.price.toFixed(2)}</b> <span className={up ? "pos" : "neg"}>{pct(data.quote.changePct, 2)}</span> <Spark data={data.spark} w={90} h={22} /></span>
             ) : loading ? <Skeleton w={160} h={18} /> : null}
@@ -165,7 +172,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
             {data.read.length > 0 && (
               <section className="read">
                 <h4 className="eyebrow">The read</h4>
-                <ul>{data.read.map((r) => <li key={r}>{r}</li>)}</ul>
+                <ul>{data.read.filter((r) => showTrader || !/\bRSI\b/.test(r)).map((r) => <li key={r}>{r}</li>)}</ul>
               </section>
             )}
 
@@ -178,9 +185,16 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
 
             {data.next && <Peers symbol={symbol} date={data.next.date} />}
 
+            {everyday && !direct && via.length === 0 && (
+              <section className="owned owned-none">
+                <h4 className="eyebrow">Does this affect me?</h4>
+                <p>Not that we can see. If you own index funds, it might — <button className="link" onClick={() => { onClose(); navigate("/compass"); }}>add what you own in My Money</button> and we'll check every fund for you.</p>
+              </section>
+            )}
+
             {(direct || via.length > 0) && (
               <section className="owned">
-                <h4 className="eyebrow"><Term k="lookthrough">You already own this</Term></h4>
+                <h4 className="eyebrow">{everyday ? "Does this affect me? Yes —" : <Term k="lookthrough">You already own this</Term>}</h4>
                 <p>
                   {direct && <>Directly: <b>{money(direct.v)}</b>. </>}
                   {via.length > 0 && <>Through your funds: {via.map((v, i) => <span key={v.etf}>{i ? ", " : ""}<b>{v.etf}</b> ({v.weight.toFixed(1)}% ≈ {money(v.dollars)})</span>)}.</>}
@@ -190,14 +204,14 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
               </section>
             )}
 
-            <div className="grade-pair">
-              <section className="grade-card">
+            <div className={`grade-pair ${showTrader ? "" : "single"}`}>
+              {showTrader && <section className="grade-card">
                 <header>
                   <div><h4 className="eyebrow"><Term k="setup">Setup into the print</Term></h4><span className="muted small">{data.setup.trend}</span></div>
                   <GradeBadge g={data.setup.grade} size="lg" />
                 </header>
                 {data.setup.factors.length ? <FactorList factors={data.setup.factors} /> : <p className="muted">Not enough price history.</p>}
-              </section>
+              </section>}
               <section className="grade-card">
                 <header>
                   <div><h4 className="eyebrow"><Term k="compass">Compass quality</Term></h4><span className="muted small">As a long-term holding</span></div>
@@ -206,6 +220,12 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                 {data.compass.factors.length ? <FactorList factors={data.compass.factors} /> : <p className="muted">Fundamentals unavailable for this company.</p>}
               </section>
             </div>
+
+            {everyday && (
+              <button className="link-quiet trader-toggle" onClick={() => setTraderDetails((x) => !x)} aria-expanded={traderDetails}>
+                {traderDetails ? "Hide trader details" : "Show trader details (setup grade, RSI, volatility)"}
+              </button>
+            )}
 
             {data.history.length > 0 && (
               <section className="card">

@@ -4,4 +4,5 @@ import App from "./App";
 import "./styles.css";
 import "./styles/ai.css";
 import "./styles/depth.css";
+import "./styles/everyday.css";
 createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);

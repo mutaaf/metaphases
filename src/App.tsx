@@ -7,6 +7,7 @@ import { appPath, href, navigate, param, setParam, useLocation } from "./lib/rou
 import { actions, useStore } from "./lib/store";
 import { nowNY } from "./lib/dates";
 import { AiLayer, AiTopButton } from "./components/ai/mount";
+import { isEveryday, LensPicker, LensSwitch, TabBar } from "./components/Everyday";
 
 // The calendar ships in the main bundle; every other page loads on demand.
 const WatchlistPage = lazy(() => import("./pages/Watchlist"));
@@ -15,9 +16,16 @@ const RetracePage = lazy(() => import("./pages/Retrace"));
 const LearnPage = lazy(() => import("./pages/Learn"));
 const AboutPage = lazy(() => import("./pages/About"));
 const Search = lazy(() => import("./pages/Search"));
+const TodayPage = lazy(() => import("./pages/Today"));
+const CheckPage = lazy(() => import("./pages/Check"));
+
+// Everyday investors on a phone land on Today the first time the app opens (not on later Calendar taps).
+let landed = false;
 
 const NAV = [
+  { path: "/today", label: "Today" },
   { path: "/", label: "Calendar" },
+  { path: "/check", label: "Hype Check" },
   { path: "/watchlist", label: "Watchlist" },
   { path: "/compass", label: "Compass" },
   { path: "/retrace", label: "Retrace" },
@@ -41,6 +49,12 @@ export default function App() {
   const { prefs } = useStore();
   const [search, setSearch] = useState(false);
   const path = appPath();
+
+  useEffect(() => {
+    if (landed) return;
+    landed = true;
+    if (prefs.lens === "everyday" && path === "/" && !location.search && matchMedia("(max-width: 760px)").matches) navigate("/today", true);
+  }, []);
 
   // Share URLs: /t/AAPL opens the calendar with AAPL's sheet on top.
   useEffect(() => {
@@ -73,11 +87,15 @@ export default function App() {
     path === "/retrace" ? <RetracePage /> :
     path === "/learn" ? <LearnPage /> :
     path === "/about" ? <AboutPage /> :
+    path === "/today" ? <TodayPage /> :
+    path === "/check" ? <CheckPage /> :
     <CalendarPage onSearch={openSearch} />;
   const ny = nowNY();
+  // Today and Hype Check are single-purpose phone screens: no macro strip, no floating Ask (they have their own).
+  const focusRoute = path === "/today" || path === "/check";
 
   return (
-    <div className="app" data-loc={loc}>
+    <div className={`app lens-${isEveryday(prefs.lens) ? "everyday" : "trader"}${focusRoute ? " focus-route" : ""}`} data-loc={loc}>
       <a className="skip-link" href="#main">Skip to content</a>
       <header className="top">
         <a className="brand" href={href("/")} onClick={(e) => { e.preventDefault(); navigate("/"); }} aria-label="Metaphases home"><Mark /> <span>Metaphases</span></a>
@@ -92,7 +110,7 @@ export default function App() {
         <button className="top-icon" onClick={() => actions.setPref("theme", dark ? "light" : "dark")} aria-label={dark ? "Switch to light" : "Switch to dark"}><Icon name={dark ? "sun" : "moon"} /></button>
       </header>
       <div className="frame">
-        <MacroStrip />
+        {!focusRoute && <MacroStrip />}
         <main id="main" tabIndex={-1}><Suspense fallback={<PageSkeleton />}>{page}</Suspense></main>
         <footer className="legend">
           <div className="legend-keys">
@@ -109,8 +127,11 @@ export default function App() {
       </div>
       <footer className="colophon">
         <span className="eyebrow">Charted in Texas by <a href="https://mutaafaziz.com">Mutaaf Aziz</a> · grades are explained, never advice · <a href={href("/about")} onClick={(e) => { e.preventDefault(); navigate("/about"); }}>sibling of Market Digest &amp; Compass</a></span>
+        <LensSwitch />
         <span className="eyebrow">{ny.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }).toUpperCase()}</span>
       </footer>
+      <TabBar />
+      <LensPicker />
       {t && <TickerSheet symbol={t.toUpperCase()} onClose={() => setParam("t", null)} />}
       {search && <Suspense fallback={null}><Search onClose={() => setSearch(false)} /></Suspense>}
       <AiLayer />

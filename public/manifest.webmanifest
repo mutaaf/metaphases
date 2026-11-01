@@ -1,7 +1,8 @@
 {
+  "id": "/metaphases/",
   "name": "Metaphases — earnings, phase by phase",
   "short_name": "Metaphases",
-  "description": "The earnings calendar that reads the room: timing, track records, quality grades and your own exposure.",
+  "description": "Earnings in plain English: what reports this week, what touches your money, and a Hype Check for stocks you saw on socials.",
   "start_url": "/metaphases/",
   "scope": "/metaphases/",
   "display": "standalone",
@@ -12,5 +13,14 @@
     { "src": "/metaphases/icon-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "/metaphases/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "/metaphases/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
-  ]
+  ],
+  "shortcuts": [
+    { "name": "Today, in 60 seconds", "short_name": "Today", "url": "/metaphases/today", "icons": [{ "src": "/metaphases/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Hype Check", "short_name": "Hype Check", "url": "/metaphases/check", "icons": [{ "src": "/metaphases/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "share_target": {
+    "action": "/metaphases/check",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  }
 }

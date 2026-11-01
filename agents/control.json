@@ -1,12 +1,24 @@
 {
   "_readme": "Operator control panel. Edit this file (GitHub web or mobile is fine) to pause or steer the agents. Every agent reads it first and obeys it. HOW OFTEN each agent runs is set on its routine schedule at https://claude.ai/code/routines, not here. The weekly data refresh (.github/workflows/data-refresh.yml) also honours \"paused\".",
   "paused": false,
-  "focus": "LAUNCH (set 2026-10-31 by the operator). v0.1 is live. Make Metaphases the earnings calendar people bookmark and share during peak November earnings season. Priority: (1) correctness and trust in every number shown (dates, sessions, estimates, results, grades), (2) depth that Market Digest and Compass uniquely bring (grades, Retrace, look-through, Market Mood) presented simply, (3) phone experience at 390×844, (4) shareability: every surface unfurls beautifully, (5) speed. Never give advice; always explain.",
+  "focus": "EVERYDAY (set 2026-11-01 by the operator). The priority persona is the social-first, mobile-first everyday investor (AGENTS.md § Product vision #4): a medium investor who gets her news from socials. Judge every change at 390×844 touch, in the Everyday lens first. Priority: (1) Hype Check and Today are fast, correct and calm — every flag and number traceable to real data; (2) she can act where she already is: share-target from Instagram/TikTok/X, story cards she'd actually repost, reminders for the companies she owns; (3) plain English everywhere — if a term needs the glossary, rewrite it; (4) keep the trader desk intact behind the lens switch. Never advice; 'a viral post isn't research'.",
   "agents": {
-    "scout": { "enabled": true, "max_new_tickets_per_run": 3, "ready_queue_cap": 10 },
-    "builder": { "enabled": true, "max_merges_per_day": 6 },
-    "keeper": { "enabled": true },
-    "critic": { "enabled": true, "max_new_tickets_per_run": 3 }
+    "scout": {
+      "enabled": true,
+      "max_new_tickets_per_run": 3,
+      "ready_queue_cap": 10
+    },
+    "builder": {
+      "enabled": true,
+      "max_merges_per_day": 6
+    },
+    "keeper": {
+      "enabled": true
+    },
+    "critic": {
+      "enabled": true,
+      "max_new_tickets_per_run": 3
+    }
   },
   "frozen_paths": [
     "wrangler.jsonc",
