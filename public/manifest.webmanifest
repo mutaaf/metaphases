@@ -2,14 +2,15 @@
   "name": "Metaphases — earnings, phase by phase",
   "short_name": "Metaphases",
   "description": "The earnings calendar that reads the room: timing, track records, quality grades and your own exposure.",
-  "start_url": "/",
+  "start_url": "/metaphases/",
+  "scope": "/metaphases/",
   "display": "standalone",
   "background_color": "#EDEAE2",
   "theme_color": "#EDEAE2",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+    { "src": "/metaphases/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/metaphases/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/metaphases/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/metaphases/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
   ]
 }

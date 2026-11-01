@@ -1,6 +1,6 @@
 # Metaphases: working notes
 
-Earnings calendar at metaphases.com. Cloudflare Worker + React SPA. Sibling of Market Digest & Compass (`~/projects/market-digest`); the grading logic in `shared/grades.ts` is a port of that repo's `fundamentals.py` / scorers, so keep the thresholds in sync.
+Earnings calendar at **mutaafaziz.com/metaphases/**: a Cloudflare Worker on route `mutaafaziz.com/metaphases*` (the same pattern as cold-gas and outatime), plus a React SPA. Vite `base` is `/metaphases/` and the build goes to `dist/metaphases/`. The worker strips `BASE`, and the client uses `src/lib/router.ts` (`BASE`, `href()`, `appPath()`). No separate domain: the user wants everything on their existing site. Sibling of Market Digest & Compass (`~/projects/market-digest`); the grading logic in `shared/grades.ts` is a port of that repo's `fundamentals.py` / scorers, so keep the thresholds in sync.
 
 ## Commands
 - `npm run up`: idempotent; installs deps, writes `.dev.vars` from market-digest's `.env`, typechecks, builds, runs `wrangler dev --port 8811`
@@ -25,4 +25,4 @@ Earnings calendar at metaphases.com. Cloudflare Worker + React SPA. Sibling of M
 - Read `AGENTS.md` (operating manual) and `agents/prompts/*`. Steering lives in `agents/control.json`; cadence is set on the routines at claude.ai/code/routines.
 - `main` is protected (required check `check`). Agent PRs on `scout/ build/ fix/ keep/` auto-merge via `agent-automerge.yml`; `main-ci-backstop.yml` dispatches CI for merges made by GITHUB_TOKEN.
 - The weekly `data-refresh.yml` needs the repo secret `FINNHUB_API_KEY` (already set). It opens its own PR, arms auto-merge and dispatches CI because GITHUB_TOKEN PRs don't trigger workflows.
-- **Deploys:** Workers Builds needs the repo added to the Cloudflare GitHub App (installation 150209183, which requires the user's passkey) and connected in the dashboard. Until then, `npm run deploy` is manual.
+- **Deploys:** `npm run deploy` publishes the worker and its route. Workers Builds needs the repo added to the Cloudflare GitHub App (installation 150209183, which requires the user's passkey) and connected in the dashboard. Until then, `npm run deploy` is manual.

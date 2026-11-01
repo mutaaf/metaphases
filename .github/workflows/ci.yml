@@ -26,7 +26,7 @@ jobs:
       - run: npx vite build
       - name: Bundle budget (main JS ≤ 120 kB gzip)
         run: |
-          f=$(ls dist/assets/index-*.js); g=$(gzip -c "$f" | wc -c); echo "main.js gzip: $g bytes"
+          f=$(ls dist/metaphases/assets/index-*.js); g=$(gzip -c "$f" | wc -c); echo "main.js gzip: $g bytes"
           [ "$g" -le 122880 ] || { echo "::error::main bundle $g B gzip exceeds the 120 kB budget (AGENTS.md)"; exit 1; }
 
   e2e:

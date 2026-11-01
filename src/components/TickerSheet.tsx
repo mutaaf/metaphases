@@ -5,6 +5,7 @@ import { co, heldVia, nameOf, ETF_ASOF } from "../lib/data";
 import { daysBetween, fmtLong, todayISO } from "../lib/dates";
 import { eps, mcap, money, pct } from "../lib/format";
 import { actions, useStore } from "../lib/store";
+import { BASE } from "../lib/router";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
 
 function FactorList({ factors }: { factors: Factor[] }) {
@@ -125,7 +126,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
           </div>
           <div className="sheet-actions">
             <button className={`btn btn-box ${w ? "on" : ""}`} onClick={() => actions.toggleWatch(symbol)} aria-pressed={!!w}><Icon name="star" size={14} /> {w ? "Watching" : "Watch"}</button>
-            <button className="btn btn-box sq" onClick={() => share(`${symbol} on Metaphases`, shareText, `${location.origin}/t/${symbol}`, () => { setCopied(true); setTimeout(() => setCopied(false), 1800); })} aria-label="Share"><Icon name="share" size={14} /></button>
+            <button className="btn btn-box sq" onClick={() => share(`${symbol} on Metaphases`, shareText, `${location.origin}${BASE}/t/${symbol}`, () => { setCopied(true); setTimeout(() => setCopied(false), 1800); })} aria-label="Share"><Icon name="share" size={14} /></button>
             <button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
           </div>
         </header>

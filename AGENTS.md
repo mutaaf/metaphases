@@ -59,8 +59,8 @@ The thresholds in `shared/grades.ts` must stay identical to Market Digest's `GRA
 - `npm run deploy`: manual deploy (normally Workers Builds deploys `main`).
 
 ## Production
-- **Live:** https://metaphases.com. Until DNS is connected: https://metaphases.mutaaf-aziz4288.workers.dev
-- **Health:** `GET /api/health` returns 200 with `{ok, build, sources[]}` when every upstream answers, otherwise 503 naming the broken source.
+- **Live:** https://mutaafaziz.com/metaphases/ (Worker route `mutaafaziz.com/metaphases*`; the base path `/metaphases/` is an invariant, so never hard-code root-relative URLs: use `href()` and `BASE` from `src/lib/router.ts`).
+- **Health:** `GET /metaphases/api/health` returns 200 with `{ok, build, sources[]}` when every upstream answers, otherwise 503 naming the broken source.
 - **Deploys:** Cloudflare Workers Builds deploys on every merge to `main`, with PR previews (`"previews": {}`). If `build` in `/api/health` hasn't changed about 10 minutes after a merge, the pipeline isn't connected. Say so in your PR and don't retry.
 
 ## Definition of done (every PR)
