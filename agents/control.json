@@ -1,0 +1,17 @@
+{
+  "_readme": "Operator control panel. Edit this file (GitHub web or mobile is fine) to pause or steer the agents. Every agent reads it first and obeys it. HOW OFTEN each agent runs is set on its routine schedule at https://claude.ai/code/routines, not here. The weekly data refresh (.github/workflows/data-refresh.yml) also honours \"paused\".",
+  "paused": false,
+  "focus": "LAUNCH (set 2026-10-31 by the operator). v0.1 is live. Make Metaphases the earnings calendar people bookmark and share during peak November earnings season. Priority: (1) correctness and trust in every number shown (dates, sessions, estimates, results, grades), (2) depth that Market Digest and Compass uniquely bring (grades, Retrace, look-through, Market Mood) presented simply, (3) phone experience at 390×844, (4) shareability: every surface unfurls beautifully, (5) speed. Never give advice; always explain.",
+  "agents": {
+    "scout": { "enabled": true, "max_new_tickets_per_run": 3, "ready_queue_cap": 10 },
+    "builder": { "enabled": true, "max_merges_per_day": 6 },
+    "keeper": { "enabled": true },
+    "critic": { "enabled": true, "max_new_tickets_per_run": 3 }
+  },
+  "frozen_paths": [
+    "wrangler.jsonc",
+    ".github/workflows/",
+    "agents/control.json",
+    "shared/grades.ts"
+  ]
+}

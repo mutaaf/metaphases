@@ -55,7 +55,7 @@ export default function App() {
             <a key={n.path} href={n.path} className={path === n.path ? "on" : ""} onClick={(e) => { e.preventDefault(); navigate(n.path); }}>{n.label}</a>
           ))}
         </nav>
-        <button className="top-search" onClick={() => setSearch(true)}><Icon name="search" size={14} /> <span>Search ticker</span> <kbd>⌘K</kbd></button>
+        <button className="top-search" onClick={() => setSearch(true)} aria-label="Search ticker"><Icon name="search" size={14} /> <span>Search ticker</span> <kbd>⌘K</kbd></button>
         <a className="top-icon" href="https://github.com/mutaaf/metaphases" target="_blank" rel="noreferrer" aria-label="Source on GitHub"><Icon name="github" /></a>
         <button className="top-icon" onClick={() => actions.setPref("theme", dark ? "light" : "dark")} aria-label={dark ? "Switch to light" : "Switch to dark"}><Icon name={dark ? "sun" : "moon"} /></button>
       </header>

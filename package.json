@@ -9,7 +9,13 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "deploy": "npm run build && wrangler deploy",
-    "universe": "python3 scripts/build_universe.py"
+    "universe": "python3 scripts/build_universe.py",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "lint": "tsc -b",
+    "check:fast": "node scripts/check-backlog.mjs && npm run lint && npm test && vite build",
+    "check": "npm run check:fast && playwright test",
+    "refresh:data": "python3 scripts/build_universe.py && python3 scripts/refresh_etfs.py"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -17,12 +23,14 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261023.1",
+    "@playwright/test": "^1.64.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "typescript": "^5.6.3",
     "vite": "^6.0.0",
+    "vitest": "^3.2.7",
     "wrangler": "^4.40.0"
   }
 }

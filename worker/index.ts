@@ -12,6 +12,7 @@ interface Env {
   FINNHUB_API_KEY: string;
   FRED_API_KEY: string;
   ASSETS: Fetcher;
+  CF_VERSION?: { id: string; tag?: string; timestamp?: string };
 }
 
 const U = universe as Record<string, { n: string; mc: number }>;
@@ -366,12 +367,32 @@ async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Resp
     .transform(new Response(res.body, { status: 200, headers: (() => { const h = new Headers(res.headers); h.set("Content-Type", "text/html; charset=utf-8"); h.set("Cache-Control", "public, max-age=300"); return h; })() }));
 }
 
+// ── /api/health: one probe per upstream, so agents and the operator can see what's degraded ──
+async function health(env: Env, ctx: ExecutionContext): Promise<Response> {
+  const today = iso(todayNY());
+  const probe = async (name: string, fn: () => Promise<unknown>) => {
+    const t0 = Date.now();
+    try { await fn(); return { name, ok: true, ms: Date.now() - t0 }; } catch (e) { return { name, ok: false, ms: Date.now() - t0, error: String(e).slice(0, 160) }; }
+  };
+  const sources = await cached(`health:${Math.floor(Date.now() / 300000)}`, 300, ctx, () => Promise.all([
+    probe("finnhub", () => getJson(`${FH}/quote?symbol=AAPL&token=${env.FINNHUB_API_KEY}`)),
+    probe("fred", () => getJson(`https://api.stlouisfed.org/fred/release/dates?release_id=50&realtime_start=${today}&include_release_dates_with_no_data=true&limit=1&file_type=json&api_key=${env.FRED_API_KEY}`)),
+    probe("yahoo", () => getJson(`https://query1.finance.yahoo.com/v8/finance/chart/SPY?range=5d&interval=1d`, UA)),
+    probe("nasdaq", () => getJson(`https://api.nasdaq.com/api/company/AAPL/earnings-surprise`, UA)),
+  ]));
+  const ok = sources.every((x) => x.ok);
+  return new Response(JSON.stringify({ ok, build: env.CF_VERSION?.id ?? "dev", deployedAt: env.CF_VERSION?.timestamp ?? null, universe: Object.keys(U).length, sources, asOf: new Date().toISOString() }), {
+    status: ok ? 200 : 503, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
+}
+
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
     try {
       if (url.pathname === "/api/calendar") return await calendar(url, env, ctx);
       if (url.pathname === "/api/macro") return await macro(env, ctx);
+      if (url.pathname === "/api/health") return await health(env, ctx);
       const m = url.pathname.match(/^\/api\/ticker\/([A-Za-z.\-]{1,10})$/);
       if (m) return await ticker(m[1].toUpperCase(), env, ctx);
       if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 0);
