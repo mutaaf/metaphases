@@ -1,12 +1,12 @@
 ---
 id: 0003
 title: Subscribe to your watchlist's earnings in any calendar app (.ics)
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: engagement
 created: 2026-10-31
-pr:
+pr: 6
 by: operator
 ---
 

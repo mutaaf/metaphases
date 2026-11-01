@@ -1,12 +1,12 @@
 ---
 id: 0004
 title: Earnings-season scoreboard (how far through the season, beat rate vs normal)
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: depth
 created: 2026-10-31
-pr:
+pr: 6
 by: operator
 ---
 
