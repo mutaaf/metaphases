@@ -24,6 +24,7 @@ A glancer who plans around a projected date is misled, and trust in every number
 - Files: `worker/index.ts`, `shared/types.ts`, `src/components/Calendar.tsx`, `TickerSheet.tsx`, `src/lib/ics.ts`, `glossary.ts`.
 
 ## Acceptance criteria
+- [ ] (critic 2026-11-01) A blank `hour` isn't the only signal. `/t/GOOGL` shows "Tuesday, February 2 · After close · in 93 days" with `amc` set, and its og:title says "GOOGL reports Tue, Feb 2", but Alphabet hasn't announced a Q4 date. Reports more than ~21 days out (documented threshold) are also treated as unconfirmed, and the worker's share meta says "expected around …" for any unconfirmed date. See `docs/critique/2026-11-01-0506.md` #3.
 - [ ] An event with empty `h` renders as "unconfirmed" in the grid tile, drawer and sheet; one with `amc` does not
 - [ ] `.ics` marks unconfirmed events `STATUS:TENTATIVE`
 - [ ] Works at 390×844 touch and 1440×900, no horizontal scroll
