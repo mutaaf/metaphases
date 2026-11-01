@@ -1,12 +1,12 @@
 ---
 id: 0006
 title: Split Pages.tsx into per-route lazy chunks
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: tech-health
 created: 2026-10-31
-pr:
+pr: 7
 by: operator
 ---
 
