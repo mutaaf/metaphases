@@ -1,4 +1,5 @@
 import { test, expect } from "./fixtures";
+import { readFileSync } from "node:fs";
 
 test("calendar opens on next trading day's month with the headline, mood and macro strip", async ({ page }) => {
   await page.goto("./");
@@ -86,6 +87,66 @@ test("no horizontal scroll and no console errors", async ({ page }) => {
   }
   expect(errors).toEqual([]);
 });
+
+// Measures the open sheet: the dialog itself must not scroll sideways and no visible descendant may
+// poke past the viewport's right edge (documentElement checks miss overflow inside dialogs, ticket 0010).
+async function sheetOverflow(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    const dlg = document.querySelector<HTMLElement>("[role=dialog]");
+    if (!dlg) return { scroll: -1, offenders: ["no dialog"] };
+    const vw = window.innerWidth;
+    const offenders: string[] = [];
+    for (const el of dlg.querySelectorAll<HTMLElement>("*")) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0 || getComputedStyle(el).visibility === "hidden") continue;
+      if (getComputedStyle(el).position === "absolute" && el.closest(".next-card") && !el.textContent) continue; // decorative
+      // Clipped by an ancestor that hides overflow on purpose (e.g. the street bar's text, the next card's halo)?
+      let clipped = false;
+      for (let a = el.parentElement; a && a !== dlg; a = a.parentElement) {
+        const ox = getComputedStyle(a).overflowX;
+        if ((ox === "hidden" || ox === "clip" || ox === "auto" || ox === "scroll") && a.getBoundingClientRect().right <= vw + 1) { clipped = true; break; }
+      }
+      if (!clipped && r.right > vw + 1) offenders.push(`${el.tagName.toLowerCase()}.${el.className} right=${Math.round(r.right)}`);
+    }
+    return { scroll: dlg.scrollWidth - dlg.clientWidth, offenders: offenders.slice(0, 8) };
+  });
+}
+
+for (const w of [390, 360]) {
+  test(`the ticker sheet fits a ${w}px phone without sideways scroll`, async ({ page, isMobile }) => {
+    test.skip(!isMobile, "phone layout");
+    await page.setViewportSize({ width: w, height: 844 });
+    // A long company name as well as the recorded ones.
+    await page.route("**/api/ticker/LONGCO", async (r) => {
+      const body = readFileSync(new URL("../fixtures/ticker-NVDA.json", import.meta.url), "utf8")
+        .replaceAll('"NVDA"', '"LONGCO"')
+        .replace(/"name":\s*"[^"]*"/, '"name":"International Consolidated Airlines & Extraordinarily Long Holdings Group plc"');
+      r.fulfill({ contentType: "application/json", body });
+    });
+    for (const sym of ["AAPL", "GOOGL", "LONGCO"]) {
+      await page.goto(`./?t=${sym}`);
+      const sheet = page.locator(".sheet");
+      await expect(sheet.locator("h2")).toBeVisible();
+      await expect(sheet.locator(".nc-stats dd").first()).toBeVisible();
+      await page.waitForLoadState("networkidle");
+      const o = await sheetOverflow(page);
+      expect(o.scroll, `${sym} sheet scrolls sideways at ${w}px`).toBeLessThanOrEqual(0);
+      expect(o.offenders, `${sym} elements past the right edge at ${w}px`).toEqual([]);
+      // Every next-report stat is fully on screen.
+      for (const dd of await sheet.locator(".nc-stats > div").all()) {
+        const b = (await dd.boundingBox())!;
+        expect(b.x + b.width, `${sym} next-report stat clipped at ${w}px`).toBeLessThanOrEqual(w);
+      }
+    }
+    // The loading state (skeletons) mustn't overflow either.
+    await page.route("**/api/ticker/SLOWCO", () => { /* never answers: the sheet stays loading */ });
+    await page.goto("./?t=SLOWCO");
+    await expect(page.locator(".sheet .sheet-body").first()).toBeVisible();
+    const loading = await sheetOverflow(page);
+    expect(loading.scroll, `loading sheet scrolls sideways at ${w}px`).toBeLessThanOrEqual(0);
+    expect(loading.offenders, `loading sheet past the right edge at ${w}px`).toEqual([]);
+  });
+}
 
 test("the week's brief: open on desktop, collapsed on phone, remembered, and its reporters open the sheet", async ({ page, isMobile }) => {
   await page.goto("/");
