@@ -8,17 +8,20 @@
 .sheet-actions { display: flex; gap: 0; align-self: start; }
 .sheet-actions .btn-box { height: 40px; }
 .sheet-actions .icon-btn { margin-left: 10px; }
-.sheet-body { display: grid; gap: 18px; padding-top: 18px; }
+/* minmax(0,1fr) + min-width:0 so no child's min-content can widen the sheet past a phone (ticket 0010). */
+.sheet-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding-top: 18px; }
+.sheet-body > * { min-width: 0; }
 .toast { position: sticky; top: 100px; z-index: 4; margin: 10px auto 0; width: fit-content; background: var(--ink); color: var(--bg); font: 400 11px var(--mono); letter-spacing: .08em; padding: 8px 14px; animation: drop .2s; }
-.next-card { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; align-items: center; padding: 20px; background: var(--ink); color: var(--bg); position: relative; overflow: hidden; }
+.next-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 18px; align-items: center; padding: 20px; background: var(--ink); color: var(--bg); position: relative; overflow: hidden; }
 .next-card::after { content: ""; position: absolute; right: -60px; top: -60px; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--accent) 55%, transparent), transparent 65%); }
 .next-card .eyebrow { color: color-mix(in srgb, var(--bg) 60%, transparent); }
 .next-card .muted { color: color-mix(in srgb, var(--bg) 70%, transparent); }
 .next-card h3 { font: 800 24px/1.15 var(--display); letter-spacing: -.02em; margin: 2px 0; }
 .nc-phase { grid-row: span 1; }
 .nc-phase .phase { color: var(--accent); }
-.nc-stats { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 12px 0 0; border-top: 1px solid color-mix(in srgb, var(--bg) 18%, transparent); padding-top: 14px; }
-.nc-stats dt { font: 400 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: color-mix(in srgb, var(--bg) 60%, transparent); }
+.nc-stats { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px 10px; margin: 12px 0 0; border-top: 1px solid color-mix(in srgb, var(--bg) 18%, transparent); padding-top: 14px; }
+.nc-stats > div { min-width: 0; }
+.nc-stats dt { overflow-wrap: anywhere; font: 400 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: color-mix(in srgb, var(--bg) 60%, transparent); }
 .nc-stats dd { margin: 4px 0 0; font: 800 22px var(--display); letter-spacing: -.02em; }
 .next-card .term-btn { color: inherit; text-decoration-color: color-mix(in srgb, var(--bg) 45%, transparent); }
 .read ul { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }

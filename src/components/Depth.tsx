@@ -126,7 +126,7 @@ export function QuarterTrend({ quarters, history }: { quarters: Quarter[]; histo
   return (
     <section className="card qtrend">
       <h4 className="eyebrow">The last {rows.length} quarters</h4>
-      <div className="qt-grid" style={{ gridTemplateColumns: `repeat(${rows.length}, 1fr)` }}>
+      <div className="qt-grid" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
         {rows.map((q) => (
           <div key={q.period} className="qt-col" title={`Quarter ending ${q.period}`}>
             <span className="qt-rev" style={{ height: `${q.rev && maxRev ? Math.max(4, (q.rev / maxRev) * 100) : 0}%` }} />
@@ -134,7 +134,7 @@ export function QuarterTrend({ quarters, history }: { quarters: Quarter[]; histo
           </div>
         ))}
       </div>
-      <div className="qt-labels" style={{ gridTemplateColumns: `repeat(${rows.length}, 1fr)` }}>
+      <div className="qt-labels" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
         {rows.map((q) => <span key={q.period}>{qLabel(q.period)}</span>)}
       </div>
       <div className="qt-legend small">

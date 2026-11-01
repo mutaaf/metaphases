@@ -8,3 +8,4 @@
 2026-11-01 · #0003 · Subscribe to your watchlist's report dates in any calendar app (.ics), or add one company from its sheet.
 2026-11-01 · #0004 · Earnings-season scoreboard (S&P 500 reported %, beat rates, median surprise) in Retrace and under the macro strip.
 2026-11-01 · depth · Ticker sheets gain a one-year price chart with every report marked, peers reporting nearby, and an 8-quarter revenue/EPS/margin trend; logos for every reporter.
+2026-11-01 · #0010 · The ticker sheet fits phones down to 360px: next-report stats, The Read, the quarterly trend and the watchlist buttons no longer run off the right edge.
