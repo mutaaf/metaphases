@@ -1,12 +1,12 @@
 ---
 id: 0002
 title: Dynamic share card per ticker (og:image for /t/SYM)
-status: ready
+status: shipped
 priority: P1
 size: L
 lens: growth
 created: 2026-10-31
-pr:
+pr: 6
 by: operator
 ---
 

@@ -3,6 +3,7 @@ import { useMacro } from "../lib/api";
 import { daysBetween, fmtLong, fmtShort, todayISO } from "../lib/dates";
 import { Icon, Skeleton, Spark, Term } from "./bits";
 import { BASE } from "../lib/router";
+import { SeasonScoreboard } from "./Depth";
 
 const MOOD_TONES = ["#B23A2E", "#D0805A", "#C9B48F", "#8FB59E", "#2F7D57"];
 
@@ -112,6 +113,7 @@ export function MacroStrip() {
           </div>
         </div>
       )}
+      <SeasonScoreboard slim />
     </section>
   );
 }
