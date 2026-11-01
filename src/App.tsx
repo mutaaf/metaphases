@@ -4,7 +4,7 @@ import { MacroStrip } from "./components/MacroStrip";
 import { CompassPage, LearnPage, RetracePage, Search, WatchlistPage } from "./components/Pages";
 import { TickerSheet } from "./components/TickerSheet";
 import { Icon, Mark, Phase } from "./components/bits";
-import { navigate, param, setParam, useLocation } from "./lib/router";
+import { appPath, href, navigate, param, setParam, useLocation } from "./lib/router";
 import { actions, useStore } from "./lib/store";
 import { nowNY } from "./lib/dates";
 
@@ -20,7 +20,7 @@ export default function App() {
   const loc = useLocation();
   const { prefs } = useStore();
   const [search, setSearch] = useState(false);
-  const path = location.pathname;
+  const path = appPath();
 
   // Share URLs: /t/AAPL opens the calendar with AAPL's sheet on top.
   useEffect(() => {
@@ -49,10 +49,10 @@ export default function App() {
   return (
     <div className="app" data-loc={loc}>
       <header className="top">
-        <a className="brand" href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}><Mark /> <span>Metaphases</span></a>
+        <a className="brand" href={href("/")} onClick={(e) => { e.preventDefault(); navigate("/"); }}><Mark /> <span>Metaphases</span></a>
         <nav className="nav" aria-label="Sections">
           {NAV.map((n) => (
-            <a key={n.path} href={n.path} className={path === n.path ? "on" : ""} onClick={(e) => { e.preventDefault(); navigate(n.path); }}>{n.label}</a>
+            <a key={n.path} href={href(n.path)} className={path === n.path ? "on" : ""} onClick={(e) => { e.preventDefault(); navigate(n.path); }}>{n.label}</a>
           ))}
         </nav>
         <button className="top-search" onClick={() => setSearch(true)} aria-label="Search ticker"><Icon name="search" size={14} /> <span>Search ticker</span> <kbd>⌘K</kbd></button>

@@ -1,15 +1,20 @@
 {
+  // metaphases: SPA + API under mutaafaziz.com/metaphases/ (same pattern as cold-gas / outatime).
+  // The route takes precedence over the mutaafaziz.com Custom Domain (the personal site).
+  // Operator-owned file (agents/control.json → frozen_paths).
   "name": "metaphases",
   "main": "worker/index.ts",
   "compatibility_date": "2026-07-30",
   "workers_dev": true,
+  "preview_urls": true,
+  "previews": {},
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
+    "not_found_handling": "none",
     "run_worker_first": true
   },
+  "routes": [{ "pattern": "mutaafaziz.com/metaphases*", "zone_name": "mutaafaziz.com" }],
   "observability": { "enabled": true },
-  "version_metadata": { "binding": "CF_VERSION" },
-  "previews": {}
+  "version_metadata": { "binding": "CF_VERSION" }
 }

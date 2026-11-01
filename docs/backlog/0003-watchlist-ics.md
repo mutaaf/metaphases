@@ -15,9 +15,9 @@ People live in their own calendar. If a watchlist's report dates show up in Appl
 the session and a link back to the sheet, Metaphases stays useful every day without anyone opening it.
 
 ## What
-`GET /api/ics?s=AAPL,NVDA,DIS` returns a `text/calendar` feed of upcoming reports (next 120 days) for
+`GET /metaphases/api/ics?s=AAPL,NVDA,DIS` returns a `text/calendar` feed of upcoming reports (next 120 days) for
 those symbols. Each event is all-day, titled "AAPL earnings · after close", with the EPS estimate in the
-description and a URL to `https://metaphases.com/t/AAPL`. The Watchlist page gets "Add to calendar"
+description and a URL to `https://mutaafaziz.com/metaphases/t/AAPL`. The Watchlist page gets "Add to calendar"
 (webcal:// link) and "Download .ics". No accounts: the symbol list is in the URL.
 
 ## Acceptance criteria

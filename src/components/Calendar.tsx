@@ -298,7 +298,11 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       </div>
 
       {error && <Notice tone="error">{error} Your watchlist and holdings are safe — pull to retry.</Notice>}
-      {data?.warnings.map((w) => <Notice key={w} tone="warn">{w}</Notice>)}
+      {data && data.warnings.length > 0 && (
+        <Notice tone="warn">
+          {data.warnings.length === 1 ? data.warnings[0] : `${data.warnings.length} days didn't load yet — the market data service is busy.`} Retrying in the background; everything else is current.
+        </Notice>
+      )}
       {prefs.filter === "holdings" && store.holdings.length === 0 && (
         <Notice>You haven't added holdings yet. <button className="link" onClick={() => navigate("/compass")}>Open Compass</button> to paste them in — funds count too.</Notice>
       )}

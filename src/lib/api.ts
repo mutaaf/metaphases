@@ -1,5 +1,6 @@
 import type { CalendarResponse, MacroResponse, TickerResponse } from "../../shared/types";
 import { useEffect, useState } from "react";
+import { BASE } from "./router";
 
 const mem = new Map<string, Promise<unknown>>();
 function get<T>(path: string): Promise<T> {
@@ -22,14 +23,26 @@ export function useApi<T>(path: string | null): Loadable<T> {
     if (!path) return;
     let live = true;
     setSt((s) => ({ data: s.data, error: null, loading: true }));
-    get<T>(path).then((data) => live && setSt({ data, error: null, loading: false }), (e) => live && setSt({ data: null, error: String(e.message ?? e), loading: false }));
-    return () => { live = false; };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = (p: string, attempt: number) =>
+      get<T>(p).then(
+        (data) => {
+          if (!live) return;
+          setSt({ data, error: null, loading: false });
+          // Partial result (some upstream calls were rate-limited): quietly retry twice.
+          const w = (data as { warnings?: string[] })?.warnings;
+          if (w?.length && attempt < 2) timer = setTimeout(() => load(`${path}${path.includes("?") ? "&" : "?"}_r=${attempt + 1}`, attempt + 1), 4000 * (attempt + 1));
+        },
+        (e) => live && setSt({ data: null, error: String(e.message ?? e), loading: false }),
+      );
+    load(path, 0);
+    return () => { live = false; clearTimeout(timer); };
   }, [path]);
   return st;
 }
 
-export const calendarPath = (from: string, to: string) => `/api/calendar?from=${from}&to=${to}`;
+export const calendarPath = (from: string, to: string) => `${BASE}/api/calendar?from=${from}&to=${to}`;
 export const useCalendar = (from: string, to: string) => useApi<CalendarResponse>(calendarPath(from, to));
-export const useMacro = () => useApi<MacroResponse>("/api/macro");
-export const useTicker = (s: string | null) => useApi<TickerResponse>(s ? `/api/ticker/${s}` : null);
-export const prefetchTicker = (s: string) => { get(`/api/ticker/${s}`).catch(() => {}); };
+export const useMacro = () => useApi<MacroResponse>(`${BASE}/api/macro`);
+export const useTicker = (s: string | null) => useApi<TickerResponse>(s ? `${BASE}/api/ticker/${s}` : null);
+export const prefetchTicker = (s: string) => { get(`${BASE}/api/ticker/${s}`).catch(() => {}); };

@@ -2,7 +2,7 @@
 
 **Every earnings report, phase by phase.** An earnings calendar that reads the room: who reports when, how the stock has reacted before, whether it's set up well going in, and how much of *your* money rides on it.
 
-→ **[metaphases.com](https://metaphases.com)**
+→ **[mutaafaziz.com/metaphases](https://mutaafaziz.com/metaphases/)**
 
 ## What's inside
 

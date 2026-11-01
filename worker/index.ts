@@ -1,4 +1,5 @@
-// Metaphases API — a thin, cached layer over free data sources.
+// Metaphases API — a thin, cached layer over free data sources. Served at mutaafaziz.com/metaphases/
+// (Worker route mutaafaziz.com/metaphases*); every path below is relative to BASE.
 //   /api/calendar?from&to   earnings events (Finnhub), filtered to tracked + large reporters
 //   /api/ticker/:symbol     the deep sheet: Compass grade, setup grade, reaction history, street view
 //   /api/macro              macro event strip (FRED release calendar + FOMC) and the Market Mood index
@@ -15,6 +16,8 @@ interface Env {
   CF_VERSION?: { id: string; tag?: string; timestamp?: string };
 }
 
+const BASE = "/metaphases";
+const SITE = "https://mutaafaziz.com";
 const U = universe as Record<string, { n: string; mc: number }>;
 const FH = "https://finnhub.io/api/v1";
 const UA = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", Accept: "application/json" };
@@ -65,7 +68,23 @@ const BIG_REVENUE = 1e9; // untracked companies still appear if they're this lar
 async function calendarDay(day: string, env: Env, ctx: ExecutionContext): Promise<EarningsEvent[]> {
   const today = iso(todayNY());
   const ttl = day < addDays(today, -3) ? 21600 : 1800; // settled history caches longer
-  return cached(`cal:v2:${day}`, ttl, ctx, async () => {
+  const staleKey = `cal:stale:v2:${day}`;
+  try {
+    return await cached(`cal:v2:${day}`, ttl, ctx, async () => {
+      const fresh = await fetchCalendarDay(day, env);
+      ctx.waitUntil(caches.default.put(new Request(`https://cache.metaphases.internal/${encodeURIComponent(staleKey)}`), new Response(JSON.stringify(fresh), { headers: { "Cache-Control": "public, max-age=604800" } })));
+      return fresh;
+    });
+  } catch (e) {
+    // Rate-limited or upstream down: serve the last good copy (kept 7 days) before giving up.
+    const stale = await caches.default.match(new Request(`https://cache.metaphases.internal/${encodeURIComponent(staleKey)}`));
+    if (stale) return (await stale.json()) as EarningsEvent[];
+    throw e;
+  }
+}
+
+async function fetchCalendarDay(day: string, env: Env): Promise<EarningsEvent[]> {
+  {
     const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${day}&to=${day}&token=${env.FINNHUB_API_KEY}`);
     const out: EarningsEvent[] = [];
     for (const e of data.earningsCalendar ?? []) {
@@ -75,7 +94,7 @@ async function calendarDay(day: string, env: Env, ctx: ExecutionContext): Promis
       out.push({ s: e.symbol, d: e.date, h: (e.hour || "") as Session, q: e.quarter, y: e.year, eE: e.epsEstimate, eA: e.epsActual, rE: e.revenueEstimate, rA: e.revenueActual, t: tracked ? 1 : 0 });
     }
     return out;
-  });
+  }
 }
 
 async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -320,7 +339,8 @@ const PAGES: Record<string, { title: string; desc: string }> = {
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
 async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ title: string; desc: string } | null> {
-  const t = url.pathname.match(/^\/t\/([A-Za-z.\-]{1,10})$/)?.[1] ?? url.searchParams.get("t");
+  const path = url.pathname.slice(BASE.length) || "/";
+  const t = path.match(/^\/t\/([A-Za-z.\-]{1,10})$/)?.[1] ?? url.searchParams.get("t");
   if (t) {
     const sym = t.toUpperCase();
     try {
@@ -348,15 +368,16 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
       return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };
     } catch { return { title: `Earnings on ${label} · Metaphases`, desc: PAGES["/"].desc }; }
   }
-  return PAGES[url.pathname] ?? null;
+  return PAGES[path] ?? null;
 }
 
 async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(req.url);
-  const res = await env.ASSETS.fetch(new Request(new URL("/", url), req));
+  // Fetch the directory URL, not index.html: the asset layer 307s "index.html" to its directory.
+  const res = await env.ASSETS.fetch(new Request(new URL(`${BASE}/`, url), req));
   const meta = await shareMeta(url, env, ctx);
   if (!meta) return res;
-  const canonical = `https://metaphases.com${url.pathname}${url.search}`;
+  const canonical = `${SITE}${url.pathname}${url.search}`;
   const set = (attr: string) => ({ element(el: Element) { el.setAttribute(attr, attr === "href" ? canonical : el.getAttribute("property")?.endsWith("description") || el.getAttribute("name")?.endsWith("description") ? meta.desc : el.getAttribute("property") === "og:url" ? canonical : meta.title); } });
   return new HTMLRewriter()
     .on("title", { element(el) { el.setInnerContent(meta.title); } })
@@ -389,14 +410,17 @@ async function health(env: Env, ctx: ExecutionContext): Promise<Response> {
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
+    if (url.pathname === BASE) return Response.redirect(`${url.origin}${BASE}/${url.search}`, 301);
+    if (!url.pathname.startsWith(BASE + "/")) return env.ASSETS.fetch(req);
+    const p = url.pathname.slice(BASE.length);
     try {
-      if (url.pathname === "/api/calendar") return await calendar(url, env, ctx);
-      if (url.pathname === "/api/macro") return await macro(env, ctx);
-      if (url.pathname === "/api/health") return await health(env, ctx);
-      const m = url.pathname.match(/^\/api\/ticker\/([A-Za-z.\-]{1,10})$/);
+      if (p === "/api/calendar") return await calendar(url, env, ctx);
+      if (p === "/api/macro") return await macro(env, ctx);
+      if (p === "/api/health") return await health(env, ctx);
+      const m = p.match(/^\/api\/ticker\/([A-Za-z.\-]{1,10})$/);
       if (m) return await ticker(m[1].toUpperCase(), env, ctx);
-      if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 0);
-      const isPage = req.method === "GET" && !/\.[a-z0-9]{2,6}$/i.test(url.pathname);
+      if (p.startsWith("/api/")) return json({ error: "Not found" }, 0);
+      const isPage = req.method === "GET" && !/\.[a-z0-9]{2,12}$/i.test(p);
       if (isPage) return await page(req, env, ctx);
       return env.ASSETS.fetch(req);
     } catch (e) {
