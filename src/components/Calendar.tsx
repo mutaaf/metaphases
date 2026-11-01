@@ -66,7 +66,7 @@ function TileButton({ e, size = 44 }: { e: EarningsEvent; size?: number }) {
       className={`tbtn ${r ? `res-${r}` : ""}`}
       onClick={(ev) => { ev.stopPropagation(); setParam("t", e.s); }}
       onMouseEnter={() => prefetchTicker(e.s)}
-      title={`${nameOf(e.s)} (${e.s}) · ${PHASE_LABEL[e.h]}${e.eE != null ? ` · est. ${eps(e.eE)}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}`}
+      title={`${nameOf(e.s)} (${e.s}) · ${PHASE_LABEL[e.h]}${e.eE != null ? ` · est. ${epsIn(e.eE, curOf(e.s))}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}`}
       aria-label={`${nameOf(e.s)}, ${PHASE_LABEL[e.h].toLowerCase()}, ${r ? r : "upcoming"}${starred ? ", on your watchlist" : ""}`}
     >
       <Tile s={e.s} size={size} />
@@ -358,7 +358,7 @@ function WeekColumn({ day, events, next, macro }: { day: string; events: Earning
           <span className="eyebrow sess-mini"><Phase h={g.h} size={10} /> {PHASE_LABEL[g.h]}</span>
           {g.list.slice(0, 14).map((e) => (
             <button key={e.s} className={`wrow ${resultOf(e) ? `res-${resultOf(e)}` : ""}`} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
-              <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{eps(e.eA ?? e.eE)}</span>
+              <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eA ?? e.eE, curOf(e.s))}</span>
             </button>
           ))}
           {g.list.length > 14 && <span className="muted small">+{g.list.length - 14} more</span>}

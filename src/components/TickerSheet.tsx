@@ -129,7 +129,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
         <header className="sheet-head">
           <Tile s={symbol} size={56} force="logo" />
           <div className="sheet-id">
-            <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{data?.profile?.marketCap ? ` · ${moneyIn(data.profile.marketCap * 1e6, data.profile.currency)}` : ""}</span>
+            <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{data?.profile?.marketCap && (isUsd(estCur) || !isUsd(data.profile.currency)) ? ` · ${moneyIn(data.profile.marketCap * 1e6, data.profile.currency)}` : ""}</span>
             <h2>{name}</h2>
             {everyday && <p className="sheet-does">{whatTheyDo(name, data?.profile?.industry ?? c?.ind)}</p>}
             {data?.quote ? (
@@ -165,7 +165,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                   <div><dt><Term k="revenue">Revenue est</Term></dt><dd>{moneyIn(data.next.revE, estCur)}</dd></div>
                   <div><dt><Term k="expectedmove">Typical move</Term></dt><dd>{data.expectedMove != null ? `±${data.expectedMove.toFixed(1)}%` : "—"}</dd></div>
                 </dl>
-                {!isUsd(estCur) && <p className="nc-cur muted small">Estimates are in <Term k="reportingcurrency">{currencyName(estCur)}</Term>, not US dollars. Past results below are in US dollars.</p>}
+                {!isUsd(estCur) && <p className="nc-cur muted small">Estimates are in <Term k="reportingcurrency">{currencyName(estCur)}</Term>, not US dollars, and so are the quarterly figures from its filings. The reaction table below is in US dollars.</p>}
               </section>
             )}
 
@@ -236,7 +236,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
               </section>
             )}
 
-            <QuarterTrend quarters={data.quarters ?? []} history={data.history} />
+            <QuarterTrend quarters={data.quarters ?? []} history={data.history} cur={estCur} />
 
             {data.street && (
               <section className="card">

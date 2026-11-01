@@ -14,7 +14,7 @@ const NAME: Record<string, string> = {
   SGD: "Singapore dollars", MXN: "Mexican pesos",
 };
 /** Home currency by ISO country, used only to name a currency once the numbers prove it isn't USD. */
-const HOME: Record<string, string> = { JP: "JPY", CN: "CNY", HK: "CNY", TW: "TWD", DK: "DKK", KR: "KRW", IN: "INR", DE: "EUR", NL: "EUR", FR: "EUR", LU: "EUR", BR: "BRL" };
+const HOME: Record<string, string> = { JP: "JPY", CN: "CNY", HK: "HKD", TW: "TWD", DK: "DKK", KR: "KRW", IN: "INR", DE: "EUR", NL: "EUR", FR: "EUR", LU: "EUR", BR: "BRL" };
 
 /** "" means "not dollars, currency unknown". */
 export type Currency = string;
@@ -61,10 +61,13 @@ export function estimateCurrency(i: CurrencyInputs): Currency {
   if (country && country !== "US" && i.epsE != null && Number.isFinite(i.epsE)) {
     const usd = (i.usdEps ?? []).filter((x): x is number => x != null && Number.isFinite(x)).slice(0, 4).map(Math.abs);
     const max = usd.length ? Math.max(...usd) : 0;
-    if (max >= 0.2 && Math.abs(i.epsE) > 4 * max) {
-      const listed = normCurrency(i.currency);
-      return listed && listed !== "USD" ? listed : HOME[country] ?? "";
-    }
+    // Same sign as the latest USD print: a dollar filer swinging to a loss isn't a currency signal.
+    const latest = (i.usdEps ?? []).find((x): x is number => x != null && Number.isFinite(x));
+    const sameSign = latest == null || latest === 0 || Math.sign(latest) === Math.sign(i.epsE);
+    const listed = normCurrency(i.currency);
+    // Only name a currency we can support with a source; never label a filer "not dollars" on a guess.
+    const named = listed && listed !== "USD" ? listed : HOME[country];
+    if (named && sameSign && max >= 0.2 && Math.abs(i.epsE) > 4 * max) return named;
   }
   return "USD";
 }

@@ -142,6 +142,11 @@ test.describe("everyday", () => {
     await expect(card).not.toContainText("$33.7B");
     await expect(sheet.locator(".read")).not.toContainText("$-0.01");
     await expect(sheet.locator(".read")).not.toContainText("versus");
+    // The quarterly trend comes from filings in yuan too.
+    await expect(sheet.locator(".qtrend")).toContainText("CN¥31.9B");
+    await expect(sheet.locator(".qtrend")).not.toContainText("$31.9B");
+    // NIO's profile market cap can't be trusted to be dollars once the estimates aren't.
+    await expect(sheet.locator(".sheet-head .eyebrow").first()).not.toContainText("$7.6B");
     expect(await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth)))).toBeLessThanOrEqual(1);
 
     await page.goto("./check?text=" + encodeURIComponent("$NIO is going to the MOON 🚀"));
@@ -154,5 +159,13 @@ test.describe("everyday", () => {
     const row = page.locator(".erow", { hasText: "PDD" }).first();
     await expect(row).toContainText("CN¥19.21");
     await expect(row).not.toContainText("$19.21");
+
+    // Week view rows and month tile tooltips too.
+    await page.goto("./?d=2026-11-16");
+    await page.getByRole("button", { name: "week view" }).click();
+    const wrow = page.locator(".wrow", { hasText: "PDD" }).first();
+    await expect(wrow).toContainText("CN¥19.21");
+    await page.getByRole("button", { name: "month view" }).click();
+    await expect(page.locator(".tbtn[title*='(PDD)']").first()).toHaveAttribute("title", /CN¥19\.21/);
   });
 });
