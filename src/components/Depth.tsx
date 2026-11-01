@@ -6,7 +6,7 @@ import { nyDate, peersFor, placeMarkers, seasonScore } from "../../shared/depth"
 import { useCalendar, prefetchTicker } from "../lib/api";
 import { co, UNIVERSE } from "../lib/data";
 import { addDays, fmtShort, todayISO } from "../lib/dates";
-import { eps, money, pct } from "../lib/format";
+import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { BASE, setParam } from "../lib/router";
 import { Icon, Phase, PHASE_LABEL, Skeleton, Term, Tile } from "./bits";
 
@@ -113,7 +113,8 @@ export function Peers({ symbol, date }: { symbol: string; date: string }) {
 }
 
 // ── Quarterly trend ────────────────────────────────────────────────────
-export function QuarterTrend({ quarters, history }: { quarters: Quarter[]; history: Reaction[] }) {
+/** `cur`: the filings' currency when it isn't dollars (foreign filers report quarterly figures in it, like their estimates). */
+export function QuarterTrend({ quarters, history, cur }: { quarters: Quarter[]; history: Reaction[]; cur?: string }) {
   const rows = quarters.filter((q) => q.eps != null || q.rev != null);
   if (rows.length < 2) return null;
   const maxRev = Math.max(...rows.map((q) => q.rev ?? 0));
@@ -138,8 +139,8 @@ export function QuarterTrend({ quarters, history }: { quarters: Quarter[]; histo
         {rows.map((q) => <span key={q.period}>{qLabel(q.period)}</span>)}
       </div>
       <div className="qt-legend small">
-        <span><i className="lg-rev" /> <Term k="revenue">Revenue</Term> ≈ {money(last.rev)}{revYoY != null && <> ({pct(revYoY, 0)} vs a year ago)</>}</span>
-        <span><i className="lg-eps" /> <Term k="eps">EPS</Term> {eps(last.eps)}</span>
+        <span><i className="lg-rev" /> <Term k="revenue">Revenue</Term> ≈ {moneyIn(last.rev, cur)}{revYoY != null && <> ({pct(revYoY, 0)} vs a year ago)</>}</span>
+        <span><i className="lg-eps" /> <Term k="eps">EPS</Term> {epsIn(last.eps, cur)}</span>
         {last.gm != null && <span><Term k="grossmargin">Gross margin</Term> {last.gm.toFixed(0)}%</span>}
         {last.om != null && <span><Term k="opmargin">Op. margin</Term> {last.om.toFixed(0)}%</span>}
       </div>

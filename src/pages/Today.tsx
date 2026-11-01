@@ -8,7 +8,7 @@ import { GradeBadge, Icon, Phase, Skeleton, Tile } from "../components/bits";
 import { useCalendar, useMacro, useTicker } from "../lib/api";
 import { curOf, heldVia, nameOf, UNIVERSE } from "../lib/data";
 import { addDays, todayISO } from "../lib/dates";
-import { epsIn, money } from "../lib/format";
+import { currencyName, epsIn, isUsd, money } from "../lib/format";
 import { moodPlain, movePlain, whatTheyDo, whenPlain } from "../lib/plain";
 import { BASE, navigate, setParam } from "../lib/router";
 import { useStore } from "../lib/store";
@@ -48,7 +48,7 @@ function ReportCard({ s, today }: { s: Extract<Story, { kind: "report" }>; today
       <p className="st-does">{whatTheyDo(name, data?.profile?.industry ?? UNIVERSE[s.e.s]?.ind)}</p>
       <p className="st-when"><Phase h={s.e.h} size={26} /> Reports {whenPlain(s.e.d, s.e.h, today)}</p>
       <dl className="st-stats">
-        <div><dt>Wall Street expects</dt><dd>{s.e.eE != null ? `${epsIn(s.e.eE, curOf(s.e.s))} a share` : "—"}</dd></div>
+        <div><dt>Wall Street expects</dt><dd>{s.e.eE != null ? `${epsIn(s.e.eE, curOf(s.e.s))} a share` : "—"}{s.e.eE != null && !isUsd(curOf(s.e.s)) && <span className="muted small"> in {currencyName(curOf(s.e.s))}, not dollars</span>}</dd></div>
         <div><dt>How much it moves</dt><dd>{data ? (data.expectedMove != null ? `±${data.expectedMove.toFixed(1)}%` : "—") : <Skeleton w={70} h={22} />}</dd></div>
         <div><dt>Quality grade</dt><dd>{data ? <GradeBadge g={data.compass.grade} /> : <Skeleton w={40} h={22} />}</dd></div>
       </dl>

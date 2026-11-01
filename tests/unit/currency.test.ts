@@ -16,8 +16,8 @@ describe("estimateCurrency (0021)", () => {
   it("detects a non-USD basis by ratio against USD history (TM: 64.50 vs ≤ $7.57)", () => {
     expect(estimateCurrency({ country: "JP", epsE: 64.4986, usdEps: [7.57, 4, 6.26, 4.85] })).toBe("JPY");
     expect(estimateCurrency({ country: "TW", epsE: 32.224, usdEps: [4.6, 4.31, 3.49, 3.14] })).toBe("TWD");
-    // Country with no known home currency → "" (not dollars, unknown).
-    expect(estimateCurrency({ country: "ZZ", epsE: 50, usdEps: [2, 3] })).toBe("");
+    // Hong Kong filers report in HKD, not CNY.
+    expect(estimateCurrency({ country: "HK", epsE: 23.09, usdEps: [2.1, 1.9] })).toBe("HKD");
   });
   it("doesn't flag the profile's listing currency alone (SQM's profile currency is CLP; it files in USD)", () => {
     expect(estimateCurrency({ currency: "CLP", country: "CL", epsE: 0.7, usdEps: [2.31, 1.28] })).toBe("USD");
@@ -26,6 +26,11 @@ describe("estimateCurrency (0021)", () => {
     expect(estimateCurrency({ country: "US", epsE: 40, usdEps: [1, 2] })).toBe("USD");
     expect(estimateCurrency({ country: "NL", epsE: 0.8258, usdEps: [0.06, -0.01, -0.03, -0.06] })).toBe("USD");
     expect(estimateCurrency({})).toBe("USD");
+  });
+  it("doesn't invent a foreign basis for a dollar filer turning around (no home currency, or a sign flip)", () => {
+    expect(estimateCurrency({ country: "IL", epsE: 1.3, usdEps: [0.25, -0.3] })).toBe("USD");
+    expect(estimateCurrency({ country: "GB", epsE: 2.5, usdEps: [0.3, 0.2, 0.4] })).toBe("USD");
+    expect(estimateCurrency({ country: "JP", epsE: -40, usdEps: [5, 6, 7] })).toBe("USD");
   });
 });
 
