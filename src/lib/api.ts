@@ -16,9 +16,10 @@ function get<T>(path: string): Promise<T> {
   return mem.get(path) as Promise<T>;
 }
 
-export interface Loadable<T> { data: T | null; error: string | null; loading: boolean }
+export interface Loadable<T> { data: T | null; error: string | null; loading: boolean; retry?: () => void }
 export function useApi<T>(path: string | null): Loadable<T> {
   const [st, setSt] = useState<Loadable<T>>({ data: null, error: null, loading: !!path });
+  const [nonce, setNonce] = useState(0);
   useEffect(() => {
     if (!path) return;
     let live = true;
@@ -33,12 +34,17 @@ export function useApi<T>(path: string | null): Loadable<T> {
           const w = (data as { warnings?: string[] })?.warnings;
           if (w?.length && attempt < 2) timer = setTimeout(() => load(`${path}${path.includes("?") ? "&" : "?"}_r=${attempt + 1}`, attempt + 1), 4000 * (attempt + 1));
         },
-        (e) => live && setSt({ data: null, error: String(e.message ?? e), loading: false }),
+        (e) => {
+          if (!live) return;
+          // A transient edge failure (e.g. a cold cache over the CPU budget) usually succeeds a moment later: retry once quietly.
+          if (attempt === 0) { timer = setTimeout(() => load(p, 1), 1200); return; }
+          setSt({ data: null, error: String(e.message ?? e), loading: false });
+        },
       );
     load(path, 0);
     return () => { live = false; clearTimeout(timer); };
-  }, [path]);
-  return st;
+  }, [path, nonce]);
+  return { ...st, retry: () => setNonce((n) => n + 1) };
 }
 
 export const calendarPath = (from: string, to: string) => `${BASE}/api/calendar?from=${from}&to=${to}`;

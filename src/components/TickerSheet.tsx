@@ -91,7 +91,7 @@ function Street({ s }: { s: NonNullable<TickerResponse["street"]> }) {
 }
 
 export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () => void }) {
-  const { data, loading, error } = useTicker(symbol);
+  const { data, loading, error, retry } = useTicker(symbol);
   const { watch, holdings } = useStore();
   const [copied, setCopied] = useState(false);
   const w = watch.find((x) => x.s === symbol);
@@ -136,7 +136,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
           </div>
         </header>
         {copied && <div className="toast">Link copied — it unfurls with {symbol}'s next report.</div>}
-        {error && <Notice tone="error">{error}</Notice>}
+        {error && <Notice tone="error">{error} <button className="link" onClick={retry}>Try again</button></Notice>}
 
         {loading && !data ? (
           <div className="sheet-body">{[90, 140, 200, 160].map((h, i) => <Skeleton key={i} h={h} />)}</div>

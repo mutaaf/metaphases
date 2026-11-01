@@ -243,3 +243,16 @@ test("the brief is honest when a week's earnings didn't load", async ({ page }) 
   await expect(head).toContainText("Earnings for this week didn't load");
   await expect(head).not.toContainText("quiet");
 });
+
+test("a transient edge failure (Cloudflare 1102) retries quietly and the sheet still opens", async ({ page }) => {
+  let calls = 0;
+  await page.route("**/api/ticker/*", async (r) => {
+    calls++;
+    if (calls === 1) return r.fulfill({ status: 503, contentType: "text/plain", body: "error code: 1102" });
+    return r.fallback();
+  });
+  await page.goto("./?t=NVDA");
+  await expect(page.locator(".sheet .next-card")).toBeVisible({ timeout: 8000 });
+  await expect(page.locator(".sheet .notice-error")).toHaveCount(0);
+  expect(calls).toBeGreaterThanOrEqual(2);
+});

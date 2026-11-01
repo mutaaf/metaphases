@@ -141,7 +141,26 @@ async function candles(symbol: string, range: string, ctx: ExecutionContext): Pr
 const nyDate = (t: number) => new Date(t * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
 // ── /api/ticker/:symbol ────────────────────────────────────────────────
+/** Finnhub's metric=all is ~200 KB (170 KB of quarterly series). Keep only what the grades and quarter bars read,
+ *  so a cached copy is ~10 KB and parsing it stays well inside the free plan's CPU budget (Cloudflare 1102). */
+const SERIES_KEYS = ["eps", "salesPerShare", "grossMargin", "operatingMargin"];
+function slimMetric(raw: any) {
+  const q = raw?.series?.quarterly ?? {};
+  const quarterly: Record<string, unknown[]> = {};
+  for (const key of SERIES_KEYS) if (Array.isArray(q[key])) quarterly[key] = q[key].slice(0, 12);
+  return { metric: raw?.metric ?? {}, series: { quarterly } };
+}
+
+/** The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON. */
+async function tickerData(symbol: string, env: Env, ctx: ExecutionContext): Promise<TickerResponse> {
+  return cached<TickerResponse>(`tk:v1:${symbol}`, 300, ctx, () => buildTicker(symbol, env, ctx));
+}
+
 async function ticker(symbol: string, env: Env, ctx: ExecutionContext): Promise<Response> {
+  return json(await tickerData(symbol, env, ctx), 300);
+}
+
+async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Promise<TickerResponse> {
   const k = env.FINNHUB_API_KEY;
   const warnings: string[] = [];
   const today = iso(todayNY());
@@ -153,7 +172,7 @@ async function ticker(symbol: string, env: Env, ctx: ExecutionContext): Promise<
   const [profile, quote, metric, recs, surprises, upcoming, nasdaq, chart] = await Promise.all([
     settle("Company profile unavailable.", fh<any>(`stock/profile2?symbol=${symbol}`, 86400)),
     settle("Live quote unavailable.", fh<any>(`quote?symbol=${symbol}`, 120)),
-    settle("Fundamentals unavailable — quality grade skipped.", fh<any>(`stock/metric?symbol=${symbol}&metric=all`, 21600)),
+    settle("Fundamentals unavailable — quality grade skipped.", cached<any>(`fh:metric:slim:v1:${symbol}`, 21600, ctx, async () => slimMetric(await getJson<any>(`${FH}/stock/metric?symbol=${symbol}&metric=all&token=${k}`)))),
     settle("Analyst ratings unavailable.", fh<any[]>(`stock/recommendation?symbol=${symbol}`, 43200)),
     settle("Earnings history unavailable.", fh<any[]>(`stock/earnings?symbol=${symbol}`, 21600)),
     settle("Upcoming date unavailable.", fh<any>(`calendar/earnings?symbol=${symbol}&from=${addDays(today, -40)}&to=${addDays(today, 120)}`, 3600)),
@@ -251,7 +270,7 @@ async function ticker(symbol: string, env: Env, ctx: ExecutionContext): Promise<
     quarters: quartersFrom(metric?.series?.quarterly, profile?.shareOutstanding ?? null),
     read, warnings,
   };
-  return json(body, 300);
+  return body;
 }
 
 // ── /api/macro ─────────────────────────────────────────────────────────
@@ -350,8 +369,7 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
   if (t) {
     const sym = t.toUpperCase();
     try {
-      const r = await ticker(sym, env, ctx);
-      const d = (await r.json()) as TickerResponse;
+      const d = await tickerData(sym, env, ctx);
       const name = d.profile?.name ?? U[sym]?.n ?? sym;
       const when = d.next ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
       const title = when ? `${sym} reports ${when} ${SESSION_WORDS[d.next!.session]} · Metaphases`.replace("  ", " ") : `${name} (${sym}) earnings · Metaphases`;
@@ -421,7 +439,7 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
 
 // ── /og/t/:sym.(svg|png): per-ticker share card ─────────────────────────
 async function cardFor(sym: string, env: Env, ctx: ExecutionContext): Promise<string> {
-  const d = (await (await ticker(sym, env, ctx)).json()) as TickerResponse;
+  const d = await tickerData(sym, env, ctx);
   const when = d.next ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
   return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null });
 }
@@ -457,6 +475,8 @@ async function health(env: Env, ctx: ExecutionContext): Promise<Response> {
     probe("fred", () => getJson(`https://api.stlouisfed.org/fred/release/dates?release_id=50&realtime_start=${today}&include_release_dates_with_no_data=true&limit=1&file_type=json&api_key=${env.FRED_API_KEY}`)),
     probe("yahoo", () => getJson(`https://query1.finance.yahoo.com/v8/finance/chart/SPY?range=5d&interval=1d`, UA)),
     probe("nasdaq", () => getJson(`https://api.nasdaq.com/api/company/AAPL/earnings-surprise`, UA)),
+    // The path users actually hit: the full sheet (cached). Upstreams can be up while this fails (critique 2026-11-01 0700).
+    probe("ticker", async () => { const d = await tickerData("AAPL", env, ctx); if (!d.profile && !d.quote) throw new Error("empty sheet"); }),
   ]));
   const ok = sources.every((x) => x.ok);
   return new Response(JSON.stringify({ ok, build: env.CF_VERSION?.id ?? "dev", deployedAt: env.CF_VERSION?.timestamp ?? null, universe: Object.keys(U).length, sources, asOf: new Date().toISOString() }), {
