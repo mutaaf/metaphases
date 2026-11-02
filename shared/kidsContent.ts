@@ -2,123 +2,235 @@
 // short sentences, everyday words, one idea per lesson. A unit test keeps every lesson at a
 // Flesch–Kincaid grade of 5 or below — if you edit, keep it simple.
 
+// Moon School is a set of MICRO-LESSONS (about a minute each), grouped into units. Each lesson is
+// a few tiny steps: one emoji + one short sentence per card, with a quick check or a sorting game
+// in between. `screens` and `quiz` are derived for the worksheets and the quiz of the day.
 export interface Quiz { q: string; options: string[]; answer: number; why: string }
-export interface Lesson { id: string; title: string; emoji: string; screens: string[]; quiz: Quiz[] }
+export interface SortItem { emoji: string; text: string; b: 0 | 1 }
+export type Step =
+  | { t: "say"; emoji: string; text: string }
+  | { t: "check"; q: string; options: string[]; answer: number; why: string }
+  | { t: "sort"; q: string; buckets: [string, string]; items: SortItem[]; why: string };
+export interface Unit { id: string; title: string; emoji: string; blurb: string }
+export interface Lesson { id: string; unit: string; title: string; emoji: string; steps: Step[]; screens: string[]; quiz: Quiz[] }
+
+export const UNITS: Unit[] = [
+  { id: "money", title: "Money basics", emoji: "💰", blurb: "What money is, and how to plan it." },
+  { id: "companies", title: "Companies", emoji: "🏪", blurb: "Who makes the things you love." },
+  { id: "shares", title: "Shares and the market", emoji: "🍕", blurb: "Owning a tiny slice." },
+  { id: "report", title: "Report cards", emoji: "📝", blurb: "How companies show their grades." },
+  { id: "growing", title: "Saving and investing", emoji: "🌱", blurb: "Keep it safe, or help it grow." },
+  { id: "dividends", title: "Dividends", emoji: "🍰", blurb: "When your slice pays you." },
+  { id: "smart", title: "Money-smart", emoji: "🧠", blurb: "Spread out, be patient, check facts." },
+];
+
+const say = (emoji: string, text: string): Step => ({ t: "say", emoji, text });
+const check = (q: string, options: string[], why: string, answer = 0): Step => ({ t: "check", q, options, answer, why });
+const sort = (q: string, buckets: [string, string], items: SortItem[], why: string): Step => ({ t: "sort", q, buckets, items, why });
+const L = (unit: string, id: string, title: string, emoji: string, steps: Step[]): Lesson => ({
+  id, unit, title, emoji, steps,
+  screens: steps.flatMap((x) => (x.t === "say" ? [x.text] : [])),
+  quiz: steps.flatMap((x) => (x.t === "check" ? [{ q: x.q, options: x.options, answer: x.answer, why: x.why }] : [])),
+});
 
 export const LESSONS: Lesson[] = [
-  {
-    id: "company", title: "What is a company?", emoji: "🏪",
-    screens: [
-      "A company is a group of people who work together to sell something.",
-      "Some sell things you can hold, like shoes or toys. Some sell things you use, like games or videos.",
-      "When people buy what a company sells, the company gets money. If it gets more than it spends, that extra is called profit.",
-    ],
-    quiz: [
-      { q: "What does a company do?", options: ["Sells things or services", "Only plays games", "Makes the weather"], answer: 0, why: "A company sells things or services to people." },
-      { q: "Profit is…", options: ["Money left after paying the bills", "A kind of fruit", "All the money a company spends"], answer: 0, why: "Profit is the money left over after the company pays for everything." },
-    ],
-  },
-  {
-    id: "share", title: "What is a share?", emoji: "🍕",
-    screens: [
-      "Think of a big company like a pizza cut into lots and lots of slices.",
-      "Each slice is called a share. If you own a share, you own a tiny piece of that company.",
-      "People can buy and sell shares in a place called the stock market. Grown-ups need a special account to do it.",
-    ],
-    quiz: [
-      { q: "If you own a share of a company, you own…", options: ["A tiny piece of it", "The whole company", "One of its stores"], answer: 0, why: "A share is a tiny slice of the whole company, like one slice of a pizza." },
-      { q: "Where do people buy and sell shares?", options: ["The stock market", "The toy store", "The bank vault"], answer: 0, why: "Shares are bought and sold on the stock market." },
-    ],
-  },
-  {
-    id: "prices", title: "Why do prices go up and down?", emoji: "🎢",
-    screens: [
-      "The price of a share is what someone will pay for it right now.",
-      "When lots of people want to buy, the price goes up. When lots of people want to sell, the price goes down.",
-      "It is a bit like trading cards. When everyone wants a card, people will give more for it.",
-      "Prices move every day. Small ups and downs are normal.",
-    ],
-    quiz: [
-      { q: "If lots of people want to buy a share, the price…", options: ["Goes up", "Goes down", "Stays stuck"], answer: 0, why: "More buyers than sellers pushes the price up." },
-      { q: "Is it normal for prices to move a little every day?", options: ["Yes", "No, never"], answer: 0, why: "Prices wiggle every day. That is normal." },
-    ],
-  },
-  {
-    id: "report-card", title: "What is a report card?", emoji: "📝",
-    screens: [
-      "You get a report card from school. Companies get one too!",
-      "Four times a year, each company tells everyone how it did. Grown-ups call this an earnings report.",
-      "It says how much money came in, and how much profit the company made.",
-      "Metaphases shows when each company will share its report card. We draw the time as a moon.",
-    ],
-    quiz: [
-      { q: "How many times a year does a company share its report card?", options: ["4 times", "Once", "Every day"], answer: 0, why: "Companies report four times a year, once every three months." },
-      { q: "What do grown-ups call a company's report card?", options: ["An earnings report", "A gift card", "A birthday card"], answer: 0, why: "It is called an earnings report." },
-    ],
-  },
-  {
-    id: "beat", title: "What does \"beat\" mean?", emoji: "🎯",
-    screens: [
-      "Before a report card comes out, grown-ups make a guess. They guess how much profit the company will make.",
-      "If the company makes more than the guess, it beat. If it makes less, it missed.",
-      "Sometimes a company beats and the price still goes down. People may have hoped for even more!",
-    ],
-    quiz: [
-      { q: "Grown-ups guessed $2. The company made $3. Did it beat or miss?", options: ["Beat", "Miss"], answer: 0, why: "$3 is more than the $2 guess, so it beat." },
-      { q: "Can a price go down even when a company beats?", options: ["Yes, sometimes", "No, never"], answer: 0, why: "Yes! People may have hoped for even more good news." },
-    ],
-  },
-  {
-    id: "saving", title: "Saving vs investing", emoji: "🐷",
-    screens: [
-      "Saving is keeping your money safe, like in a piggy bank. It stays the same.",
-      "Investing is using money to buy things like shares. It can grow, but it can also shrink.",
-      "Grown-ups often do both. They save money they need soon. They invest money they will not need for a long time.",
-    ],
-    quiz: [
-      { q: "Money in a piggy bank…", options: ["Stays the same", "Grows by itself", "Turns into shares"], answer: 0, why: "Saved money stays the same. It does not grow or shrink." },
-      { q: "Investing can make money…", options: ["Grow or shrink", "Only grow", "Disappear for sure"], answer: 0, why: "Investing can go up or down. That is the risk." },
-    ],
-  },
-  {
-    id: "baskets", title: "Don't put all your eggs in one basket", emoji: "🧺",
-    screens: [
-      "Imagine you carry all your eggs in one basket. If you trip, they all break!",
-      "If you split them into many baskets, one trip only breaks a few.",
-      "Money works the same way. Owning a little of many companies is safer than owning a lot of one.",
-      "Grown-ups call this spreading out. You can try it in your Piggy Bank.",
-    ],
-    quiz: [
-      { q: "Why split your eggs into many baskets?", options: ["So one trip doesn't break them all", "Baskets are pretty", "Eggs like company"], answer: 0, why: "If one basket falls, the others are still safe." },
-      { q: "Which is safer?", options: ["A little of many companies", "All your money in one company"], answer: 0, why: "Spreading out means one bad day hurts less." },
-    ],
-  },
-  {
-    id: "patience", title: "Be patient like the moon", emoji: "🌙",
-    screens: [
-      "The moon takes about a month to go from new moon to full moon. It does not rush.",
-      "Good companies can grow over many years. Some days their price goes down. Some days it goes up.",
-      "People who wait a long time often do better than people who buy and sell every day.",
-    ],
-    quiz: [
-      { q: "Good investing is usually…", options: ["Slow and patient", "Fast and wild", "Done every minute"], answer: 0, why: "Being patient over many years usually works better." },
-      { q: "If a price goes down for one day, should you panic?", options: ["No, small drops are normal", "Yes, always"], answer: 0, why: "Prices go up and down. One bad day is normal." },
-    ],
-  },
-  {
-    id: "hype", title: "Hype vs facts", emoji: "📣",
-    screens: [
-      "Sometimes a video says a stock will go to the moon. That is called hype.",
-      "Hype is exciting. But the person in the video might be trying to sell, or might just be wrong.",
-      "Facts are things you can check, like how much profit a company made.",
-      "Before you believe a video, ask: What are the facts? Who is telling me this? Why?",
-    ],
-    quiz: [
-      { q: "A video says \"this stock will go to the moon!\" That is…", options: ["Hype", "A fact", "A school rule"], answer: 0, why: "It's an exciting guess, not a fact you can check." },
-      { q: "What should you do before believing a video?", options: ["Check the facts", "Tell everyone right away", "Buy right now"], answer: 0, why: "Always check the facts, and ask a grown-up." },
-    ],
-  },
+  // ── Money basics ──
+  L("money", "money", "What is money?", "💵", [
+    say("🐄", "Long ago, people traded things. A cow for some bread!"),
+    say("🤔", "That was hard. What if the baker did not want a cow?"),
+    say("💵", "So people made money. Everyone agrees it is worth something."),
+    check("Why did people make money?", ["To make trading easy", "Because cows are boring", "To use as paper"], "Money makes trading easy, because everyone takes it."),
+  ]),
+  L("money", "earn", "Where does money come from?", "🧑‍🍳", [
+    say("🧑‍🍳", "Grown-ups earn money by doing work. A cook cooks. A nurse helps sick people."),
+    say("🍋", "Kids can earn too! You can sell lemonade or help a neighbor."),
+    say("⏰", "Earning takes time and work. That is why money matters."),
+    check("How do most grown-ups get money?", ["By working", "It grows on trees", "They print it at home"], "Most grown-ups earn money by doing a job."),
+  ]),
+  L("money", "needs", "Needs and wants", "🎒", [
+    say("🍎", "A need is something you must have. Like food, a home and clothes."),
+    say("🎮", "A want is something nice to have. Like a new game or candy."),
+    sort("Is it a need or a want?", ["Need", "Want"], [
+      { emoji: "🍎", text: "Food", b: 0 }, { emoji: "🎮", text: "A new game", b: 1 }, { emoji: "🧥", text: "A warm coat", b: 0 },
+      { emoji: "🍭", text: "Candy", b: 1 }, { emoji: "🏠", text: "A home", b: 0 }, { emoji: "🧸", text: "One more toy", b: 1 },
+    ], "Needs come first. Wants come next, if there is money left."),
+  ]),
+  L("money", "budget", "Make a money plan", "📋", [
+    say("📋", "A budget is a plan for your money. You plan before you spend."),
+    say("🫙", "Try three jars: Spend, Save and Share. Put some money in each one."),
+    say("✅", "When you see something fun, check your Spend jar first."),
+    check("A budget is…", ["A plan for your money", "A kind of candy", "A piggy bank"], "A budget is a plan. It helps you choose before you spend."),
+  ]),
+  // ── Companies ──
+  L("companies", "company", "What is a company?", "🏪", [
+    say("👟", "A company is a team of people. They work together to sell something."),
+    say("🎮", "Some sell things you can hold, like shoes or toys. Some sell things you use, like games or videos."),
+    say("✨", "When people buy what it sells, the company gets money. If it gets more than it spends, the extra is profit."),
+    check("What does a company do?", ["Sells things to people", "Only plays games", "Makes the weather"], "A company sells things or services to people."),
+    check("Profit is…", ["Money left after paying the bills", "A kind of fruit", "All the money a company spends"], "Profit is the money left after the bills are paid."),
+  ]),
+  L("companies", "profit", "Money in, money out", "🧾", [
+    say("💵", "Money in is all the money a company gets from selling things."),
+    say("🧾", "Money out is what it pays for. Workers, rent and supplies."),
+    say("✨", "Money in minus money out is profit. If money out is bigger, that is a loss."),
+    check("A shop sells $20 of cookies. The flour cost $5. What is the profit?", ["$15", "$25", "$5"], "$20 take away $5 is $15."),
+  ]),
+  L("companies", "grow", "How companies grow", "🌱", [
+    say("🍋", "A lemonade stand can grow into a lemonade shop."),
+    say("🧱", "To grow, it needs money for a bigger shop and more workers."),
+    say("🍕", "One way to get that money is to sell shares of the company."),
+    check("Why might a company sell shares?", ["To get money to grow", "To get smaller", "Just for fun"], "Selling shares brings in money the company can use to grow."),
+  ]),
+  // ── Shares and the market ──
+  L("shares", "share", "What is a share?", "🍕", [
+    say("🍕", "Think of a big company like a pizza cut into lots and lots of slices."),
+    say("🧩", "Each slice is called a share. If you own a share, you own a tiny piece of that company."),
+    say("🏟️", "People buy and sell shares in a place called the stock market. Grown-ups need a special account to do it."),
+    check("If you own a share of a company, you own…", ["A tiny piece of it", "The whole company", "One of its stores"], "A share is a tiny slice of the company. Like one slice of a pizza."),
+    check("Where do people buy and sell shares?", ["The stock market", "The toy store", "The bank vault"], "Shares are bought and sold on the stock market."),
+  ]),
+  L("shares", "owner", "Being an owner", "👑", [
+    say("👑", "If you own a share, you are a part owner of the company."),
+    say("🗳️", "Owners can vote on some big choices. One share is one vote."),
+    say("📈", "If the company does well, your share can be worth more."),
+    check("Owning one share of Nike makes you…", ["A tiny part owner of Nike", "The boss of Nike", "A Nike worker"], "One share makes you a tiny part owner. Lots of other people own parts too."),
+  ]),
+  L("shares", "market", "The stock market", "🏟️", [
+    say("🏟️", "The stock market is a big place where people buy and sell shares."),
+    say("💻", "Today it is mostly on computers. It opens in the morning and closes in the afternoon."),
+    say("🔔", "In New York, a bell rings to start the day and to end it!"),
+    check("What do people trade on the stock market?", ["Shares", "Pets", "Pizza"], "The stock market is where shares are traded."),
+  ]),
+  L("shares", "prices", "Why do prices go up and down?", "🎢", [
+    say("🏷️", "The price of a share is what someone will pay for it right now."),
+    say("🙋", "When lots of people want to buy, the price goes up. When lots want to sell, it goes down."),
+    say("🃏", "It is a bit like trading cards. When everyone wants a card, people will give more for it."),
+    say("〰️", "Prices move every day. Small ups and downs are normal."),
+    check("If lots of people want to buy a share, the price…", ["Goes up", "Goes down", "Stays stuck"], "More buyers than sellers pushes the price up."),
+    check("Is it normal for prices to move a little every day?", ["Yes", "No, never"], "Prices wiggle every day. That is normal."),
+  ]),
+  L("shares", "ticker", "Ticker nicknames", "🔤", [
+    say("🔤", "Each company has a short nickname. It is called a ticker."),
+    say("🍎", "Apple is AAPL. Disney is DIS. Coca-Cola is KO."),
+    say("👀", "Grown-ups use tickers to find a company fast."),
+    check("What is DIS?", ["Disney's ticker", "A kind of dish", "A dinosaur"], "DIS is Disney's short nickname on the stock market."),
+  ]),
+  // ── Report cards ──
+  L("report", "report-card", "What is a report card?", "📝", [
+    say("🎒", "You get a report card from school. Companies get one too!"),
+    say("📅", "Four times a year, each company tells everyone how it did. Grown-ups call this an earnings report."),
+    say("💵", "It says how much money came in, and how much profit the company made."),
+    say("🌙", "Metaphases shows when each company will share its report card. We draw the time as a moon."),
+    check("How many times a year does a company share its report card?", ["4 times", "Once", "Every day"], "Companies report four times a year, once every three months."),
+    check("What do grown-ups call a company's report card?", ["An earnings report", "A gift card", "A birthday card"], "It is called an earnings report."),
+  ]),
+  L("report", "guess", "The grown-ups' guess", "🔮", [
+    say("🔮", "Before a report card, experts guess the profit."),
+    say("📊", "They put all the guesses together and find the middle. That is the number to beat."),
+    say("⏳", "Then everyone waits to see what really happened."),
+    check("What are the experts guessing?", ["The company's profit", "The weather", "Tomorrow's lunch"], "They guess the profit, so we can see if the company beats it."),
+  ]),
+  L("report", "beat", "What does \"beat\" mean?", "🎯", [
+    say("🔮", "Before a report card comes out, grown-ups make a guess. They guess how much profit the company will make."),
+    say("🎯", "If the company makes more than the guess, it beat. If it makes less, it missed."),
+    say("🤷", "Sometimes a company beats and the price still goes down. People may have hoped for even more!"),
+    check("Grown-ups guessed $2. The company made $3. Did it beat or miss?", ["Beat", "Miss"], "$3 is more than the $2 guess, so it beat."),
+    check("Can a price go down even when a company beats?", ["Yes, sometimes", "No, never"], "Yes! People may have hoped for even more good news."),
+  ]),
+  L("report", "after", "Why prices jump on report day", "🎢", [
+    say("📝", "On report card day, prices can jump up or fall down fast."),
+    say("😮", "That is because people learn lots of new facts all at once."),
+    say("🔭", "People also hear what the company thinks comes next."),
+    check("Why can a price jump on report card day?", ["People learn new facts all at once", "The building moves", "It is a holiday"], "New facts arrive all at once, so people change their minds fast."),
+  ]),
+  // ── Saving and investing ──
+  L("growing", "saving", "Saving vs investing", "🐷", [
+    say("🐷", "Saving is keeping your money safe, like in a piggy bank. It stays the same."),
+    say("🌳", "Investing is using money to buy things like shares. It can grow, but it can also shrink."),
+    say("🤝", "Grown-ups often do both. They save money they need soon. They invest money they will not need for a long time."),
+    check("Money in a piggy bank…", ["Stays the same", "Grows by itself", "Turns into shares"], "Saved money stays the same. It does not grow or shrink."),
+    check("Investing can make money…", ["Grow or shrink", "Only grow", "Go away for sure"], "Investing can go up or down. That is the risk."),
+  ]),
+  L("growing", "interest", "Interest: a little extra", "🏦", [
+    say("🏦", "A bank keeps your money safe. It even pays you a little to keep it there."),
+    say("🪙", "That little extra is called interest. Put in $100, and a year later you may have $102."),
+    say("🐢", "Interest is slow, but it is safe."),
+    check("Interest is…", ["A little extra money the bank pays you", "A fee to play games", "A kind of share"], "It is the small extra the bank adds to your money."),
+  ]),
+  L("growing", "snowball", "The money snowball", "⛄", [
+    say("⛄", "Roll a snowball and it picks up more snow. It gets bigger faster and faster."),
+    say("💰", "Money can do that too. The money you grow can grow more money."),
+    say("⏳", "That is why starting early helps. Time makes the snowball big."),
+    check("Why does starting early help?", ["More time for the snowball to grow", "Banks like kids best", "It does not help"], "More years means more time for growth to pile up."),
+  ]),
+  L("growing", "risk", "Risk: ups and downs", "🎢", [
+    say("🎢", "Risk means things might not go the way you hope."),
+    say("🫙", "A savings jar has low risk. It will not grow much, but it will not shrink."),
+    say("🌳", "Investing has more risk. It can grow more, but some years it goes down."),
+    sort("Low risk or high risk?", ["Low risk", "High risk"], [
+      { emoji: "🐷", text: "Money in a piggy bank", b: 0 }, { emoji: "🚀", text: "All your money in one new company", b: 1 },
+      { emoji: "🏦", text: "Money in a bank", b: 0 }, { emoji: "📣", text: "A stock a video says will go to the moon", b: 1 },
+    ], "Safe places grow slowly. Big promises can go up or down a lot."),
+  ]),
+  L("growing", "which", "Save it or invest it?", "🤔", [
+    say("🗓️", "Need the money soon? Save it. Then it will be there when you need it."),
+    say("🌳", "Will you not need it for many years? Investing gives it time to grow."),
+    sort("Save it or invest it?", ["Save", "Invest"], [
+      { emoji: "🧸", text: "A toy next week", b: 0 }, { emoji: "🎓", text: "College in 10 years", b: 1 },
+      { emoji: "🎂", text: "A gift for mom this month", b: 0 }, { emoji: "🏡", text: "When you are a grown-up", b: 1 },
+    ], "Soon means save. A long time means it can be invested."),
+  ]),
+  // ── Dividends ──
+  L("dividends", "dividend", "What is a dividend?", "🍰", [
+    say("🍰", "Some companies share part of their profit with their owners. That is a dividend."),
+    say("🪙", "If you own a share, you might get a little money every few months."),
+    say("🥤", "Coca-Cola and McDonald's pay them. Some do not."),
+    check("A dividend is…", ["Profit a company shares with its owners", "A kind of pizza", "A school test"], "It is a bit of the profit. The owners get it."),
+  ]),
+  L("dividends", "no-dividend", "Why some don't pay", "🚀", [
+    say("🚀", "Some companies keep all their profit to grow faster."),
+    say("🔧", "They build new things, hire workers and open new stores."),
+    say("🤞", "Owners hope the company grows. Then their shares may be worth more later."),
+    check("Why might a company skip dividends?", ["To use the money to grow", "Because it forgot", "It is against the rules"], "Some companies use all their profit to grow."),
+  ]),
+  L("dividends", "replant", "Spend it or plant it?", "🌻", [
+    say("🌻", "When you get a dividend, you can spend it. Or you can use it to buy more shares."),
+    say("⛄", "Buying more shares is like adding snow to your snowball."),
+    say("📅", "Over many years, that can grow a lot."),
+    check("Using dividends to buy more shares is like…", ["Adding snow to a snowball", "Throwing seeds away", "Eating all the cake"], "More shares can pay you more. So the snowball grows."),
+  ]),
+  // ── Money-smart ──
+  L("smart", "baskets", "Don't put all your eggs in one basket", "🧺", [
+    say("🥚", "Imagine you carry all your eggs in one basket. If you trip, they all break!"),
+    say("🧺", "If you split them into many baskets, one trip only breaks a few."),
+    say("🍕", "Money works the same way. Owning a little of many companies is safer than a lot of one."),
+    say("🐷", "Grown-ups call this spreading out. You can try it in your Piggy Bank."),
+    check("Why split your eggs into many baskets?", ["So one trip doesn't break them all", "Baskets are pretty", "Eggs like company"], "If one basket falls, the others are still safe."),
+    check("Which is safer?", ["A little of many companies", "All your money in one company"], "Spreading out means one bad day hurts less."),
+  ]),
+  L("smart", "patience", "Be patient like the moon", "🌙", [
+    say("🌙", "The moon takes about a month to go from new moon to full moon. It does not rush."),
+    say("📈", "Good companies can grow over many years. Some days their price goes down. Some days it goes up."),
+    say("🐢", "People who wait a long time often do better than people who buy and sell every day."),
+    check("Good investing is usually…", ["Slow and patient", "Fast and wild", "Done every minute"], "Waiting a long time usually works best."),
+    check("If a price goes down for one day, should you panic?", ["No, small drops are normal", "Yes, always"], "Prices go up and down. One bad day is normal."),
+  ]),
+  L("smart", "hype", "Hype vs facts", "📣", [
+    say("📣", "Sometimes a video says a stock will go to the moon. That is called hype."),
+    say("🎭", "Hype is exciting. But the person in the video might be trying to sell, or might just be wrong."),
+    say("🔍", "Facts are things you can check, like how much profit a company made."),
+    say("❓", "Before you believe a video, ask: What are the facts? Who is telling me this? Why?"),
+    check("A video says \"this stock will go to the moon!\" That is…", ["Hype", "A fact", "A school rule"], "It's an exciting guess, not a fact you can check."),
+    check("What should you do before believing a video?", ["Check the facts", "Tell everyone right away", "Buy right now"], "Always check the facts, and ask a grown-up."),
+  ]),
+  L("smart", "too-good", "Too good to be true", "🚩", [
+    say("🚩", "If someone promises lots of money, fast and for sure, that is a red flag."),
+    say("🕵️", "Real investing has ups and downs. Nobody can promise it only goes up."),
+    say("🙋", "If it feels too good to be true, stop and ask a grown-up."),
+    check("Someone says \"Double your money by Friday, for sure!\" What do you do?", ["Stop and ask a grown-up", "Send them your money", "Tell them your password"], "Big promises that are for sure are a red flag. Ask a grown-up."),
+  ]),
 ];
+export const lessonUnit = (l: Lesson) => UNITS.find((u) => u.id === l.unit)!;
 
 export interface KidWord { word: string; means: string; example: string }
 export const KID_WORDS: KidWord[] = [

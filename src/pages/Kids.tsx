@@ -9,7 +9,7 @@ import {
   lastTimeLine, levelFor, LEVELS, MAX_PICKS, ofTheDay, piggyValue, pointsFor, resolveGuess, resolvePrice, START_COINS, weatherFor, whyLine,
   type KidCo, type Pick, type Weather,
 } from "../../shared/kids";
-import { KID_WORDS, LESSONS, type Lesson, type Quiz } from "../../shared/kidsContent";
+import { KID_WORDS, LESSONS, lessonUnit, UNITS, type Lesson, type Quiz, type Step } from "../../shared/kidsContent";
 import {
   buildRecap, decodeLeague, encodeLeague, leagueRows, PLAYER_NAMES, PLAYERS, recapLines, recapQuery, type LeagueGuess, type LeaguePlayer, type Recap,
 } from "../../shared/kidsWeek";
@@ -97,7 +97,7 @@ function Pretend({ children = "PRETEND MONEY" }: { children?: ReactNode }) {
 const coins = (v: number) => `🌙 $${v.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 /** Stable answer order per question, so the right answer isn't always first. */
-function shuffled(q: Quiz, seed: number): { text: string; i: number }[] {
+function shuffled(q: { q: string; options: string[] }, seed: number): { text: string; i: number }[] {
   const opts = q.options.map((text, i) => ({ text, i }));
   const k = (seed * 7 + q.q.length) % opts.length;
   return [...opts.slice(k), ...opts.slice(0, k)];
@@ -622,70 +622,128 @@ function Badges() {
 
 function SchoolPage() {
   const { lessons } = useKids();
+  const next = LESSONS.find((l) => !lessons.includes(l.id));
   return (
     <div className="k-page">
       <header className="k-hero">
         <span className="k-hero-emoji" aria-hidden>🎓</span>
-        <div><span className="k-eyebrow">{lessons.length} of {LESSONS.length} done</span><h1>Moon <em>School</em></h1></div>
+        <div><span className="k-eyebrow">{lessons.length} of {LESSONS.length} done · about a minute each</span><h1>Moon <em>School</em></h1></div>
       </header>
       <StartHere />
-      <p className="k-intro">Short lessons, one idea each. Finish a lesson to fill your moon!</p>
-      <ul className="k-lessons">
-        {LESSONS.map((l, i) => {
-          const done = lessons.includes(l.id);
+      {next && (
+        <button className="k-upnext" onClick={() => navigate(`/kids/school/${next.id}`)}>
+          <span className="k-upnext-emoji" aria-hidden>{next.emoji}</span>
+          <span className="k-starthere-t"><span className="k-eyebrow">Up next · {lessonUnit(next).title}</span><b>{next.title}</b><small>{next.steps.length} tiny steps</small></span>
+          <span className="k-starthere-go" aria-hidden>→</span>
+        </button>
+      )}
+      {UNITS.map((u) => {
+        const ls = LESSONS.filter((l) => l.unit === u.id);
+        const done = ls.filter((l) => lessons.includes(l.id)).length;
+        return (
+          <section key={u.id} className="k-unit" aria-label={u.title}>
+            <header className="k-unit-head">
+              <span className="k-unit-emoji" aria-hidden>{u.emoji}</span>
+              <div><h2>{u.title}</h2><span className="k-small">{u.blurb}</span></div>
+              <span className={`k-unit-count${done === ls.length ? " full" : ""}`}>{done === ls.length ? "🌕" : `${done}/${ls.length}`}</span>
+            </header>
+            <ul className="k-lessons">
+              {ls.map((l) => {
+                const isDone = lessons.includes(l.id);
+                return (
+                  <li key={l.id}>
+                    <button className={`k-lesson${isDone ? " done" : ""}`} onClick={() => navigate(`/kids/school/${l.id}`)}>
+                      <span className="k-lesson-emoji" aria-hidden>{l.emoji}</span>
+                      <span className="k-lesson-t"><b>{l.title}</b><span className="k-small">{l.steps.length} steps · 1 min</span></span>
+                      <span className="k-lesson-done" aria-label={isDone ? "Finished" : "Not started"}>{isDone ? "🌕" : "🌑"}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
+      <Badges />
+    </div>
+  );
+}
+
+function CheckStep({ step, seed, picked, onPick }: { step: Extract<Step, { t: "check" }>; seed: number; picked: number | undefined; onPick: (i: number) => void }) {
+  return (
+    <>
+      <span className="k-eyebrow">Quick check</span>
+      <h2 className="k-q">{step.q}</h2>
+      <div className="k-answers">
+        {shuffled(step, seed).map((o) => (
+          <button key={o.i} className={`k-answer${picked === o.i ? (o.i === step.answer ? " right" : " wrong") : ""}`} aria-pressed={picked === o.i} onClick={() => onPick(o.i)}>{o.text}</button>
+        ))}
+      </div>
+      {picked != null && <p className="k-feedback" role="status">{picked === step.answer ? "🎉 Yes! " : "Good try! "}{step.why}</p>}
+      <div className="k-card-actions"><ReadAloud text={`${step.q} ${step.options.join(". Or, ")}.`} /></div>
+    </>
+  );
+}
+
+function SortStep({ step, picks, onPick }: { step: Extract<Step, { t: "sort" }>; picks: Record<number, 0 | 1>; onPick: (item: number, b: 0 | 1) => void }) {
+  const all = step.items.every((_, i) => picks[i] != null);
+  const right = step.items.filter((it, i) => picks[i] === it.b).length;
+  return (
+    <>
+      <span className="k-eyebrow">Sorting game</span>
+      <h2 className="k-q">{step.q}</h2>
+      <ul className="k-sort">
+        {step.items.map((it, i) => {
+          const p = picks[i];
           return (
-            <li key={l.id}>
-              <button className={`k-lesson${done ? " done" : ""}`} onClick={() => navigate(`/kids/school/${l.id}`)}>
-                <span className="k-lesson-emoji" aria-hidden>{l.emoji}</span>
-                <span className="k-lesson-t"><span className="k-small">Lesson {i + 1}</span><b>{l.title}</b></span>
-                <span className="k-lesson-done" aria-label={done ? "Finished" : "Not started"}>{done ? "🌕" : "🌑"}</span>
-              </button>
+            <li key={it.text} className={p == null ? "" : p === it.b ? "right" : "wrong"}>
+              <span className="k-sort-item"><span aria-hidden>{it.emoji}</span> {it.text}</span>
+              <span className="k-sort-btns" role="group" aria-label={it.text}>
+                {step.buckets.map((bk, b) => (
+                  <button key={bk} className={`k-chip${p === b ? " on" : ""}`} aria-pressed={p === b} onClick={() => onPick(i, b as 0 | 1)}>{bk}</button>
+                ))}
+              </span>
+              {p != null && <span className="k-sort-mark" aria-label={p === it.b ? "right" : `not quite: ${step.buckets[it.b]}`}>{p === it.b ? "✅" : `↩︎ ${step.buckets[it.b]}`}</span>}
             </li>
           );
         })}
       </ul>
-      <Badges />
-    </div>
+      {all && <p className="k-feedback" role="status">{right === step.items.length ? "🎉 All right! " : `${right} of ${step.items.length} right. `}{step.why}</p>}
+      <div className="k-card-actions"><ReadAloud text={`${step.q} ${step.items.map((x) => x.text).join(". ")}.`} /></div>
+    </>
   );
 }
 
 function LessonPage({ lesson }: { lesson: Lesson }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
-  const total = lesson.screens.length + lesson.quiz.length;
+  const [sorts, setSorts] = useState<Record<number, Record<number, 0 | 1>>>({});
+  const total = lesson.steps.length;
   const done = step >= total;
-  const qi = step - lesson.screens.length;
-  const q = qi >= 0 && qi < lesson.quiz.length ? lesson.quiz[qi] : null;
-  const picked = q ? answers[qi] : undefined;
+  const cur = done ? null : lesson.steps[step];
+  const ready = !cur || cur.t === "say" || (cur.t === "check" && answers[step] != null) || (cur.t === "sort" && cur.items.every((_, i) => sorts[step]?.[i] != null));
+  const unit = lessonUnit(lesson);
+  const idx = LESSONS.findIndex((l) => l.id === lesson.id);
+  const nx = LESSONS[idx + 1];
   useEffect(() => { if (done) kids.finishLesson(lesson.id, todayISO()); }, [done]);
   return (
     <div className="k-page">
       <button className="k-link k-back" onClick={() => navigate("/kids/school")}>← Moon School</button>
-      <header className="k-hero">
+      <header className="k-hero k-hero-lesson">
         <span className="k-hero-emoji" aria-hidden>{lesson.emoji}</span>
-        <div><span className="k-eyebrow">{done ? "Finished!" : `Step ${step + 1} of ${total}`}</span><h1>{lesson.title}</h1></div>
+        <div><span className="k-eyebrow">{unit.emoji} {unit.title} · {done ? "Finished!" : `Step ${step + 1} of ${total}`}</span><h1>{lesson.title}</h1></div>
       </header>
-      <div className="k-progress" aria-hidden><i style={{ width: `${(Math.min(step, total) / total) * 100}%` }} /></div>
-      <article className="k-story k-lesson-card" aria-live="polite">
-        {!done && !q && (
+      <div className="k-steps" aria-hidden>{lesson.steps.map((x, i) => <i key={i} className={`${i < step ? "done" : i === step ? "on" : ""} t-${x.t}`} />)}</div>
+      <article className={`k-story k-lesson-card${cur ? ` k-step-${cur.t}` : ""}`} aria-live="polite" key={step}>
+        {cur?.t === "say" && (
           <>
-            <p className="k-lesson-text">{lesson.screens[step]}</p>
-            <div className="k-card-actions"><ReadAloud text={lesson.screens[step]} /></div>
+            <span className="k-say-emoji" aria-hidden>{cur.emoji}</span>
+            <p className="k-lesson-text">{cur.text}</p>
+            <div className="k-card-actions"><ReadAloud text={cur.text} /></div>
           </>
         )}
-        {q && (
-          <>
-            <span className="k-eyebrow">Quiz {qi + 1} of {lesson.quiz.length}</span>
-            <h2 className="k-q">{q.q}</h2>
-            <div className="k-answers">
-              {shuffled(q, qi + lesson.id.length).map((o) => (
-                <button key={o.i} className={`k-answer${picked === o.i ? (o.i === q.answer ? " right" : " wrong") : ""}`} aria-pressed={picked === o.i} onClick={() => setAnswers({ ...answers, [qi]: o.i })}>{o.text}</button>
-              ))}
-            </div>
-            {picked != null && <p className="k-feedback" role="status">{picked === q.answer ? "🎉 Yes! " : "Good try! "}{q.why}</p>}
-            <div className="k-card-actions"><ReadAloud text={`${q.q} ${q.options.join(". Or, ")}.`} /></div>
-          </>
-        )}
+        {cur?.t === "check" && <CheckStep step={cur} seed={step + lesson.id.length} picked={answers[step]} onPick={(i) => setAnswers({ ...answers, [step]: i })} />}
+        {cur?.t === "sort" && <SortStep step={cur} picks={sorts[step] ?? {}} onPick={(i, b) => setSorts({ ...sorts, [step]: { ...(sorts[step] ?? {}), [i]: b } })} />}
         {done && (
           <div className="k-celebrate" role="status">
             <MoonPhase phase={4} size={96} />
@@ -698,12 +756,12 @@ function LessonPage({ lesson }: { lesson: Lesson }) {
         {!done ? (
           <>
             <button className="k-btn" onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0}>← Back</button>
-            <button className="k-btn k-btn-primary" onClick={() => setStep(step + 1)} disabled={!!q && picked == null}>{step === total - 1 ? "Finish 🌕" : "Next →"}</button>
+            <button className="k-btn k-btn-primary" onClick={() => setStep(step + 1)} disabled={!ready}>{step === total - 1 ? "Finish 🌕" : "Next →"}</button>
           </>
         ) : (
           <>
             <button className="k-btn" onClick={() => navigate("/kids/school")}>All lessons</button>
-            {(() => { const i = LESSONS.findIndex((l) => l.id === lesson.id); const nx = LESSONS[i + 1]; return nx ? <button className="k-btn k-btn-primary" onClick={() => navigate(`/kids/school/${nx.id}`)}>Next lesson →</button> : null; })()}
+            {nx && <button className="k-btn k-btn-primary" onClick={() => navigate(`/kids/school/${nx.id}`)}>Next lesson →</button>}
           </>
         )}
       </div>
@@ -896,6 +954,13 @@ function WorksheetPage({ lesson }: { lesson: Lesson }) {
             </div>
           ))}
         </section>
+        {lesson.steps.filter((x): x is Extract<Step, { t: "sort" }> => x.t === "sort").map((x) => (
+          <section key={x.q} className="k-sheet-sort">
+            <h2>Sort it</h2>
+            <b>{x.q} Write {x.buckets.map((b) => `“${b}”`).join(" or ")}.</b>
+            <ul>{x.items.map((it) => <li key={it.text}>{it.emoji} {it.text} <span className="k-sheet-blank" /></li>)}</ul>
+          </section>
+        ))}
         <div className="k-sheet-row">
           <section className="k-sheet-draw"><h2>Draw it</h2><p>Draw a picture that shows the big idea of this lesson.</p><div className="k-sheet-box" /></section>
           <section className="k-sheet-find">
@@ -907,7 +972,7 @@ function WorksheetPage({ lesson }: { lesson: Lesson }) {
           </section>
         </div>
         <footer className="k-sheet-key" aria-label="Answer key">
-          <span>Answer key: {lesson.quiz.map((q, i) => `${i + 1}. ${letters[q.answer]} (${q.options[q.answer]})`).join("   ")}</span>
+          <span>Answer key: {lesson.quiz.map((q, i) => `${i + 1}. ${letters[q.answer]} (${q.options[q.answer]})`).join("   ")}{lesson.steps.flatMap((x) => (x.t === "sort" ? x.items.map((it) => ` · ${it.text}: ${x.buckets[it.b]}`) : [])).join("")}</span>
         </footer>
         <p className="k-sheet-foot">Metaphases Kids · pretend money, real prices · no ads, nothing to buy</p>
       </article>
@@ -1032,6 +1097,8 @@ function NewBadgeToast() {
   const st = useKids();
   const have = badgesFor(progressOf(st), LESSONS.length);
   const fresh = have.filter((b) => !st.seenBadges.includes(b));
+  // A moment of celebration, then out of the way (it used to sit on top of the page until tapped).
+  useEffect(() => { if (!fresh.length) return; const t = setTimeout(() => kids.seeBadges(fresh), 6000); return () => clearTimeout(t); }, [fresh.join()]);
   if (!fresh.length) return null;
   const b = BADGES.find((x) => x.id === fresh[0])!;
   return (

@@ -70,3 +70,31 @@ test.describe("Kids: learn by doing", () => {
     expect(external).toEqual([]);
   });
 });
+
+test.describe("Kids: micro-lessons", () => {
+  test.use({ lens: "kids" });
+
+  test("Moon School is grouped into units with an Up next lesson", async ({ page }) => {
+    await page.goto("./kids/school");
+    for (const u of ["Money basics", "Companies", "Shares and the market", "Report cards", "Saving and investing", "Dividends", "Money-smart"]) {
+      await expect(page.getByRole("region", { name: u })).toBeVisible();
+    }
+    await expect(page.locator(".k-upnext")).toContainText("What is money?");
+  });
+
+  test("a sorting game: needs vs wants, one tap per item, with feedback", async ({ page }) => {
+    await page.goto("./kids/school/needs");
+    await expect(page.locator(".k-say-emoji")).toBeVisible();
+    for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "Next →" }).click();
+    const next = page.getByRole("button", { name: /Finish/ });
+    await expect(next).toBeDisabled();
+    const pick = (item: string, b: "Need" | "Want") => page.getByRole("group", { name: item }).getByRole("button", { name: b }).click();
+    await pick("Food", "Need"); await pick("A new game", "Want"); await pick("A warm coat", "Need");
+    await pick("Candy", "Need"); // a mistake gets a gentle correction
+    await expect(page.locator(".k-sort li.wrong")).toContainText("Want");
+    await pick("A home", "Need"); await pick("One more toy", "Want");
+    await expect(page.locator(".k-feedback")).toContainText("5 of 6 right");
+    await next.click();
+    await expect(page.locator(".k-celebrate")).toContainText("Lesson done!");
+  });
+});
