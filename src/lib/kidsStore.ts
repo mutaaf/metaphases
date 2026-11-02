@@ -13,10 +13,12 @@ export interface KidsState {
   me: number | null; league: LeaguePlayer[];
   /** The Monday of the last recap a kid closed, so it doesn't nag. */
   recapSeen: string | null;
+  /** Luna's Lemonade Stand: finished stages, and whether the whole quest is done. */
+  quest: string[]; questDone: boolean;
 }
 
 const KEY = "metaphases:kids:v1";
-const DEFAULT: KidsState = { guesses: [], piggy: null, lessons: [], seenBadges: [], lessonDates: {}, me: null, league: [], recapSeen: null };
+const DEFAULT: KidsState = { guesses: [], piggy: null, lessons: [], seenBadges: [], lessonDates: {}, me: null, league: [], recapSeen: null, quest: [], questDone: false };
 
 let state: KidsState = (() => {
   try { const raw = localStorage.getItem(KEY); if (raw) return { ...DEFAULT, ...JSON.parse(raw) }; } catch {}
@@ -52,5 +54,7 @@ export const kids = {
   addPlayer(p: LeaguePlayer) { set({ league: [...state.league.filter((x) => x.emoji !== p.emoji), p].slice(-6) }); },
   removePlayer(emoji: number) { set({ league: state.league.filter((p) => p.emoji !== emoji) }); },
   closeRecap(monday: string) { set({ recapSeen: monday }); },
+  questStage(id: string) { if (!state.quest.includes(id)) set({ quest: [...state.quest, id] }); },
+  finishQuest() { set({ questDone: true }); },
   seeBadges(ids: string[]) { set({ seenBadges: Array.from(new Set([...state.seenBadges, ...ids])) }); },
 };

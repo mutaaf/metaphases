@@ -135,3 +135,50 @@ export const KID_WORDS: KidWord[] = [
   { word: "Hype", means: "Lots of excited talk that might not be true.", example: "\"This will go to the moon!\" is hype, not a fact." },
   { word: "Market weather", means: "How brave or worried people feel about buying shares.", example: "Sunny means people feel brave. Cloudy means they feel worried." },
 ];
+
+// ── Tap-a-word: picture cards for every word a kid meets on a card (unit-tested reading level) ──
+export type QuestStage = "company" | "shares" | "price" | "report";
+export interface KidTerm { word: string; emoji: string; means: string; example: string; play?: QuestStage }
+export const KID_TERMS = {
+  company: { word: "Company", emoji: "🏪", means: "A team of people who sell something to make money.", example: "Nike is a company. It sells sneakers.", play: "company" },
+  profit: { word: "Profit", emoji: "✨", means: "The money left after a company pays its bills.", example: "You sell lemonade for $10. The lemons cost $4. You keep $6.", play: "company" },
+  share: { word: "Share", emoji: "🍕", means: "A tiny slice of a company that someone can own.", example: "Cut a pizza into 4 slices. One slice is one share.", play: "shares" },
+  stock: { word: "Stock market", emoji: "🏟️", means: "A big market where people buy and sell shares.", example: "It is like a giant swap meet for slices of companies.", play: "price" },
+  price: { word: "Price", emoji: "🏷️", means: "What someone will pay for one share right now.", example: "When lots of kids want a card, it costs more.", play: "price" },
+  report: { word: "Report card", emoji: "📝", means: "A company tells everyone how much money it made. It does this 4 times a year.", example: "Disney shares its report card in November.", play: "report" },
+  guess: { word: "Grown-ups' guess", emoji: "🔮", means: "Before the report card, experts guess the profit.", example: "They guess $2. That is the number to beat.", play: "report" },
+  beat: { word: "Beat", emoji: "👍", means: "The company made more than the grown-ups guessed.", example: "They guessed $2. It made $3. It beat!", play: "report" },
+  miss: { word: "Miss", emoji: "👎", means: "The company made less than the grown-ups guessed.", example: "They guessed $2. It made $1. It missed.", play: "report" },
+  mood: { word: "Market mood", emoji: "🌦️", means: "How brave or scared people feel about buying shares today.", example: "Sunny means brave. Stormy means scared." },
+} satisfies Record<string, KidTerm>;
+export type KidTermKey = keyof typeof KID_TERMS;
+
+// ── Luna's Lemonade Stand: the "start here" quest. Learn by doing, one idea per stage. ────────
+export const QUEST = {
+  intro: "Before we look at real companies, let's run our own! Help me run a lemonade stand.",
+  company: {
+    title: "Run a company",
+    ask: "Tap the cup to sell lemonade. Each cup sells for $1. Sell 10 cups!",
+    done: "You sold $10 of lemonade. The lemons cost $4. So you have $6 left. That is your profit! Your stand is a company: a team that sells something.",
+  },
+  shares: {
+    title: "Cut it into shares",
+    ask: "You want a bigger stand, but you need money. Cut your stand into 4 slices. Tap a friend to sell them a slice for $5.",
+    done: "Each slice is called a share. Your friends own a share of your stand now! You got $15 for a bigger stand. Real companies do this too.",
+  },
+  price: {
+    title: "Watch the price move",
+    ask: "Now lots of kids want a slice of your stand! Tap the buttons to see what happens to the price.",
+    up: "Make the price go up to $8.",
+    down: "Now make it go down to $4.",
+    done: "More buyers made the price go up. More sellers made it go down. That is how prices move every day!",
+  },
+  report: {
+    title: "Report card day",
+    ask: "It's time for your stand's report card! Grown-ups guessed your profit would be $6. Will you beat it or miss it?",
+    reveal: "Open the report card",
+    result: "Your stand made $7 of profit. That's more than $6, so it BEAT!",
+    done: "Real companies like Disney and Apple share a report card 4 times a year. Now you can guess theirs!",
+  },
+  finish: "You did it! You know what a company, a share, a price and a report card are. You earned the Lemonade Boss badge!",
+} as const;
