@@ -1,12 +1,12 @@
 ---
 id: 0012
 title: Stop the Worker failing with Cloudflare 1102 (resource limit) on ticker, share and calendar requests
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: tech-health
 created: 2026-11-01
-pr: 15
+pr: 23
 by: critic
 ---
 
