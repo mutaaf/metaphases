@@ -2,9 +2,11 @@
 //   POST /api/ai/stream  {task, context, question?, history?, provider?, model?}  (+ x-mp-key for BYOK)
 //        → text/event-stream: data: {"t":"…"} … data: {"done":true,"provider","model"}  |  data: {"error":"…"}
 //   POST /api/ai/models  {provider}  + x-mp-key → {provider, models, suggested}   (BYOK connect test)
+//   POST /api/ai/speak   {provider: openai|gemini, voice, text} + x-mp-key → audio (kids read-aloud, TTS only)
 //   GET  /api/ai/status  → {edge, models, freeLimitPerHour, providers}
 // The free brain (Workers AI) is rate-limited per IP; BYOK calls are the user's own spend and aren't.
 import { buildMessages, FREE_ONLY, isTask } from "./prompts";
+import { handleSpeak } from "./speak";
 import { describeError, EDGE_MODELS, isProvider, listModels, pickModel, PROVIDERS, streamChat, type ProviderId } from "./providers";
 
 export interface AiEnv { AI?: { run(model: string, input: unknown, opts?: unknown): Promise<unknown> } }
@@ -42,6 +44,13 @@ export async function handleAi(p: string, req: Request, env: AiEnv): Promise<Res
       edge: !!env.AI, models: EDGE_MODELS, freeLimitPerHour: FREE_PER_HOUR,
       providers: Object.fromEntries(Object.entries(PROVIDERS).map(([k, v]) => [k, { label: v.label, vendor: v.vendor, needsKey: v.needsKey }])),
     });
+  }
+
+  // Kids read-aloud on a grown-up's own OpenAI/Gemini key (TTS only). A loose per-IP cap stops
+  // anyone using the edge as an open proxy; the spend itself is the key owner's.
+  if (p === "/api/ai/speak" && req.method === "POST") {
+    if ((await bump(`speak:${await ipHash(req)}:${hourKey()}`, 3600)) > 240) return json({ error: "That's a lot of reading this hour. Try again soon, or use the device voice." }, 429);
+    return handleSpeak(req);
   }
 
   if (p === "/api/ai/models" && req.method === "POST") {

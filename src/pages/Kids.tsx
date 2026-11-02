@@ -23,6 +23,8 @@ import { kids, useKids } from "../lib/kidsStore";
 import { appPath, BASE, href, navigate, useLocation } from "../lib/router";
 import { actions } from "../lib/store";
 import { QuestPage, StartHere, W, WordChips } from "./KidsQuest";
+import { VoiceCorner } from "./KidsVoice";
+import { canSpeak, markKidTyped, speakText, useVoiceSettings } from "../lib/voice";
 import "../styles/kids.css";
 
 const progressOf = (st: ReturnType<typeof useKids>) => ({ guesses: st.guesses, lessons: st.lessons, piggy: !!st.piggy, piggyCount: st.piggy?.holdings.length ?? 0, quest: st.questDone });
@@ -71,19 +73,22 @@ function WeatherArt({ w }: { w: Weather }) {
   );
 }
 
-const canSpeak = () => typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
-function speak(text: string) {
-  try {
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text.replace(/[*_]/g, ""));
-    u.rate = 0.95; u.pitch = 1.05;
-    window.speechSynthesis.speak(u);
-  } catch {}
-}
-/** Big 🔊 button: reads the card out loud (early readers). Hidden when the browser can't speak. */
+/** Big 🔊 button: reads the card out loud (early readers). The device's friendliest voice, or a
+ *  grown-up's warmer OpenAI/Gemini voice set up behind the gate (src/lib/voice.ts). Hidden when neither works. */
 export function ReadAloud({ text, label = "Read it to me" }: { text: string; label?: string }) {
+  useVoiceSettings();
+  const [loading, setLoading] = useState(false);
   if (!canSpeak()) return null;
-  return <button className="k-speak" onClick={(e) => { e.stopPropagation(); speak(text); }} aria-label={`${label}: read this out loud`}><span aria-hidden>🔊</span> {label}</button>;
+  const go = async (e: { stopPropagation(): void }) => {
+    e.stopPropagation();
+    setLoading(true);
+    try { await speakText(text); } finally { setLoading(false); }
+  };
+  return (
+    <button className={`k-speak${loading ? " loading" : ""}`} onClick={go} aria-busy={loading} aria-label={`${label}: read this out loud`}>
+      <span aria-hidden>{loading ? "…" : "🔊"}</span> {label}
+    </button>
+  );
 }
 
 function Pretend({ children = "PRETEND MONEY" }: { children?: ReactNode }) {
@@ -724,6 +729,7 @@ function AskPage() {
     if (!text || busy) return;
     ctrl.current?.abort();
     const c = new AbortController(); ctrl.current = c;
+    markKidTyped(text); // a kid typed this: it is never sent to a voice provider
     setAsked(text); setAnswer(""); setErr(null); setBusy(true); setQ("");
     const w = macro.data?.mood ? weatherFor(macro.data.mood.score) : null;
     const nextBy = new Map<string, EarningsEvent>();
@@ -835,6 +841,7 @@ function GrownUps() {
           {LESSONS.map((l, i) => <li key={l.id}><button className="k-lesson" onClick={() => navigate(`/kids/school/${l.id}/print`)}><span className="k-lesson-emoji" aria-hidden>{l.emoji}</span><span className="k-lesson-t"><span className="k-small">Worksheet {i + 1}</span><b>{l.title}</b></span><span aria-hidden>🖨️</span></button></li>)}
         </ul>
       </section>
+      <VoiceCorner />
       <LeagueSetup />
       <section className="k-section">
         <h2>Conversation starters</h2>
