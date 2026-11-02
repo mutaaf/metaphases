@@ -19,6 +19,7 @@ Earnings calendar at **mutaafaziz.com/metaphases/**: a Cloudflare Worker on rout
 - Yahoo chart API needs a browser User-Agent. It may rate-limit from Cloudflare IPs; every route degrades to partial data plus `warnings`.
 - `run_worker_first: true` so the Worker can inject per-URL share meta; asset requests (with an extension) go straight to `env.ASSETS`.
 - Headless Chrome won't screenshot below about 500px wide, so render icons at 1024 and downscale with `sips` (`scripts/brand/`).
+- **Parallel e2e runs collide**: Playwright reuses any server already on :4188 locally, so two worktrees running `npm run check` at once test each other's builds (mass failures). Give each its own port: `E2E_PORT=4231 npm run check`.
 - `shared/market.ts` holds FOMC dates and NYSE holidays; update it yearly.
 
 ## Autonomy (same pattern as COLD GAS / arcade games)

@@ -443,3 +443,50 @@
   .k-voice-list { grid-template-columns: 1fr 1fr; }
 }
 .k-voice-forget { min-height: 40px; padding: 6px 14px; font-size: 15px; }
+/* ── Micro-lessons: units, step dots, emoji cards, sorting games ── */
+.k-upnext { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; width: 100%; padding: 16px 18px; text-align: left; border-radius: 24px; border: 0; background: var(--accent); color: #fff; box-shadow: 0 18px 30px -20px color-mix(in srgb, var(--accent) 80%, transparent); }
+.k-upnext .k-eyebrow { color: #fff; opacity: .8; }
+.k-upnext small { color: #fff; opacity: .8; font-size: 14px; }
+.k-upnext b { font: 800 21px/1.15 var(--display); }
+.k-upnext-emoji { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: #ffffff26; font-size: 32px; }
+.k-unit { display: grid; gap: 10px; }
+.k-unit-head { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 6px 4px 0; }
+.k-unit-head h2 { margin: 0; font: 800 20px/1.2 var(--display); letter-spacing: -.01em; }
+.k-unit-emoji { font-size: 28px; }
+.k-unit-count { font: 600 13px var(--mono); color: var(--k-muted); padding: 4px 10px; border-radius: 999px; background: var(--k-card); border: 1px solid var(--k-line); }
+.k-unit-count.full { border: 0; background: none; font-size: 22px; }
+.k-unit .k-lesson { grid-template-columns: 44px 1fr auto; padding: 12px 14px; border-width: 1px; border-radius: 18px; }
+.k-unit .k-lesson-emoji { font-size: 26px; }
+.k-unit .k-lesson-t { display: grid; }
+.k-unit .k-lesson-t b { font-size: 17px; }
+.k-steps { display: flex; gap: 5px; }
+.k-steps i { flex: 1; height: 6px; border-radius: 99px; background: var(--k-line); transition: background .25s; }
+.k-steps i.done { background: var(--accent); }
+.k-steps i.on { background: color-mix(in srgb, var(--accent) 45%, var(--k-line)); }
+.k-steps i.t-check.done, .k-steps i.t-sort.done { background: var(--k-good); }
+.k-say-emoji { display: block; font-size: 84px; line-height: 1; text-align: center; padding: 18px 0 4px; animation: k-pop .45s cubic-bezier(.2,.9,.3,1.5); }
+.k-step-say .k-lesson-text { text-align: center; font: 600 24px/1.4 var(--display); letter-spacing: -.01em; }
+.k-step-say .k-card-actions { justify-content: center; }
+.k-sort { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.k-sort li { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 10px 12px; border-radius: 16px; background: var(--k-bg); border: 1px solid transparent; transition: background .2s, border-color .2s; }
+.k-sort li.right { background: var(--k-mint); border-color: color-mix(in srgb, var(--k-good) 35%, transparent); }
+.k-sort li.wrong { background: var(--k-peach); }
+.k-sort-item { font-weight: 600; font-size: 17px; }
+.k-sort-btns { display: flex; gap: 6px; }
+.k-sort-btns .k-chip { padding: 8px 14px; font-size: 14px; }
+.k-sort-btns .k-chip.on { background: var(--k-ink); color: var(--k-card); border-color: var(--k-ink); }
+.k-sort-mark { grid-column: 1 / -1; font-size: 13px; color: var(--k-ink-2); }
+@media (max-width: 420px) {
+  .k-sort li { grid-template-columns: 1fr; }
+  .k-step-say .k-lesson-text { font-size: 22px; }
+}
+.k-sheet-sort ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
+.k-sheet-sort li { display: flex; align-items: end; gap: 8px; }
+.k-sheet-blank { flex: 1; min-width: 60px; border-bottom: 1.5px solid #1d1b33; height: 1.1em; }
+/* Calmer badge toast: compact, auto-dismissing (see NewBadgeToast). */
+.k-toast { gap: 10px; padding: 8px 8px 8px 12px; border-width: 1px; border-radius: 18px; }
+.k-toast b { font-size: 15px; }
+.k-toast span { font-size: 13px; line-height: 1.3; }
+.k-toast .k-btn { min-height: 40px; padding: 0 16px; }
+.k-toast svg { width: 34px; height: 34px; }
+.k-step-say { align-content: center; justify-items: center; min-height: 420px; }

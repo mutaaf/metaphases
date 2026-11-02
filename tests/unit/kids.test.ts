@@ -3,7 +3,7 @@ import {
   badgesFor, basketTip, biggestMover, buyPretend, evenSplit, expectLine, fkGrade, isKidCo, KID_BY_SYMBOL, KID_COMPANIES, kidWhen, lastTimeLine,
   levelFor, moveAnalogy, piggyValue, pointsFor, resolveGuess, resolvePrice, START_COINS, weatherFor, whyLine,
 } from "../../shared/kids";
-import { KID_WORDS, LESSONS } from "../../shared/kidsContent";
+import { KID_WORDS, LESSONS, UNITS } from "../../shared/kidsContent";
 import { storyKidsSvg } from "../../shared/story";
 import { buildMessages, FREE_ONLY, KIDS_SYSTEM, SYSTEM } from "../../worker/ai/prompts";
 import { handleAi } from "../../worker/ai";
@@ -117,24 +117,32 @@ describe("points, levels, badges", () => {
 });
 
 describe("Moon School content", () => {
-  it("has 8–10 lessons with 3–5 screens and 2 quiz questions each, unique ids", () => {
-    expect(LESSONS.length).toBeGreaterThanOrEqual(8);
-    expect(LESSONS.length).toBeLessThanOrEqual(10);
+  it("is a set of micro-lessons: every unit has lessons, 3–7 tiny steps each, at least one check or sort, unique ids", () => {
+    expect(LESSONS.length).toBeGreaterThanOrEqual(24);
     expect(new Set(LESSONS.map((l) => l.id)).size).toBe(LESSONS.length);
+    for (const u of UNITS) expect(LESSONS.filter((l) => l.unit === u.id).length, u.id).toBeGreaterThanOrEqual(3);
     for (const l of LESSONS) {
-      expect(l.screens.length, l.id).toBeGreaterThanOrEqual(3);
-      expect(l.screens.length, l.id).toBeLessThanOrEqual(5);
-      expect(l.quiz.length, l.id).toBe(2);
-      for (const q of l.quiz) {
-        expect(q.answer).toBeGreaterThanOrEqual(0);
-        expect(q.answer).toBeLessThan(q.options.length);
-        expect(q.options.length).toBeGreaterThanOrEqual(2);
-        expect(q.why.length).toBeGreaterThan(5);
+      expect(UNITS.some((u) => u.id === l.unit), l.id).toBe(true);
+      expect(l.steps.length, l.id).toBeGreaterThanOrEqual(3);
+      expect(l.steps.length, l.id).toBeLessThanOrEqual(7);
+      expect(l.steps.some((x) => x.t !== "say"), l.id).toBe(true);
+      for (const x of l.steps) {
+        if (x.t === "say") { expect(x.emoji, l.id).toBeTruthy(); expect(x.text.split(/\s+/).length, `${l.id}: ${x.text}`).toBeLessThanOrEqual(22); }
+        if (x.t === "check") { expect(x.answer).toBeLessThan(x.options.length); expect(x.options.length).toBeGreaterThanOrEqual(2); expect(x.why.length).toBeGreaterThan(5); }
+        if (x.t === "sort") { expect(x.items.length).toBeGreaterThanOrEqual(4); expect(new Set(x.items.map((i) => i.b)).size, l.id).toBe(2); }
       }
     }
   });
-  it("every lesson reads at grade 5 or below (Flesch–Kincaid)", () => {
-    for (const l of LESSONS) expect(fkGrade(l.screens.join(" ")), l.id).toBeLessThanOrEqual(5);
+  it("keeps the old lesson ids so finished lessons stay finished", () => {
+    for (const id of ["company", "share", "prices", "report-card", "beat", "saving", "baskets", "patience", "hype"]) expect(LESSONS.some((l) => l.id === id), id).toBe(true);
+  });
+  it("every lesson reads at grade 5 or below, and no single card is grown-up prose", () => {
+    for (const l of LESSONS) {
+      const texts = l.steps.map((x) => (x.t === "say" ? x.text : `${x.q} ${x.why}`));
+      expect(fkGrade(l.steps.flatMap((x) => (x.t === "say" ? [x.text] : [])).join(" ")), l.id).toBeLessThanOrEqual(5);
+      expect(fkGrade(texts.join(" ")), l.id).toBeLessThanOrEqual(5.5);
+      for (const t of texts) if (t.split(/\s+/).length > 5) expect(fkGrade(t), `${l.id}: ${t}`).toBeLessThanOrEqual(9);
+    }
     expect(fkGrade(KID_WORDS.map((w) => `${w.means} ${w.example}`).join(" "))).toBeLessThanOrEqual(5);
   });
   it("the reading-level check really does flag grown-up prose", () => {

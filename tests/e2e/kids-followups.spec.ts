@@ -2,6 +2,7 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { decodeLeague, encodeLeague } from "../../shared/kidsWeek";
+import { LESSONS } from "../../shared/kidsContent";
 
 const seed = (page: Page, state: object) =>
   page.addInitScript((s) => { try { localStorage.setItem("metaphases:kids:v1", JSON.stringify(s)); } catch {} }, state);
@@ -70,7 +71,7 @@ test.describe("Kids follow-ups", () => {
     await expect(page.locator(".k-tabbar, .k-top, .tabbar, .top")).toHaveCount(0);
     expect(await page.locator("a[href]").count()).toBe(0);
     if (browserName === "chromium" && info.project.name === "desktop") {
-      for (const [id, fmt] of [["share", "Letter"], ["prices", "A4"]] as const) {
+      for (const [id, fmt] of [["share", "Letter"], ["prices", "A4"], ["needs", "Letter"], ["baskets", "A4"]] as const) {
         await page.evaluate((p) => { history.pushState(null, "", p); dispatchEvent(new PopStateEvent("popstate")); }, `/metaphases/kids/school/${id}/print`);
         await expect(sheet).toBeVisible();
         const pdf = (await page.pdf({ format: fmt })).toString("latin1");
@@ -83,7 +84,7 @@ test.describe("Kids follow-ups", () => {
     await page.goto("./kids");
     await page.getByRole("button", { name: "For grown-ups" }).click();
     await passGate(page);
-    await expect(page.locator(".k-sheets li")).toHaveCount(9);
+    await expect(page.locator(".k-sheets li")).toHaveCount(LESSONS.length);
     await page.locator(".k-sheets button", { hasText: "Why do prices go up and down?" }).click();
     await expect(page).toHaveURL(/\/kids\/school\/prices\/print$/);
     await expect(page.locator(".k-sheet h1")).toContainText("Why do prices go up and down?");
