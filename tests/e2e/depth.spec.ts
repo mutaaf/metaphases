@@ -51,7 +51,7 @@ test("a revenue figure on a different basis from its estimate isn't judged (0011
   const row = page.locator("[role=dialog] .erow", { hasText: "HIG" }).first();
   const chip = row.locator(".erow-res .chip");
   await expect(chip).toHaveClass(/res-beat/);
-  await expect(chip).toHaveAttribute("title", /EPS only/);
+  await expect(row.locator(".eps-only")).toHaveText(/EPS only/i);
 
   await page.goto("./retrace");
   await expect(page.locator(".stat-row .rev-excluded")).toContainText(/\d+ can't compare/);

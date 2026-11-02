@@ -140,7 +140,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
       <span className="erow-num"><span className="eyebrow">EPS est</span>{epsIn(e.eE, cur)}</span>
       <span className="erow-num"><span className="eyebrow">{e.eA != null ? "Actual" : "Rev est"}</span>{e.eA != null ? epsIn(e.eA, cur) : moneyIn(e.rE, cur)}</span>
       <span className="erow-res">
-        {r ? <span className={`chip res-${r}`} title={revenueVerdict(e, cur) === "not-comparable" ? "Judged on EPS only: reported revenue isn't counted the same way as the forecast." : undefined}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : PHASE_LABEL[e.h]}</span>}
+        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{revenueVerdict(e, cur) === "not-comparable" && <span className="eps-only" title="Judged on EPS only: the reported revenue isn't counted the same way as the forecast.">EPS only</span>}</> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : PHASE_LABEL[e.h]}</span>}
       </span>
     </button>
   );
