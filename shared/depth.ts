@@ -2,6 +2,7 @@
 // quarterly series and the share-card SVG. Shared by the worker and the client, and unit-tested.
 import type { EarningsEvent, Quarter, Reaction, Session } from "./types";
 import { epsIn } from "./currency";
+import { revenueBeatRate } from "./compare";
 
 // ── Chart ──────────────────────────────────────────────────────────────
 /** Evenly downsample to at most `max` items, always keeping the first and last. */
@@ -127,15 +128,15 @@ export function buildIcs(items: IcsItem[], stamp: Date): string {
 }
 
 // ── Season scoreboard ──────────────────────────────────────────────────
-export interface Season { members: number; reported: number; reportedPct: number; epsBeatPct: number | null; revBeatPct: number | null; medianSurprise: number | null; from: string; to: string; enough: boolean }
+export interface Season { members: number; reported: number; reportedPct: number; epsBeatPct: number | null; revBeatPct: number | null; /** Reports left out of revBeatPct: revenue and estimate on different bases. */ revExcluded: number; medianSurprise: number | null; from: string; to: string; enough: boolean }
 
 /** Aggregate S&P 500 members' reported results inside [from, to] (latest report per company). */
-export function seasonScore(events: EarningsEvent[], isMember: (s: string) => boolean, memberCount: number, from: string, to: string): Season {
+export function seasonScore(events: EarningsEvent[], isMember: (s: string) => boolean, memberCount: number, from: string, to: string, curOf: (s: string) => string = () => "USD"): Season {
   const seen = new Map<string, EarningsEvent>();
   for (const e of events) if (e.eA != null && e.d >= from && e.d <= to && isMember(e.s)) seen.set(e.s, e);
   const done = [...seen.values()];
   const epsJ = done.filter((e) => e.eE != null);
-  const revJ = done.filter((e) => e.rA != null && e.rE != null);
+  const rev = revenueBeatRate(done, curOf);
   const sur = epsJ
     .filter((e) => e.eE !== 0)
     .map((e) => (((e.eA as number) - (e.eE as number)) / Math.abs(e.eE as number)) * 100)
@@ -147,7 +148,8 @@ export function seasonScore(events: EarningsEvent[], isMember: (s: string) => bo
     reported: done.length,
     reportedPct: memberCount ? Math.round((done.length / memberCount) * 100) : 0,
     epsBeatPct: pct(epsJ.filter((e) => (e.eA as number) >= (e.eE as number)).length, epsJ.length),
-    revBeatPct: pct(revJ.filter((e) => (e.rA as number) >= (e.rE as number)).length, revJ.length),
+    revBeatPct: pct(rev.beats, rev.judged),
+    revExcluded: rev.excluded,
     medianSurprise: sur.length ? Math.round(sur[Math.floor(sur.length / 2)] * 10) / 10 : null,
     from, to, enough: done.length >= 20,
   };

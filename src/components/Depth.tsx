@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import type { Quarter, Reaction, TickerResponse } from "../../shared/types";
 import { nyDate, peersFor, placeMarkers, seasonScore } from "../../shared/depth";
 import { useCalendar, prefetchTicker } from "../lib/api";
-import { co, UNIVERSE } from "../lib/data";
+import { co, curOf, UNIVERSE } from "../lib/data";
 import { addDays, fmtShort, todayISO } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { BASE, setParam } from "../lib/router";
@@ -180,7 +180,7 @@ export function useSeason() {
   const today = todayISO();
   const from = addDays(today, -42);
   const { data, loading, error } = useCalendar(from, today);
-  const season = useMemo(() => (data ? seasonScore(data.events, (s) => !!UNIVERSE[s]?.sp, SP_COUNT, from, today) : null), [data]);
+  const season = useMemo(() => (data ? seasonScore(data.events, (s) => !!UNIVERSE[s]?.sp, SP_COUNT, from, today, curOf) : null), [data]);
   return { season, loading, error };
 }
 
@@ -209,7 +209,7 @@ export function SeasonScoreboard({ slim }: { slim?: boolean }) {
           <div className="season-stats">
             <div><span className="eyebrow">Reported</span><b>{season.reportedPct}%</b></div>
             <div><span className="eyebrow"><Term k="eps">EPS</Term> beat rate</span><b>{season.epsBeatPct ?? "—"}%</b></div>
-            <div><span className="eyebrow"><Term k="revenue">Revenue</Term> beat rate</span><b>{season.revBeatPct ?? "—"}%</b></div>
+            <div><span className="eyebrow"><Term k="revenue">Revenue</Term> beat rate</span><b>{season.revBeatPct != null ? `${season.revBeatPct}%` : "—"}</b>{season.revExcluded > 0 && <small className="muted rev-excluded">{season.revExcluded} <Term k="revbasis">can't compare</Term></small>}</div>
             <div><span className="eyebrow">Median <Term k="surprise">surprise</Term></span><b>{pct(season.medianSurprise)}</b></div>
           </div>
           <p className="muted small">Counts each index member's latest report in the last six weeks (our free data window). Historically, roughly three in four companies beat EPS estimates in a typical quarter.</p>

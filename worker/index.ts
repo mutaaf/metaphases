@@ -13,6 +13,7 @@ import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, type IcsItem } from "../shared/depth";
+import { periodKey, pickConsensus } from "../shared/compare";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -213,21 +214,17 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   rows.slice(0, 8).forEach((r, i) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");
     const date = `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
-    const f = usd ? surprises?.[i] : undefined;
+    // One consensus per quarter: Finnhub's (the calendar's) when we have it for this quarter, else Nasdaq's.
+    const f = !usd ? undefined
+      : lastE && lastE.date === date && lastE.epsEstimate != null ? { estimate: lastE.epsEstimate, actual: lastE.epsActual }
+      : surprises?.find((x) => periodKey(x.period) != null && periodKey(x.period) === periodKey(r.fiscalQtrEnd));
     const session: Session = lastE && lastE.date === date ? (lastE.hour as Session) : habit;
     let move: number | null = null;
     const before = session === "bmo" ? closeOn(date, -1) : closeOn(date, 0);
     const after = session === "bmo" ? closeOn(date, 0) : closeOn(date, 1);
     if (before && after) move = ((after - before) / before) * 100;
-    const epsA = typeof r.eps === "number" ? r.eps : parseFloat(r.eps);
-    const epsE = parseFloat(r.consensusForecast);
-    history.push({
-      date, session, period: r.fiscalQtrEnd,
-      epsE: Number.isFinite(epsE) ? epsE : f?.estimate ?? null,
-      epsA: Number.isFinite(epsA) ? epsA : f?.actual ?? null,
-      surprisePct: parseFloat(r.percentageSurprise) || f?.surprisePercent || null,
-      move,
-    });
+    const pick = pickConsensus({ estimate: r.consensusForecast, actual: r.eps, surprisePct: r.percentageSurprise }, f);
+    history.push({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move });
   });
   // Fall back to Finnhub's four quarters if Nasdaq was unreachable.
   if (!history.length && surprises?.length && usd) {

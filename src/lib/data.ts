@@ -1,6 +1,7 @@
 import universeRaw from "../../data/universe.json";
 import etfRaw from "../../data/etf_holdings.json";
 import type { EarningsEvent } from "../../shared/types";
+import { revenueVerdict } from "../../shared/compare";
 
 export interface Co { n: string; logo: string; mc: number; ind: string; sec: string; c: string; web: string; sp: boolean; ec?: string }
 // Non-S&P names carry Finnhub industry labels; fold them into the 11 GICS sectors.
@@ -29,11 +30,15 @@ export const curOf = (s: string): string => UNIVERSE[s]?.ec ?? "USD";
 export const popularity = (e: EarningsEvent) => (UNIVERSE[e.s]?.mc ?? 0) + (e.rE ?? 0) / 1e9;
 
 export type Result = "beat" | "mixed" | "miss" | null;
-/** Beat = EPS and revenue both clear consensus; miss = both fall short; mixed otherwise. */
+/**
+ * Beat = EPS and revenue both clear consensus; miss = both fall short; mixed otherwise. Revenue that
+ * isn't comparable with its estimate (different basis or currency, see shared/compare.ts) is ignored.
+ */
 export function resultOf(e: EarningsEvent): Result {
   if (e.eA == null) return null;
   const epsBeat = e.eE == null ? null : e.eA >= e.eE;
-  const revBeat = e.rA == null || e.rE == null ? null : e.rA >= e.rE;
+  const rv = revenueVerdict(e, curOf(e.s));
+  const revBeat = rv === "beat" ? true : rv === "miss" ? false : null;
   if (epsBeat == null) return null;
   if (revBeat == null) return epsBeat ? "beat" : "miss";
   if (epsBeat && revBeat) return "beat";

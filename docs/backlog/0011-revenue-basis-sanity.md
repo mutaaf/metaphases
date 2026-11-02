@@ -1,12 +1,12 @@
 ---
 id: 0011
 title: Never compare revenue actuals and estimates on different bases (or currencies)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-01
-pr:
+pr: 21
 by: critic
 ---
 
