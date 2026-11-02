@@ -100,3 +100,31 @@ ${moons}
 ${lines(["Guess company report cards. Build a", "pretend piggy bank. Learn what a share is.", "No real money. No ads. Nothing to buy."], 96, 1400, 38, 54, `font-family="Schibsted Grotesk" fill="#3b3a37"`)}`;
   return frame("Metaphases Kids · Market Moon Club", body);
 }
+
+/** 0027: "My week in the Moon Club" — counts only (no names, no prices, no free text). */
+export function storyKidsRecapSvg(x: { g: number; r: number; l: number; p: number | null; lv: number }, levelName: string): string {
+  const moon = (cx: number, cy: number, r: number, k: number) => {
+    const ring = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff3c4" stroke="${ACCENT}" stroke-width="${(r * 0.12).toFixed(1)}"/>`;
+    if (k <= 0) return ring;
+    if (k >= 4) return ring + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${ACCENT}"/>`;
+    if (k === 2) return ring + `<path d="M${cx} ${cy - r}a${r} ${r} 0 0 1 0 ${2 * r}z" fill="${ACCENT}"/>`;
+    return ring + `<path d="M${cx} ${cy - r}a${r} ${r} 0 0 1 0 ${2 * r}a${(r * 0.6).toFixed(1)} ${r} 0 0 ${k === 1 ? 0 : 1} 0-${2 * r}z" fill="${ACCENT}"/>`;
+  };
+  const stats: [string, string][] = [];
+  stats.push([String(x.g), x.g === 1 ? "report card guess" : "report card guesses"]);
+  if (x.g) stats.push([String(x.r), x.r === 1 ? "guess was right" : "guesses were right"]);
+  stats.push([String(x.l), x.l === 1 ? "Moon School lesson" : "Moon School lessons"]);
+  if (x.p != null) stats.push([`${x.p > 0 ? "+" : x.p < 0 ? "−" : ""}${Math.abs(x.p).toFixed(1)}%`, "pretend piggy bank"]);
+  const rows = stats.slice(0, 4).map(([n, label], i) => {
+    const y = 800 + i * 190;
+    return `<text x="96" y="${y}" font-family="Schibsted Grotesk" font-weight="900" font-size="120" letter-spacing="-3" fill="${ACCENT}">${xml(n)}</text>
+<text x="${96 + Math.max(2, n.length) * 74 + 30}" y="${y - 12}" font-family="Schibsted Grotesk" font-weight="700" font-size="44" fill="#3b3a37">${xml(label)}</text>`;
+  }).join("\n");
+  const body = `
+${lines(["My week in", "the Moon Club"], 96, 460, 104, 112, `font-family="Schibsted Grotesk" font-weight="900" letter-spacing="-3" fill="${INK}"`)}
+${rows}
+${moon(840, 1560, 64, x.lv)}
+<text x="96" y="1545" font-family="Instrument Serif" font-style="italic" font-size="64" fill="${ACCENT}">Level: ${xml(levelName)}</text>
+<text x="96" y="1610" font-family="Schibsted Grotesk" font-size="34" fill="#3b3a37">Pretend money. Real prices. No ads.</text>`;
+  return frame("Metaphases Kids · Weekly recap", body);
+}

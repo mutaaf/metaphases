@@ -10,6 +10,9 @@ import {
   type KidCo, type Pick, type Weather,
 } from "../../shared/kids";
 import { KID_WORDS, LESSONS, type Lesson, type Quiz } from "../../shared/kidsContent";
+import {
+  buildRecap, decodeLeague, encodeLeague, leagueRows, PLAYER_NAMES, PLAYERS, recapLines, recapQuery, type LeagueGuess, type LeaguePlayer, type Recap,
+} from "../../shared/kidsWeek";
 import { Markdown } from "../components/ai/Markdown";
 import { Skeleton, Spark, Tile } from "../components/bits";
 import { streamAi } from "../lib/ai";
@@ -103,6 +106,7 @@ function useKidEvents() {
 
 // ── Story (home) ────────────────────────────────────────────────────────────────────────────
 type KidStory =
+  | { kind: "recap"; r: Recap }
   | { kind: "weather"; w: Weather; score: number }
   | { kind: "report"; e: EarningsEvent; co: KidCo }
   | { kind: "word" }
@@ -150,6 +154,82 @@ function QuizCard({ q, seed }: { q: Quiz; seed: number }) {
   );
 }
 
+// ── Weekly recap (0027) ─────────────────────────────────────────────────────────────────────
+function useRecap(): Recap | null {
+  const st = useKids();
+  const today = todayISO();
+  const points = pointsFor({ guesses: st.guesses, lessons: st.lessons, piggy: !!st.piggy, piggyCount: st.piggy?.holdings.length ?? 0 });
+  return useMemo(() => buildRecap({ guesses: st.guesses, lessonDates: st.lessonDates, piggy: st.piggy, points, level: levelFor(points).index }, today), [st, today, points]);
+}
+
+function RecapCard({ r }: { r: Recap }) {
+  const [gate, setGate] = useState(false);
+  const [share, setShare] = useState(false);
+  const ls = recapLines(r);
+  return (
+    <>
+      <span className="k-eyebrow">{r.label} in the Moon Club</span>
+      <div className="k-recap-head"><MoonPhase phase={r.level} size={72} /><h2>Look what you did!</h2></div>
+      <ul className="k-recap-stats" aria-label="Your week">
+        <li><b>{r.guesses}</b><span>{r.guesses === 1 ? "guess" : "guesses"}</span></li>
+        <li><b>{r.right}</b><span>right</span></li>
+        <li><b>{r.lessons}</b><span>{r.lessons === 1 ? "lesson" : "lessons"}</span></li>
+        {r.piggyPct != null && <li><b>{r.piggyPct > 0 ? "+" : ""}{r.piggyPct.toFixed(1)}%</b><span>piggy bank</span></li>}
+      </ul>
+      <ul className="k-recap-lines">{ls.map((l) => <li key={l}>{l}</li>)}</ul>
+      <div className="k-card-actions">
+        <ReadAloud text={ls.join(" ")} />
+        <button className="k-btn k-btn-primary" onClick={(e) => { e.stopPropagation(); setGate(true); }}>Show a grown-up 👀</button>
+      </div>
+      {/* Dialogs sit inside the swipeable card: keep their clicks from turning the page. */}
+      <span onClick={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}>
+        {gate && <ParentGate onPass={() => { setGate(false); setShare(true); }} onClose={() => setGate(false)} />}
+        {share && <RecapShare r={r} onClose={() => setShare(false)} />}
+      </span>
+    </>
+  );
+}
+
+/** Behind the parental gate: the recap as a 9:16 image a grown-up can save or share. */
+function RecapShare({ r, onClose }: { r: Recap; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDialog(ref, onClose);
+  const [img, setImg] = useState<{ url: string; blob: Blob } | null>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let url = "";
+    fetch(`${BASE}/og/story/kids-recap.png?${recapQuery(r)}`)
+      .then((x) => (x.ok ? x.blob() : Promise.reject()))
+      .then((blob) => { url = URL.createObjectURL(blob); setImg({ url, blob }); })
+      .catch(() => setErr(true));
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, []);
+  const file = img ? new File([img.blob], "moon-club-week.png", { type: "image/png" }) : null;
+  const canShare = !!file && typeof navigator !== "undefined" && !!navigator.canShare?.({ files: [file] });
+  const save = () => {
+    if (!img) return;
+    const a = document.createElement("a");
+    a.href = img.url; a.download = "moon-club-week.png"; a.click();
+  };
+  return (
+    <div className="drawer-scrim center" onClick={onClose}>
+      <div className="k-gate k-share" ref={ref} role="dialog" aria-modal="true" aria-labelledby="k-share-t" onClick={(e) => e.stopPropagation()}>
+        <h2 id="k-share-t">Their week, as a picture</h2>
+        <p className="k-small">Only counts and a percent. No names, no prices, nothing personal.</p>
+        {img ? <img className="k-share-img" src={img.url} alt={`Weekly recap: ${recapLines(r).join(" ")}`} /> : err ? <p role="alert">The picture didn't load. Try again in a minute.</p> : <Skeleton h={320} />}
+        <div className="k-nav">
+          <button className="k-btn" onClick={onClose}>Close</button>
+          {canShare ? (
+            <button className="k-btn k-btn-primary" onClick={() => navigator.share({ files: [file!], title: "Our week in the Moon Club" }).catch(() => {})}>Share</button>
+          ) : (
+            <button className="k-btn k-btn-primary" disabled={!img} onClick={save}>Save image</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StoryPage() {
   const { today, upcoming, loading } = useKidEvents();
   const macro = useMacro();
@@ -158,9 +238,13 @@ function StoryPage() {
   const word = ofTheDay(KID_WORDS, today);
   const allQuiz = useMemo(() => LESSONS.flatMap((l) => l.quiz), []);
   const quiz = ofTheDay(allQuiz, today, 3);
+  const recap = useRecap();
+  const { recapSeen } = useKids();
 
   const stories: KidStory[] = useMemo(() => {
     const out: KidStory[] = [];
+    const fresh = recap?.active && recapSeen !== recap.from;
+    if (recap?.active && fresh) out.push({ kind: "recap", r: recap });
     if (macro.data?.mood) out.push({ kind: "weather", w: weatherFor(macro.data.mood.score), score: macro.data.mood.score });
     const seen = new Set<string>();
     for (const e of upcoming) {
@@ -169,9 +253,11 @@ function StoryPage() {
       seen.add(e.s);
       out.push({ kind: "report", e, co: KID_BY_SYMBOL[e.s] });
     }
-    out.push({ kind: "word" }, { kind: "quiz" }, { kind: "next" });
+    out.push({ kind: "word" }, { kind: "quiz" });
+    if (recap?.active && !fresh) out.push({ kind: "recap", r: recap });
+    out.push({ kind: "next" });
     return out;
-  }, [macro.data, upcoming, today]);
+  }, [macro.data, upcoming, today, recap, recapSeen]);
   const n = stories.length;
   const go = (d: number) => setI((x) => Math.max(0, Math.min(n - 1, x + d)));
   useEffect(() => {
@@ -183,6 +269,10 @@ function StoryPage() {
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, [n]);
   const s = stories[Math.min(i, n - 1)];
+  // Once the recap has been seen, it moves to the end of the cards next time (no nagging).
+  const sawRecap = useRef<string | null>(null);
+  if (s?.kind === "recap") sawRecap.current = s.r.from;
+  useEffect(() => () => { if (sawRecap.current) kids.closeRecap(sawRecap.current); }, []);
 
   return (
     <div className="k-page">
@@ -222,6 +312,7 @@ function StoryPage() {
                 <div className="k-card-actions"><ReadAloud text={`Market weather: ${s.w.title}. ${s.w.line}`} /></div>
               </>
             )}
+            {s.kind === "recap" && <RecapCard r={s.r} />}
             {s.kind === "report" && <ReportStory e={s.e} co={s.co} today={today} />}
             {s.kind === "word" && (
               <>
@@ -309,6 +400,8 @@ function GuessPage() {
       </header>
       <p className="k-intro">Before a company shares its report card, grown-ups guess its profit. Will the company <b>beat</b> that guess (do better) or <b>miss</b> (do worse)? Make your guess, then come back to see!</p>
       <ReadAloud text="Before a company shares its report card, grown-ups guess its profit. Will the company beat that guess, or miss? Make your guess, then come back to see." />
+
+      <LeagueBoard events={events} />
 
       {mine.length > 0 && (
         <section className="k-section">
@@ -552,7 +645,7 @@ function LessonPage({ lesson }: { lesson: Lesson }) {
   const qi = step - lesson.screens.length;
   const q = qi >= 0 && qi < lesson.quiz.length ? lesson.quiz[qi] : null;
   const picked = q ? answers[qi] : undefined;
-  useEffect(() => { if (done) kids.finishLesson(lesson.id); }, [done]);
+  useEffect(() => { if (done) kids.finishLesson(lesson.id, todayISO()); }, [done]);
   return (
     <div className="k-page">
       <button className="k-link k-back" onClick={() => navigate("/kids/school")}>← Moon School</button>
@@ -729,6 +822,14 @@ function GrownUps() {
         </ul>
       </section>
       <section className="k-section">
+        <h2>Printable worksheets</h2>
+        <p className="k-small">One page per Moon School lesson: the idea, the quiz, a drawing box and a find-it-at-home task. The answer key is at the bottom.</p>
+        <ul className="k-sheets">
+          {LESSONS.map((l, i) => <li key={l.id}><button className="k-lesson" onClick={() => navigate(`/kids/school/${l.id}/print`)}><span className="k-lesson-emoji" aria-hidden>{l.emoji}</span><span className="k-lesson-t"><span className="k-small">Worksheet {i + 1}</span><b>{l.title}</b></span><span aria-hidden>🖨️</span></button></li>)}
+        </ul>
+      </section>
+      <LeagueSetup />
+      <section className="k-section">
         <h2>Conversation starters</h2>
         <ul className="k-list">
           <li>"Which companies do we buy things from every week?"</li>
@@ -742,6 +843,165 @@ function GrownUps() {
         <button className="k-btn k-btn-primary" onClick={() => { actions.setPref("lens", "everyday"); navigate("/"); }}>Go to the grown-up Metaphases</button>
       </div>
     </div>
+  );
+}
+
+
+// ── Printable worksheets (0029) — grown-up corner only ─────────────────────────────────────
+function WorksheetPage({ lesson }: { lesson: Lesson }) {
+  const [ok, setOk] = useState(gatePassed);
+  useEffect(() => { document.title = `Worksheet: ${lesson.title} · Metaphases Kids`; }, [lesson.id]);
+  if (!ok) return <div className="kids"><ParentGate onPass={() => setOk(true)} onClose={() => navigate("/kids/school")} /></div>;
+  const n = LESSONS.findIndex((l) => l.id === lesson.id) + 1;
+  const letters = ["A", "B", "C", "D"];
+  return (
+    <div className="k-sheet-wrap">
+      <div className="k-sheet-tools">
+        <button className="k-btn" onClick={() => navigate("/kids/grownups")}>← Grown-up corner</button>
+        <button className="k-btn k-btn-primary" onClick={() => window.print()}>Print this worksheet 🖨️</button>
+      </div>
+      <article className="k-sheet" aria-label={`Worksheet: ${lesson.title}`}>
+        <header className="k-sheet-head">
+          <Luna size={56} />
+          <div>
+            <span className="k-sheet-eyebrow">Market Moon Club · Moon School · Lesson {n}</span>
+            <h1>{lesson.emoji} {lesson.title}</h1>
+          </div>
+          <div className="k-sheet-name">Name: <span /></div>
+        </header>
+        <section className="k-sheet-read">
+          <h2>Read it</h2>
+          {lesson.screens.map((t) => <p key={t}>{t}</p>)}
+        </section>
+        <section className="k-sheet-quiz">
+          <h2>Circle the answer</h2>
+          {lesson.quiz.map((q, qi) => (
+            <div key={q.q} className="k-sheet-q">
+              <b>{qi + 1}. {q.q}</b>
+              <ul>{q.options.map((o, i) => <li key={o}><span className="k-sheet-bubble">{letters[i]}</span>{o}</li>)}</ul>
+            </div>
+          ))}
+        </section>
+        <div className="k-sheet-row">
+          <section className="k-sheet-draw"><h2>Draw it</h2><p>Draw a picture that shows the big idea of this lesson.</p><div className="k-sheet-box" /></section>
+          <section className="k-sheet-find">
+            <h2>Find it at home</h2>
+            <p>Find something at home made by a company. Which company made it?</p>
+            <div className="k-sheet-line" /><div className="k-sheet-line" />
+            <p>What does that company sell?</p>
+            <div className="k-sheet-line" />
+          </section>
+        </div>
+        <footer className="k-sheet-key" aria-label="Answer key">
+          <span>Answer key: {lesson.quiz.map((q, i) => `${i + 1}. ${letters[q.answer]} (${q.options[q.answer]})`).join("   ")}</span>
+        </footer>
+        <p className="k-sheet-foot">Metaphases Kids · pretend money, real prices · no ads, nothing to buy</p>
+      </article>
+    </div>
+  );
+}
+
+// ── Family League (0028) ────────────────────────────────────────────────────────────────────
+function LeagueSetup() {
+  const st = useKids();
+  const [paste, setPaste] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const code = st.me != null ? encodeLeague({ emoji: st.me, guesses: st.guesses }) : "";
+  const add = () => {
+    const r = decodeLeague(paste);
+    if (!r.ok) { setMsg({ ok: false, text: r.why }); return; }
+    if (r.player.emoji === st.me) { setMsg({ ok: false, text: `That's this device's own player (${PLAYERS[r.player.emoji]}). Each player needs a different emoji.` }); return; }
+    kids.addPlayer(r.player);
+    setPaste("");
+    setMsg({ ok: true, text: `${PLAYERS[r.player.emoji]} ${PLAYER_NAMES[r.player.emoji]} joined with ${r.player.guesses.length} ${r.player.guesses.length === 1 ? "guess" : "guesses"}.` });
+  };
+  return (
+    <section className="k-section k-league-setup">
+      <h2>Family league</h2>
+      <p className="k-small">Siblings (or you!) guess the same report cards on different devices, then compare. Each player picks an emoji instead of a name. A code holds only the company, the date and the guess. Nothing goes to a server.</p>
+      <div>
+        <b>1. This device's player</b>
+        <div className="k-emoji-pick" role="radiogroup" aria-label="This device's player">
+          {PLAYERS.map((e, i) => (
+            <button key={e} role="radio" aria-checked={st.me === i} aria-label={PLAYER_NAMES[i]} className={st.me === i ? "on" : ""} onClick={() => kids.setMe(i)}>{e}</button>
+          ))}
+        </div>
+      </div>
+      {st.me != null && (
+        <div className="k-code">
+          <b>2. Send this code to the other device</b>
+          <div className="k-ask-row">
+            <input readOnly value={code} aria-label="This player's league code" onFocus={(e) => e.currentTarget.select()} />
+            <button className="k-btn" onClick={() => { navigator.clipboard?.writeText(code).then(() => setCopied(true), () => {}); }}>{copied ? "Copied" : "Copy"}</button>
+          </div>
+          <span className="k-small">{st.guesses.length ? `Holds the last ${Math.min(st.guesses.length, 20)} guesses.` : "No guesses yet: make some on Guess first."} Make a new code after new guesses.</span>
+        </div>
+      )}
+      <form className="k-code" onSubmit={(e) => { e.preventDefault(); add(); }}>
+        <label htmlFor="k-league-in"><b>3. Paste a code from another device</b></label>
+        <div className="k-ask-row">
+          <input id="k-league-in" value={paste} onChange={(e) => { setPaste(e.target.value.slice(0, 140)); setMsg(null); }} placeholder="MOON-1…" autoComplete="off" spellCheck={false} />
+          <button className="k-btn k-btn-primary" disabled={!paste.trim()}>Add player</button>
+        </div>
+        {msg && <p className="k-feedback" role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+      </form>
+      {st.league.length > 0 && (
+        <ul className="k-players">
+          {st.league.map((p) => (
+            <li key={p.emoji}><span aria-hidden>{PLAYERS[p.emoji]}</span> {PLAYER_NAMES[p.emoji]} · {p.guesses.length} {p.guesses.length === 1 ? "guess" : "guesses"} <button className="k-link" onClick={() => kids.removePlayer(p.emoji)}>Remove</button></li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function LeagueBoard({ events }: { events: EarningsEvent[] }) {
+  const st = useKids();
+  if (!st.league.length) return null;
+  const meEmoji = st.me ?? 0;
+  const players: LeaguePlayer[] = [{ emoji: meEmoji, guesses: st.guesses }, ...st.league];
+  const rows = leagueRows(players, 8);
+  const byKey = new Map(events.map((e) => [`${e.s}:${e.d}`, e]));
+  // This device's own guesses may already be revealed (stored result) even when the event is out of range.
+  const res = (g: LeagueGuess & { result?: "right" | "wrong" }) => {
+    const r = resolveGuess(g.pick, byKey.get(`${g.s}:${g.d}`));
+    return r === "pending" && g.result ? g.result : r;
+  };
+  const score = players.map((p) => p.guesses.filter((g) => res(g) === "right").length);
+  const best = Math.max(...score);
+  return (
+    <section className="k-section k-league" aria-label="Family league">
+      <h2>Family league 🏆</h2>
+      <div className="k-league-scroll">
+        <table>
+          <thead>
+            <tr><th scope="col">Report card</th>{players.map((p, i) => <th key={i} scope="col"><span className="k-league-p" aria-label={i === 0 ? `You (${PLAYER_NAMES[p.emoji]})` : PLAYER_NAMES[p.emoji]}>{PLAYERS[p.emoji]}</span>{i === 0 && <small>you</small>}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const co = KID_BY_SYMBOL[r.s];
+              return (
+                <tr key={r.key}>
+                  <th scope="row"><span aria-hidden>{co?.emoji}</span> {co?.nick ?? r.s}<small>{new Date(r.d + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</small></th>
+                  {r.picks.map((g, i) => {
+                    if (!g) return <td key={i} className="k-lg-none" aria-label="No guess">·</td>;
+                    const rr = res(g);
+                    const mark = rr === "right" ? "✅" : rr === "wrong" ? "❌" : "⏳";
+                    return <td key={i} className={`k-lg-${rr}`} aria-label={`${g.pick}, ${rr === "pending" || rr === "unknown" ? "waiting" : rr}`}>{g.pick === "beat" ? "👍" : "👎"}<span aria-hidden>{mark}</span></td>;
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr><th scope="row">Right</th>{score.map((n, i) => <td key={i} className={n === best && n > 0 ? "k-lg-best" : ""}>{n}{n === best && n > 0 ? " 🌕" : ""}</td>)}</tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="k-small">👍 beat · 👎 miss · ✅ right · ❌ not this time · ⏳ waiting. Everyone is learning. Even experts guess wrong a lot!</p>
+    </section>
   );
 }
 
@@ -776,9 +1036,10 @@ export default function KidsApp() {
   const [gate, setGate] = useState(false);
   const points = pointsFor({ guesses: st.guesses, lessons: st.lessons, piggy: !!st.piggy, piggyCount: st.piggy?.holdings.length ?? 0 });
   const lvl = levelFor(points);
-  useEffect(() => { document.title = "Metaphases Kids: the Market Moon Club"; window.scrollTo({ top: 0 }); }, [path]);
-  const lessonId = path.match(/^\/kids\/school\/([a-z-]+)$/)?.[1];
-  const lesson = lessonId ? LESSONS.find((l) => l.id === lessonId) : undefined;
+  useEffect(() => { if (!path.endsWith("/print")) document.title = "Metaphases Kids: the Market Moon Club"; window.scrollTo({ top: 0 }); }, [path]);
+  const lessonId = path.match(/^\/kids\/school\/([a-z-]+)(\/print)?$/);
+  const lesson = lessonId ? LESSONS.find((l) => l.id === lessonId[1]) : undefined;
+  if (lesson && lessonId?.[2]) return <WorksheetPage lesson={lesson} />;
   const body =
     path === "/kids/guess" ? <GuessPage /> :
     path === "/kids/piggy" ? <PiggyPage /> :

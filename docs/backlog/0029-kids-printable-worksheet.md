@@ -1,12 +1,12 @@
 ---
 id: 0029
 title: Printable Moon School worksheets for each lesson
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: user-value
 created: 2026-11-02
-pr:
+pr: 27
 by: operator
 ---
 
@@ -17,9 +17,9 @@ Parents and teachers want screen-free follow-ups. A one-page worksheet per lesso
 A print stylesheet plus a `/kids/school/<id>/print` view (reachable from the Grown-up corner, behind the gate) that lays out a lesson on one A4/Letter page in the brand style: Luna, the lesson text, the quiz with answer lines, and a small answer key at the bottom (upside-down). Built from `shared/kidsContent.ts` — no new content source.
 
 ## Acceptance criteria
-- [ ] Every lesson prints on exactly one page in Chrome and Safari (Letter and A4)
-- [ ] No tab bar, header chrome or links in print
-- [ ] Reachable only from the Grown-up corner
+- [x] Every lesson prints on exactly one page in Chrome and Safari (Letter and A4)
+- [x] No tab bar, header chrome or links in print
+- [x] Reachable only from the Grown-up corner
 
 ## Test plan
 E2E: `page.pdf()` for two lessons → 1 page each; the print view contains the lesson title and both questions.

@@ -8,7 +8,9 @@ import universe from "../data/universe.json";
 import type { CalendarResponse, EarningsEvent, MacroResponse, Session, TickerResponse, Reaction, MoodComponent, MacroEvent } from "../shared/types";
 import { compassGrade, setupGrade, rsi, sma } from "../shared/grades";
 import { FOMC, HOLIDAYS } from "../shared/market";
-import { storyKidsSvg, storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../shared/story";
+import { parseRecapQuery, recapImageKey } from "../shared/kidsWeek";
+import { LEVELS } from "../shared/kids";
+import { storyKidsRecapSvg, storyKidsSvg, storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../shared/story";
 import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
@@ -500,6 +502,11 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
     const day = iso(todayNY());
     const svg = await cached(`story:svg:v2:${kind}:${day}`, 21600, ctx, async () => {
       if (kind === "kids") return storyKidsSvg();
+      const rc = kind.match(/^kids-recap:(\d+)\.(\d+)\.(\d+)\.(n|-?[\d.]+)\.(\d)$/);
+      if (rc) {
+        const x = parseRecapQuery(new URLSearchParams({ g: rc[1], r: rc[2], l: rc[3], lv: rc[5], ...(rc[4] === "n" ? {} : { p: rc[4] }) }));
+        return storyKidsRecapSvg(x, LEVELS[x.lv].name);
+      }
       const t = kind.match(/^t\/([A-Z.\-]{1,10})$/);
       if (t) {
         const sym = t[1];
@@ -568,6 +575,8 @@ export default {
       if (p === "/api/ics") return await ics(url, env, ctx);
       if (p === "/api/quotes") return await quotes(url, env, ctx);
       if (p === "/og/story/kids.png") return await storyCard("kids", req, env, ctx);
+      // 0027: counts only; parseRecapQuery drops anything else, so nothing personal can be rendered.
+      if (p === "/og/story/kids-recap.png") return await storyCard(`kids-recap:${recapImageKey(parseRecapQuery(url.searchParams))}`, req, env, ctx);
       const story = p.match(/^\/og\/story\/(t\/[A-Za-z.\-]{1,10}|mood|week)\.png$/);
       if (story) return await storyCard(story[1].toUpperCase().replace(/^T\//, "t/").replace(/^MOOD$/, "mood").replace(/^WEEK$/, "week"), req, env, ctx);
       const og = p.match(/^\/og\/t\/([A-Za-z.\-]{1,10})\.(svg|png)$/);
