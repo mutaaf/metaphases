@@ -1,7 +1,7 @@
 {
   "_readme": "Operator control panel. Edit this file (GitHub web or mobile is fine) to pause or steer the agents. Every agent reads it first and obeys it. HOW OFTEN each agent runs is set on its routine schedule at https://claude.ai/code/routines, not here. The weekly data refresh (.github/workflows/data-refresh.yml) also honours \"paused\".",
   "paused": false,
-  "focus": "EVERYDAY (set 2026-11-01 by the operator). The priority persona is the social-first, mobile-first everyday investor (AGENTS.md § Product vision #4): a medium investor who gets her news from socials. Judge every change at 390×844 touch, in the Everyday lens first. Priority: (1) Hype Check and Today are fast, correct and calm — every flag and number traceable to real data; (2) she can act where she already is: share-target from Instagram/TikTok/X, story cards she'd actually repost, reminders for the companies she owns; (3) plain English everywhere — if a term needs the glossary, rewrite it; (4) keep the trader desk intact behind the lens switch. Never advice; 'a viral post isn't research'.",
+  "focus": "PEAK EARNINGS WEEK (set 2026-11-02 by the operator). Trust before features: (1) zero Cloudflare 1102s and no failure ever shown as a fact (0012 \u2192 0026), (2) every date and session correct, with company-published dates overriding Finnhub and foreign filers present (0013 \u2192 0024 \u2192 0015), (3) then the social-first everyday investor (Hype Check copy 0022/0023, picker vs deep links 0025, reminders 0017), (4) then Metaphases Kids follow-ups. Design at 390\u00d7844 first. Explained, never advice.",
   "agents": {
     "scout": {
       "enabled": true,
