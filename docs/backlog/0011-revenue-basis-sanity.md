@@ -26,6 +26,10 @@ Metaphases told users that Alphabet missed revenue by 15.8% ($111.2B vs $132.0B 
 - [ ] (critic 2026-11-01 0700) The same quarter shows one consensus everywhere. META Q3 2026 shows EPS est **$5.79** in `/api/calendar` (Finnhub) but **$6.52** in the sheet's reaction history (Nasdaq `consensusForecast`, `worker/index.ts` history join). That gives a +28% beat in one place and +13.5% in the other for the same $7.40 print. Its actual $7.40 excludes a $9.89B legal charge (GAAP $3.83). Pick one estimate source per quarter, prefer Finnhub when present, and say which basis (adjusted or GAAP) the actual is on.
 - [ ] Works at 390×844 touch and 1440×900
 
+## Shipped notes (builder, 2026-11-02, #21)
+- The KSPI criterion holds only for filers the universe knows (`curOf` → `ec`). Untracked foreign reporters admitted by revenue (KSPI, DIDIY, TBBB) still format with "$" until the calendar carries a per-event `cur` from the server. That's the open follow-up already named in LESSONS (2026-11-01). Their revenue is judged only when estimate and actual (both local currency) sit within 12% of each other, which is a valid same-currency ratio.
+- The sheet's history prefers Finnhub's estimate when `stock/earnings` has the same fiscal month (or the calendar row on the same date). Otherwise it falls back to Nasdaq.
+
 ## Test plan
 Vitest for the helper and for `seasonScore` / `resultOf` with the mismatched rows; an e2e assertion on the recorded October fixture that the GOOGL tile isn't marked "mixed" or "miss" because of revenue.
 
