@@ -39,9 +39,9 @@ test.describe("Kids: learn by doing", () => {
     await expect(page.locator(".k-toast")).toContainText("Lemonade Boss");
     await expect(page.locator(".k-level")).toContainText("15 pts");
 
-    // Done: the banner goes away.
+    // Done: the banner moves on to the next chapter.
     await page.goto("./kids");
-    await expect(page.locator(".k-starthere")).toHaveCount(0);
+    await expect(page.locator(".k-starthere")).toContainText("Next chapter: Save or Grow?");
   });
 
   test("tap a word on a card to see what it means, then jump into the matching part of the quest", async ({ page }) => {
