@@ -18,6 +18,8 @@ const AboutPage = lazy(() => import("./pages/About"));
 const Search = lazy(() => import("./pages/Search"));
 const TodayPage = lazy(() => import("./pages/Today"));
 const CheckPage = lazy(() => import("./pages/Check"));
+// Metaphases Kids has its own child-safe shell (no trader UI, no links out), loaded on demand.
+const KidsApp = lazy(() => import("./pages/Kids"));
 
 // Everyday investors on a phone land on Today the first time the app opens (not on later Calendar taps).
 let landed = false;
@@ -30,6 +32,7 @@ const NAV = [
   { path: "/compass", label: "Compass" },
   { path: "/retrace", label: "Retrace" },
   { path: "/learn", label: "Learn" },
+  { path: "/kids", label: "Kids" },
   { path: "/about", label: "About" },
 ];
 
@@ -53,7 +56,8 @@ export default function App() {
   useEffect(() => {
     if (landed) return;
     landed = true;
-    if (prefs.lens === "everyday" && path === "/" && !location.search && matchMedia("(max-width: 760px)").matches) navigate("/today", true);
+    if (prefs.lens === "kids" && path === "/" && !location.search) navigate("/kids", true);
+    else if (prefs.lens === "everyday" && path === "/" && !location.search && matchMedia("(max-width: 760px)").matches) navigate("/today", true);
   }, []);
 
   // Share URLs: /t/AAPL opens the calendar with AAPL's sheet on top.
@@ -77,6 +81,8 @@ export default function App() {
 
   // New page → top of the page (not when only the query changes, e.g. opening a sheet).
   useEffect(() => { if (!location.hash) window.scrollTo({ top: 0 }); }, [path]);
+
+  if (path === "/kids" || path.startsWith("/kids/")) return <Suspense fallback={<PageSkeleton />}><KidsApp /></Suspense>;
 
   const t = param("t");
   const dark = prefs.theme === "dark" || (prefs.theme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);

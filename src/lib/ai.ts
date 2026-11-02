@@ -6,7 +6,7 @@ import { BASE } from "./router";
 import { parseSse, type StreamEvent } from "./sse";
 
 export type AiProvider = "edge" | "anthropic" | "openai" | "gemini" | "xai";
-export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask" | "hype";
+export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask" | "hype" | "kids";
 
 export interface AiSettings { provider: AiProvider; key: string; model: string; models: string[]; verified: boolean }
 
@@ -50,7 +50,8 @@ export type { StreamEvent };
 
 export async function* streamAi(o: StreamOpts): AsyncGenerator<StreamEvent> {
   const s = settings;
-  const own = usingOwnKey(s);
+  // Kid surfaces never send a grown-up's key (the worker enforces this too).
+  const own = o.task !== "kids" && usingOwnKey(s);
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (own) headers["x-mp-key"] = s.key;
   const r = await fetch(`${BASE}/api/ai/stream`, {

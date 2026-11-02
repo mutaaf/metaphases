@@ -8,7 +8,7 @@ import universe from "../data/universe.json";
 import type { CalendarResponse, EarningsEvent, MacroResponse, Session, TickerResponse, Reaction, MoodComponent, MacroEvent } from "../shared/types";
 import { compassGrade, setupGrade, rsi, sma } from "../shared/grades";
 import { FOMC, HOLIDAYS } from "../shared/market";
-import { storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../shared/story";
+import { storyKidsSvg, storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../shared/story";
 import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
@@ -371,6 +371,7 @@ const PAGES: Record<string, { title: string; desc: string }> = {
   "/learn": { title: "Learn the language of earnings · Metaphases", desc: "EPS, consensus, typical move, P/E, RSI — every term on Metaphases in plain English." },
   "/today": { title: "Today, in 60 seconds · Metaphases", desc: "The market's mood, the reports that touch your money and this week's big event — in plain English, one swipe at a time." },
   "/check": { title: "Hype Check: saw a stock on socials? · Metaphases", desc: "Paste a TikTok, Instagram or X caption. See what the company actually does, when it reports, how wild it swings and the red flags — before you buy. Never advice." },
+  "/kids": { title: "Metaphases Kids: the Market Moon Club", desc: "Kids learn how the stock market works with pretend money and real prices: guess company report cards, build a pretend piggy bank, and learn what a share is with Luna the moon. No real money, no ads, nothing to buy." },
   "/about": { title: "Where Metaphases comes from · Metaphases", desc: "A calmer earnings calendar with a memory: the best ideas from Market Digest and Compass, free, explained, never advice. Data, lineage and how the agents keep it running." },
 };
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
@@ -404,6 +405,7 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
       return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };
     } catch { return { title: `Earnings on ${label} · Metaphases`, desc: PAGES["/"].desc }; }
   }
+  if (path.startsWith("/kids/")) return PAGES["/kids"];
   return PAGES[path] ?? null;
 }
 
@@ -424,6 +426,22 @@ async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Resp
     .on('meta[property="og:image"], meta[name="twitter:image"]', { element(el) { if (meta.image) el.setAttribute("content", meta.image); } })
     .on('meta[property="og:image:alt"]', { element(el) { if (meta.image) el.setAttribute("content", meta.title); } })
     .transform(new Response(res.body, { status: 200, headers: (() => { const h = new Headers(res.headers); h.set("Content-Type", "text/html; charset=utf-8"); h.set("Cache-Control", "public, max-age=300"); return h; })() }));
+}
+
+// ── /api/quotes?s=AAPL,DIS: batched live prices (Kids piggy bank). Cheap on purpose: each symbol is
+// one small cached Finnhub quote (2 min), at most 10 per request, a few at a time (LESSONS: 1102). ──
+async function quotes(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const syms = Array.from(new Set((url.searchParams.get("s") ?? "").toUpperCase().split(/[,\s]+/).filter((x) => /^[A-Z.\-]{1,10}$/.test(x)))).slice(0, 10);
+  const results = await pool(syms, 4, (sym) =>
+    cached<any>(`fh:quote?symbol=${sym}`, 120, ctx, () => getJson(`${FH}/quote?symbol=${sym}&token=${env.FINNHUB_API_KEY}`)),
+  );
+  const out: Record<string, { price: number; changePct: number; prevClose: number }> = {};
+  const warnings: string[] = [];
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled" && r.value?.c) out[syms[i]] = { price: r.value.c, changePct: r.value.dp ?? 0, prevClose: r.value.pc ?? r.value.c };
+    else warnings.push(`No price for ${syms[i]} right now.`);
+  });
+  return json({ quotes: out, asOf: new Date().toISOString(), warnings }, 120);
 }
 
 // ── /api/ics: subscribe to a watchlist's report dates in any calendar app ──
@@ -481,6 +499,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
   try {
     const day = iso(todayNY());
     const svg = await cached(`story:svg:v2:${kind}:${day}`, 21600, ctx, async () => {
+      if (kind === "kids") return storyKidsSvg();
       const t = kind.match(/^t\/([A-Z.\-]{1,10})$/);
       if (t) {
         const sym = t[1];
@@ -547,6 +566,8 @@ export default {
       if (p === "/api/health") return await health(env, ctx);
       if (p.startsWith("/api/ai/")) { const r = await handleAi(p, req, env); if (r) return r; }
       if (p === "/api/ics") return await ics(url, env, ctx);
+      if (p === "/api/quotes") return await quotes(url, env, ctx);
+      if (p === "/og/story/kids.png") return await storyCard("kids", req, env, ctx);
       const story = p.match(/^\/og\/story\/(t\/[A-Za-z.\-]{1,10}|mood|week)\.png$/);
       if (story) return await storyCard(story[1].toUpperCase().replace(/^T\//, "t/").replace(/^MOOD$/, "mood").replace(/^WEEK$/, "week"), req, env, ctx);
       const og = p.match(/^\/og\/t\/([A-Za-z.\-]{1,10})\.(svg|png)$/);

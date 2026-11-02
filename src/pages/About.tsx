@@ -57,6 +57,12 @@ export default function AboutPage() {
         </section>
       </div>
 
+      <section className="card kids-promo">
+        <h4 className="eyebrow">Metaphases Kids</h4>
+        <p>The Market Moon Club teaches kids how the market works with <b>pretend money that follows real prices</b>: guess company report cards, build a pretend piggy bank, take short Moon School lessons, and ask Luna, a kid-safe helper. No real money, no ads, no accounts, nothing collected, no links out.</p>
+        <button className="cta cta-secondary" onClick={() => navigate("/kids")}>Open Metaphases Kids</button>
+      </section>
+
       <section className="card">
         <h4 className="eyebrow">Data, and how fresh it is</h4>
         <dl className="sources">

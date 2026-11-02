@@ -11,6 +11,7 @@ Four kinds of people use it, and every change should serve at least one:
 2. **The trader** wants to know how a stock moved last time, how it's set up and what the street expects. That lives in the ticker sheet.
 3. **The investor** (Compass's user) wants to know whether this report touches their money and whether it's a quality company. That lives in Compass look-through and quality grades.
 4. **The social-first everyday investor** — the operator's own household: a medium investor who gets her market news from Instagram, TikTok and X, on her phone. She doesn't want a terminal; she wants to know *does this affect me?* and *is this hyped stock real?* That lives in the **Everyday lens** (plain English, trader jargon one tap away), **Today** (60-second story cards that share as 9:16 images), **Hype Check** (`/check`, also the PWA share target — share a post from any app straight into it) and the phone **tab bar** (Today · Calendar · Hype Check · My Money). Design for her at 390×844 first; nothing she sees should need a glossary, and nothing may read as advice. "A viral post isn't research" is the stance.
+5. **Kids learning with a grown-up** (about 8–12). **Metaphases Kids — the Market Moon Club** (`/kids`, chosen as "We're learning with our kid" in the lens picker) teaches how markets and trading *work* with **pretend money that follows real prices**: a Today's Market Story (market mood as weather, report cards from companies kids know, a word and a quiz of the day, read-aloud on every card), Guess the Report Card (beat or miss, badges, streaks), the Pretend Piggy Bank (🌙 $1,000 pretend coins across up to 5 companies, teaching eggs-in-baskets), Moon School (short lessons, Flesch–Kincaid grade ≤ 5, unit-tested) and Ask Luna (kid-safe AI). It has its own shell: no trader UI, no macro strip, no links out; a "For grown-ups" parental gate guards the way back to the full site. Design for a 9-year-old at 390×844: huge tap targets, short sentences, no jargon.
 
 Sibling of **Market Digest** and **Compass** (`github.com/mutaaf`, private `market-digest`). Their ideas are first-class here:
 - **Setup grade** comes from Market Digest's scorers.
@@ -42,6 +43,12 @@ The thresholds in `shared/grades.ts` must stay identical to Market Digest's `GRA
   - Client side: `static2.finnhub.io` (logos), `fonts.googleapis.com`, `fonts.gstatic.com`.
   - Adding a host requires an operator `proposal/`.
 - **No analytics, trackers, ads, accounts or paid services.** User state stays in localStorage behind try/catch.
+- **Kids surfaces (`/kids*`, `src/pages/Kids.tsx`, `shared/kids*.ts`) are child-directed:**
+  - Pretend money only. Never a buy/sell/broker link, a payment, or anything a kid could spend.
+  - No data: no accounts, no names, no analytics; progress lives in `localStorage` (`metaphases:kids:v1`) only.
+  - No ads and no click-outs: no external `<a href>` anywhere in kids mode (an e2e test enforces it). Leaving kids mode goes through the parental gate.
+  - AI is the **free brain only** with the kid-safe `KIDS_SYSTEM` prompt (`FREE_ONLY` in `worker/ai/prompts.ts`): the worker ignores any BYOK key for the `kids` task and the client never sends one (unit + e2e tests).
+  - Kid copy stays at Flesch–Kincaid grade ≤ 5 (`fkGrade`, unit-tested). Nothing is advice.
 - **Free tiers only.** Finnhub allows 60 req/min, so per-day calendar calls go through `pool()`, and everything is edge-cached via `cached()`.
 - **API responses carry `warnings: string[]`.** Partial data beats a 500.
 - **Main JS bundle ≤ 120 kB gzip** (CI enforces). Heavy features ship as lazy chunks (`import()`).

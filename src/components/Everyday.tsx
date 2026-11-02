@@ -19,8 +19,9 @@ export const isEveryday = (lens: string) => lens !== "trader";
 export function LensPicker() {
   const { prefs } = useStore();
   const ref = useRef<HTMLDivElement>(null);
-  const choose = (lens: "everyday" | "trader") => {
+  const choose = (lens: "everyday" | "trader" | "kids") => {
     actions.setPref("lens", lens);
+    if (lens === "kids") { navigate("/kids", true); return; }
     if (lens === "everyday" && matchMedia(PHONE).matches && appPath() === "/") navigate("/today", true);
   };
   useDialog(ref, () => choose("everyday"));
@@ -38,6 +39,10 @@ export function LensPicker() {
         <button className="lens-opt" onClick={() => choose("trader")}>
           <b>I trade actively</b>
           <span>The full desk: setup grades, RSI, volatility, reactions, every number.</span>
+        </button>
+        <button className="lens-opt lens-kids" onClick={() => choose("kids")}>
+          <b>We're learning with our kid</b>
+          <span>Metaphases Kids: pretend money, real prices, report-card games and Moon School. No ads, nothing to buy.</span>
         </button>
       </div>
     </div>

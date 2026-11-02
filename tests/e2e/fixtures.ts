@@ -10,7 +10,7 @@ const fx = (n: string) => readFileSync(new URL(`../fixtures/${n}`, import.meta.u
 // 1×1 transparent PNG, stands in for the worker-rendered story cards.
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
 
-export const test = base.extend<{ lens: "trader" | "everyday" | "unset" }>({
+export const test = base.extend<{ lens: "trader" | "everyday" | "kids" | "unset" }>({
   lens: ["trader", { option: true }],
   page: async ({ page, lens }, use) => {
     await page.clock.setFixedTime(new Date("2026-10-31T15:00:00-04:00"));
@@ -35,6 +35,11 @@ export const test = base.extend<{ lens: "trader" | "everyday" | "unset" }>({
       r.fulfill({ contentType: "application/json", body: fx("ticker-NVDA.json").replaceAll('"NVDA"', JSON.stringify(sym)) });
     });
     await page.route("**/og/story/**", (r) => r.fulfill({ contentType: "image/png", body: PNG }));
+    // Batched live prices (Kids piggy bank): every symbol at $100, up 1.2% today.
+    await page.route("**/api/quotes**", (r) => {
+      const syms = (new URL(r.request().url()).searchParams.get("s") ?? "").split(",").filter(Boolean);
+      r.fulfill({ contentType: "application/json", body: JSON.stringify({ quotes: Object.fromEntries(syms.map((s) => [s, { price: 100, changePct: 1.2, prevClose: 98.8 }])), asOf: "2026-10-31T19:00:00Z", warnings: [] }) });
+    });
     // Logos come from a third-party CDN; keep tests hermetic.
     await page.route("https://static2.finnhub.io/**", (r) => r.fulfill({ status: 404, body: "" }));
     await use(page);

@@ -4,8 +4,10 @@
 import type { ChatMessage } from "./providers";
 import { epsIn, isUsd, moneyIn } from "../../shared/currency";
 
-export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask" | "hype";
-export const TASKS: AiTask[] = ["ticker", "week", "exposure", "retrace", "ask", "hype"];
+export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask" | "hype" | "kids";
+export const TASKS: AiTask[] = ["ticker", "week", "exposure", "retrace", "ask", "hype", "kids"];
+/** Tasks that must only ever run on the free brain (kid surfaces never use a grown-up's key). */
+export const FREE_ONLY: AiTask[] = ["kids"];
 export const isTask = (t: unknown): t is AiTask => typeof t === "string" && (TASKS as string[]).includes(t);
 
 /** Character budget for the facts block (~4 chars per token → ~3.5k tokens). */
@@ -24,7 +26,20 @@ Rules you never break:
 - Report timing: "bmo" = before the open, "amc" = after the close, "dmh" = during market hours.
 - Only if your answer touches a decision someone might make with money, end with one short line in italics: _Not investment advice — just what the data says._`;
 
+/** Luna, the helper inside Metaphases Kids. Child-directed: simple, kind, on-topic, never advice, collects nothing. */
+export const KIDS_SYSTEM = `You are Luna, a friendly moon who helps kids (about 8 to 12 years old) learn how money, companies and the stock market work. You live inside Metaphases Kids, where everything is pretend practice money.
+
+Rules you never break:
+- Use short sentences and simple words a 9-year-old can read. Answer in 2 to 5 sentences. Be warm and encouraging.
+- Only talk about money, saving, companies, shares, earnings report cards and the stock market. If a kid asks about anything else, say: "That's a great question for a grown-up! I'm best at money and markets." Then suggest a money question they could ask you.
+- Never tell anyone to buy or sell anything, and never tell them to use real money. Say it's pretend practice here, and that real money decisions are for grown-ups.
+- Never ask for, guess or repeat personal information: no names, ages, schools, addresses, locations, photos or contact details. If a kid shares personal information, kindly say they shouldn't share that online, and don't repeat it.
+- No scary, violent, adult or unkind content. If something feels unsafe, say: "Let's ask a grown-up about that!"
+- Use only the facts provided. If you don't know, say "I'm not sure!" Don't make up numbers.
+- No links. At most one emoji.`;
+
 const TASK_BRIEF: Record<AiTask, string> = {
+  kids: "Answer the kid's question using the facts if they help, in kid-friendly words. If they ask about a company, you can use its kid-friendly description and when it shares its report card. Keep it short, friendly and simple.",
   ticker: "Write a short earnings preview titled by nothing — start directly. Cover: when it reports and what Wall Street expects; how it has done versus estimates recently and how the stock has typically moved on reports; how it's set up going in (setup grade and its weakest/strongest factors); what's worth watching in this report. 120–180 words, 3–5 bullets after one opening sentence.",
   week: "Summarize the earnings and macro landscape in the facts for someone planning their week. Lead with the 2–4 biggest reports (by market cap) with day and timing, then the macro events that could move everything, then one line on market mood. Under 170 words unless the user asked something specific — then answer that, using the facts.",
   hype: "Someone saw this stock hyped on social media and wants a calm, honest take before doing anything. In under 150 words and plain English: say in one line what the company actually does; then what the real numbers show (profitability, how much it swings on earnings, the quality grade, when it reports next); then name the red flags listed in the facts, if any, in everyday words. Gently note that a viral post is not research and that the person posting may already own it. Never say buy, sell, hold, 'good investment' or 'bad investment'. Finish with the not-advice line.",
@@ -121,6 +136,13 @@ export function factsFor(task: AiTask, context: Obj | null | undefined): string[
       return L;
     }
     case "retrace": return retraceFacts(c);
+    case "kids": {
+      const L: string[] = [];
+      if (c.weather) L.push(`Market weather today: ${clip(c.weather, 120)}.`);
+      for (const k of (c.companies ?? []).slice(0, 12)) L.push(`${clip(k.nick, 30)} (${clip(k.s, 8)}) ${clip(k.hook, 80)}. Report card: ${clip(k.when ?? "not scheduled yet", 60)}.`);
+      L.push("Everything in Metaphases Kids is pretend money that follows real prices. Nothing can be bought here.");
+      return L;
+    }
     case "ask": {
       const L: string[] = [];
       if (c.ticker) L.push(...tickerFacts(c.ticker));
@@ -149,7 +171,7 @@ export interface PromptInput { task: AiTask; context?: Obj | null; question?: st
 export function buildMessages(input: PromptInput): ChatMessage[] {
   const facts = trimToBudget(factsFor(input.task, input.context));
   const q = clip(input.question ?? "", MAX_QUESTION).trim();
-  const msgs: ChatMessage[] = [{ role: "system", content: SYSTEM }];
+  const msgs: ChatMessage[] = [{ role: "system", content: input.task === "kids" ? KIDS_SYSTEM : SYSTEM }];
   msgs.push({ role: "user", content: `Task: ${TASK_BRIEF[input.task]}\n\nFacts (the only data you may use):\n${facts || "(no facts available)"}` });
   msgs.push({ role: "assistant", content: "Understood. I'll use only those facts." });
   for (const h of (input.history ?? []).slice(-MAX_HISTORY)) {
