@@ -1,12 +1,12 @@
 ---
 id: 0031
 title: Kids quest chapters 2 and 3 — Save or Grow? (saving vs investing) and Your Slice Pays You (dividends)
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: user-value
 created: 2026-11-02
-pr:
+pr: 31
 by: operator
 ---
 
