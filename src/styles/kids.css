@@ -257,3 +257,5 @@
 @media (prefers-reduced-motion: reduce) {
   .kids *, .kids *::before, .kids *::after { animation: none !important; transition: none !important; }
 }
+
+.k-hold-ch.flat { color: var(--muted); font-size: .8em; }

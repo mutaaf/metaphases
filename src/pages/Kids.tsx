@@ -443,7 +443,7 @@ function PiggyView() {
         <Pretend />
         <span className="k-eyebrow">Your pretend money today</span>
         {q.loading && !q.data ? <Skeleton h={56} w={200} /> : <b className="k-bank-v">{coins(value)}</b>}
-        {q.data && <span className={`k-bank-ch ${change >= 0 ? "up" : "down"}`}>{change >= 0 ? "⬆️ Up" : "⬇️ Down"} {coins(Math.abs(change)).replace("🌙 ", "")} since you started</span>}
+        {q.data && Math.abs(change) >= 0.5 && <span className={`k-bank-ch ${change >= 0 ? "up" : "down"}`}>{change >= 0 ? "⬆️ Up" : "⬇️ Down"} {coins(Math.abs(change)).replace("🌙 ", "")} since you started</span>}
         {hist.length >= 2 ? <Spark data={hist} w={240} h={48} /> : <span className="k-small">Come back tomorrow to watch your line grow. 📈</span>}
         <ReadAloud text={`Your pretend money today is ${Math.round(value)} coins. You started with one thousand.`} />
       </section>
@@ -463,7 +463,9 @@ function PiggyView() {
             <li key={h.s}>
               <span className="k-co-emoji sm" aria-hidden>{KID_BY_SYMBOL[h.s]?.emoji}</span>
               <div><b>{KID_BY_SYMBOL[h.s]?.nick ?? h.s}</b><span className="k-small">You put in {coins(h.coins)}</span></div>
-              <span className={`k-hold-ch ${c >= 0 ? "up" : "down"}`}>{c >= 0 ? "+" : ""}{c.toFixed(1)}%</span>
+              {Math.abs(c) < 0.05
+                ? <span className="k-hold-ch flat">New! 🌱</span>
+                : <span className={`k-hold-ch ${c >= 0 ? "up" : "down"}`}>{c >= 0 ? "+" : ""}{c.toFixed(1)}%</span>}
             </li>
           );
         })}
