@@ -1,13 +1,16 @@
 // Grounding for every AI surface: compact, structured facts built from data the page already has.
 // Pure functions (unit-tested) — the worker renders them into prompt lines and trims to a budget.
 import type { EarningsEvent, MacroResponse, TickerResponse } from "../../shared/types";
-import { co, heldVia, resultOf, surprise, UNIVERSE } from "./data";
+import { co, curOf, heldVia, resultOf, surprise, UNIVERSE } from "./data";
+import { revenueVerdict, revenueBeatRate } from "../../shared/compare";
 import { weekOf } from "./dates";
 import type { Holding } from "./store";
 
 const slimEvent = (e: EarningsEvent) => {
   const c = co(e.s);
-  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.h, eE: e.eE, eA: e.eA, rE: e.rE, rA: e.rA, cur: c?.ec, res: resultOf(e) ?? undefined };
+  // A revenue actual on a different basis from its estimate (GOOGL net of TAC vs gross) isn't passed as a fact to judge.
+  const nc = revenueVerdict(e, curOf(e.s)) === "not-comparable";
+  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.h, eE: e.eE, eA: e.eA, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: c?.ec, res: resultOf(e) ?? undefined };
 };
 
 export function slimMacro(m: MacroResponse | null | undefined, from: string, to: string) {
@@ -51,7 +54,7 @@ export function retraceContext(events: EarningsEvent[], monthLabel: string) {
   const done = events.filter((e) => e.eA != null && e.t);
   const by = (k: string) => done.filter((e) => resultOf(e) === k).length;
   const epsJudged = done.filter((e) => e.eE != null);
-  const revJudged = done.filter((e) => e.rA != null && e.rE != null);
+  const rev = revenueBeatRate(done, curOf);
   const sur = done.map(surprise).filter((x): x is number => x != null && Math.abs(x) < 500).sort((a, b) => a - b);
   const sectors: Record<string, { n: number; beat: number; s: number[] }> = {};
   for (const e of done) { const k = co(e.s)?.sec || "Other"; (sectors[k] ??= { n: 0, beat: 0, s: [] }); sectors[k].n++; if (resultOf(e) === "beat") sectors[k].beat++; const x = surprise(e); if (x != null) sectors[k].s.push(x); }
@@ -60,7 +63,8 @@ export function retraceContext(events: EarningsEvent[], monthLabel: string) {
     month: monthLabel,
     reported: done.length,
     epsBeatPct: epsJudged.length ? (epsJudged.filter((e) => (e.eA as number) >= (e.eE as number)).length / epsJudged.length) * 100 : null,
-    revBeatPct: revJudged.length ? (revJudged.filter((e) => (e.rA as number) >= (e.rE as number)).length / revJudged.length) * 100 : null,
+    revBeatPct: rev.pct,
+    revExcluded: rev.excluded,
     medianSurprise: sur.length ? sur[Math.floor(sur.length / 2)] : null,
     beat: by("beat"), mixed: by("mixed"), miss: by("miss"),
     sectors: Object.entries(sectors).filter(([, v]) => v.n >= 2).map(([sector, v]) => { const xs = v.s.sort((a, b) => a - b); return { sector, n: v.n, beatPct: (v.beat / v.n) * 100, median: xs.length ? xs[Math.floor(xs.length / 2)] : null }; }),

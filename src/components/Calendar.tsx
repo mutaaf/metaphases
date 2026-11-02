@@ -3,6 +3,7 @@ import type { EarningsEvent, MacroEvent } from "../../shared/types";
 import { EARLY_CLOSE, HOLIDAYS } from "../../shared/market";
 import { useCalendar, useMacro, prefetchTicker } from "../lib/api";
 import { co, curOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
+import { revenueVerdict } from "../../shared/compare";
 import { addDays, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
@@ -139,7 +140,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
       <span className="erow-num"><span className="eyebrow">EPS est</span>{epsIn(e.eE, cur)}</span>
       <span className="erow-num"><span className="eyebrow">{e.eA != null ? "Actual" : "Rev est"}</span>{e.eA != null ? epsIn(e.eA, cur) : moneyIn(e.rE, cur)}</span>
       <span className="erow-res">
-        {r ? <span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : PHASE_LABEL[e.h]}</span>}
+        {r ? <span className={`chip res-${r}`} title={revenueVerdict(e, cur) === "not-comparable" ? "Judged on EPS only: reported revenue isn't counted the same way as the forecast." : undefined}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : PHASE_LABEL[e.h]}</span>}
       </span>
     </button>
   );

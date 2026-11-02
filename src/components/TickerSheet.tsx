@@ -72,6 +72,7 @@ function Reactions({ history, expected }: { history: Reaction[]; expected: numbe
           ))}
         </tbody>
       </table>
+      <p className="muted small rx-basis">Estimates use the calendar's consensus wherever we have it for that quarter. Actuals are <Term k="adjustedeps">adjusted EPS</Term>, the figure analysts forecast, so they can differ from the profit in the company's filings.</p>
     </div>
   );
 }

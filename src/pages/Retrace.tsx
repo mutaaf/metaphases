@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCalendar } from "../lib/api";
-import { co, resultOf, surprise } from "../lib/data";
+import { co, curOf, resultOf, surprise } from "../lib/data";
+import { revenueBeatRate } from "../../shared/compare";
 import { MONTHS, parse, todayISO } from "../lib/dates";
 import { pct } from "../lib/format";
 import { navigate } from "../lib/router";
@@ -23,8 +24,7 @@ export default function RetracePage() {
   const done = (data?.events ?? []).filter((e) => e.eA != null && e.t);
   const by = (k: string) => done.filter((e) => resultOf(e) === k).length;
   const epsBeat = done.filter((e) => e.eE != null && (e.eA as number) >= e.eE).length;
-  const revJudged = done.filter((e) => e.rA != null && e.rE != null);
-  const revBeat = revJudged.filter((e) => (e.rA as number) >= (e.rE as number)).length;
+  const rev = revenueBeatRate(done, curOf);
   const sur = done.map(surprise).filter((x): x is number => x != null && Math.abs(x) < 500);
   const median = sur.length ? [...sur].sort((a, b) => a - b)[Math.floor(sur.length / 2)] : null;
   const sectors = useMemo(() => {
@@ -71,7 +71,7 @@ export default function RetracePage() {
           <div className="stat-row">
             <div className="stat"><span className="eyebrow">Reported</span><b>{done.length}</b></div>
             <div className="stat"><span className="eyebrow"><Term k="eps">EPS</Term> beat rate</span><b>{Math.round((epsBeat / done.length) * 100)}%</b></div>
-            <div className="stat"><span className="eyebrow"><Term k="revenue">Revenue</Term> beat rate</span><b>{revJudged.length ? `${Math.round((revBeat / revJudged.length) * 100)}%` : "—"}</b></div>
+            <div className="stat"><span className="eyebrow"><Term k="revenue">Revenue</Term> beat rate</span><b>{rev.pct != null ? `${Math.round(rev.pct)}%` : "—"}</b>{rev.excluded > 0 && <small className="muted rev-excluded">{rev.excluded} <Term k="revbasis">can't compare</Term></small>}</div>
             <div className="stat"><span className="eyebrow">Median <Term k="surprise">surprise</Term></span><b>{pct(median)}</b></div>
           </div>
           <section className="card">
