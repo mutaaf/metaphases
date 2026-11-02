@@ -1111,8 +1111,22 @@ function NewBadgeToast() {
   );
 }
 
+/** Kids mode wears Luna in the tab and on the home screen, even when entered by in-app navigation. */
+function useKidsIcon() {
+  useEffect(() => {
+    const swaps: [HTMLLinkElement | HTMLMetaElement, string, string][] = [];
+    const swap = (sel: string, attr: string, val: string) => document.querySelectorAll<HTMLLinkElement | HTMLMetaElement>(sel).forEach((el) => { swaps.push([el, attr, el.getAttribute(attr) ?? ""]); el.setAttribute(attr, val); });
+    swap('link[rel="icon"][type="image/svg+xml"]', "href", `${BASE}/kids-icon.svg`);
+    swap('link[rel="icon"][type="image/png"]', "href", `${BASE}/kids-icon-512.png`);
+    swap('link[rel="apple-touch-icon"]', "href", `${BASE}/kids-apple-touch-icon.png`);
+    swap('meta[name="apple-mobile-web-app-title"]', "content", "Moon Club");
+    return () => swaps.forEach(([el, attr, v]) => el.setAttribute(attr, v));
+  }, []);
+}
+
 export default function KidsApp() {
   useLocation();
+  useKidsIcon();
   const path = appPath();
   const st = useKids();
   const [gate, setGate] = useState(false);

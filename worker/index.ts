@@ -365,7 +365,7 @@ async function marketMood(ctx: ExecutionContext): Promise<NonNullable<MacroRespo
 }
 
 // ── Share metadata: crawlers don't run JS, so rewrite <head> at the edge per URL ──
-const PAGES: Record<string, { title: string; desc: string }> = {
+const PAGES: Record<string, { title: string; desc: string; image?: string; kids?: boolean }> = {
   "/": { title: "Metaphases · Every earnings report, phase by phase", desc: "Who reports, when, how they've moved before — and how much of your money rides on it. A calmer, deeper earnings calendar." },
   "/watchlist": { title: "Your watchlist, in phases · Metaphases", desc: "Every company you track: when it reports next, its setup and Compass grades, and whether it's under your buy price." },
   "/compass": { title: "Compass: what reports with your money · Metaphases", desc: "Paste your stocks and funds. See which earnings reports actually move your money over the next two months — looking through your ETFs." },
@@ -373,12 +373,14 @@ const PAGES: Record<string, { title: string; desc: string }> = {
   "/learn": { title: "Learn the language of earnings · Metaphases", desc: "EPS, consensus, typical move, P/E, RSI — every term on Metaphases in plain English." },
   "/today": { title: "Today, in 60 seconds · Metaphases", desc: "The market's mood, the reports that touch your money and this week's big event — in plain English, one swipe at a time." },
   "/check": { title: "Hype Check: saw a stock on socials? · Metaphases", desc: "Paste a TikTok, Instagram or X caption. See what the company actually does, when it reports, how wild it swings and the red flags — before you buy. Never advice." },
-  "/kids": { title: "Metaphases Kids: the Market Moon Club", desc: "Kids learn how the stock market works with pretend money and real prices: guess company report cards, build a pretend piggy bank, and learn what a share is with Luna the moon. No real money, no ads, nothing to buy." },
+  "/kids": { title: "Metaphases Kids — money, explained for kids", desc: "One-minute lessons, a lemonade-stand game and a pretend piggy bank that follows real prices. For ages 8–12. No ads, no sign-up, nothing to buy.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
+  "/kids/start": { title: "Luna's Lemonade Stand — learn money by playing", desc: "Run a lemonade stand to learn what a company, a share, a price and a report card are. A free game for ages 8–12, with no ads.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
+  "/kids/school": { title: "Moon School — one-minute money lessons for kids", desc: "28 tiny lessons on money, companies, shares, saving, investing and dividends, with quick checks and sorting games. Read aloud, for ages 8–12.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/about": { title: "Where Metaphases comes from · Metaphases", desc: "A calmer earnings calendar with a memory: the best ideas from Market Digest and Compass, free, explained, never advice. Data, lineage and how the agents keep it running." },
 };
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
-async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ title: string; desc: string; image?: string } | null> {
+async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ title: string; desc: string; image?: string; kids?: boolean } | null> {
   const path = url.pathname.slice(BASE.length) || "/";
   const t = path.match(/^\/t\/([A-Za-z.\-]{1,10})$/)?.[1] ?? url.searchParams.get("t");
   if (t) {
@@ -407,7 +409,7 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
       return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };
     } catch { return { title: `Earnings on ${label} · Metaphases`, desc: PAGES["/"].desc }; }
   }
-  if (path.startsWith("/kids/")) return PAGES["/kids"];
+  if (path.startsWith("/kids/")) return PAGES[path] ?? (path.startsWith("/kids/school/") ? PAGES["/kids/school"] : PAGES["/kids"]);
   return PAGES[path] ?? null;
 }
 
@@ -427,6 +429,10 @@ async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Resp
     .on('link[rel="canonical"]', set("href"))
     .on('meta[property="og:image"], meta[name="twitter:image"]', { element(el) { if (meta.image) el.setAttribute("content", meta.image); } })
     .on('meta[property="og:image:alt"]', { element(el) { if (meta.image) el.setAttribute("content", meta.title); } })
+    // Kids pages wear Luna: their own favicon, home-screen icon and app title.
+    .on('link[rel="icon"]', { element(el) { if (meta.kids) el.setAttribute("href", el.getAttribute("type") === "image/png" ? `${BASE}/kids-icon-512.png` : `${BASE}/kids-icon.svg`); } })
+    .on('link[rel="apple-touch-icon"]', { element(el) { if (meta.kids) el.setAttribute("href", `${BASE}/kids-apple-touch-icon.png`); } })
+    .on('meta[name="apple-mobile-web-app-title"]', { element(el) { if (meta.kids) el.setAttribute("content", "Moon Club"); } })
     .transform(new Response(res.body, { status: 200, headers: (() => { const h = new Headers(res.headers); h.set("Content-Type", "text/html; charset=utf-8"); h.set("Cache-Control", "public, max-age=300"); return h; })() }));
 }
 
