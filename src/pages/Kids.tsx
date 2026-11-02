@@ -867,12 +867,33 @@ function ParentGate({ onPass, onClose }: { onPass: () => void; onClose: () => vo
   );
 }
 
+/** Grown-ups only: send Moon Club to another parent (native share sheet, or copy the link). */
+function ShareWithParent() {
+  const [done, setDone] = useState<string | null>(null);
+  const url = `${location.origin}${BASE}/kids`;
+  const text = "Moon Club teaches kids how money works: one-minute lessons, a lemonade-stand game and a pretend piggy bank on real prices. Ages 8–12, no ads, no sign-up.";
+  const share = async () => {
+    try {
+      if (navigator.share) { await navigator.share({ title: "Moon Club — money, explained for kids", text, url }); setDone("Shared!"); return; }
+      await navigator.clipboard.writeText(`${text} ${url}`); setDone("Link copied. Paste it into a message.");
+    } catch { /* closed the share sheet */ }
+  };
+  return (
+    <section className="k-section k-share-parent">
+      <div><h2>Share with another parent</h2><p className="k-small">A link with a preview card. Nothing about your child is included.</p></div>
+      <button className="k-btn k-btn-primary" onClick={share}>Share Moon Club</button>
+      {done && <p className="k-feedback" role="status">{done}</p>}
+    </section>
+  );
+}
+
 function GrownUps() {
   const [ok, setOk] = useState(gatePassed);
   if (!ok) return <ParentGate onPass={() => setOk(true)} onClose={() => navigate("/kids")} />;
   return (
     <div className="k-page k-grownups">
       <header className="k-hero"><Luna size={56} /><div><span className="k-eyebrow">Grown-up corner</span><h1>About <em>Metaphases Kids</em></h1></div></header>
+      <ShareWithParent />
       <section className="k-section">
         <h2>What kids learn</h2>
         <ul className="k-list">
@@ -1157,7 +1178,7 @@ export default function KidsApp() {
           <MoonPhase phase={lvl.index} size={30} />
           <span><b>{lvl.name}</b><small>{points} pts{lvl.next != null ? ` · ${lvl.next - points} to ${LEVELS[lvl.index + 1].name}` : ""}</small></span>
         </div>
-        <button className="k-grown" onClick={() => setGate(true)}>For grown-ups</button>
+        <button className="k-grown" aria-label="For grown-ups" onClick={() => setGate(true)}><span className="k-grown-for">For </span>grown-ups</button>
       </header>
       <main id="k-main" tabIndex={-1} className="k-main">{body}</main>
       <NewBadgeToast />

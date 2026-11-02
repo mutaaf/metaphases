@@ -85,6 +85,7 @@ test.describe("Kids follow-ups", () => {
     await page.getByRole("button", { name: "For grown-ups" }).click();
     await passGate(page);
     await expect(page.locator(".k-sheets li")).toHaveCount(LESSONS.length);
+    expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, innerWidth) - (screen.width < 500 ? 390 : innerWidth)), "grown-up corner overflows the phone").toBeLessThanOrEqual(1);
     await page.locator(".k-sheets button", { hasText: "Why do prices go up and down?" }).click();
     await expect(page).toHaveURL(/\/kids\/school\/prices\/print$/);
     await expect(page.locator(".k-sheet h1")).toContainText("Why do prices go up and down?");
