@@ -1,7 +1,7 @@
 ---
 id: 0012
 title: Stop the Worker failing with Cloudflare 1102 (resource limit) on ticker, share and calendar requests
-status: shipped
+status: ready
 priority: P0
 size: M
 lens: tech-health
@@ -9,6 +9,16 @@ created: 2026-11-01
 pr: 15
 by: critic
 ---
+
+## Reopened 2026-11-02 by critic (bounce 1 of 2)
+Shipped in #15 and passed its bar live on 2026-11-01 at 18:58 UTC (0/60 ticker 1102s). By 2026-11-02 at 07:00 UTC, on build `e2177331` (deployed 22:03 UTC with #18 and #19, the 0021 currency work), it has regressed:
+- **57 of 150** `GET /api/ticker/:sym` calls for the 150 largest universe names returned `error code: 1102` (first, un-busted call to each, so a phone user opening a sheet sees this). Cache-busted: 4 of 20. `/api/ticker/UBER` failed **6 of 8** consecutive tries, two days before UBER reports.
+- **`/t/AXON` served Cloudflare's raw "Error 1102 · Worker exceeded resource limits" HTML page** to a 390×844 browser (`phone_t_AXON.png`). That's the shared-link route, so an unfurl or a tap from Instagram lands on a stack-trace page.
+- `/api/calendar?from=2026-11-02&to=2026-12-04` (the home page's own request) returned 503 on the first load on phone **and** desktop, and the home page showed "Charting the phases… MOST POPULAR · 0". Cache-busted month calls: 2 of 20 and 1 of 10 failed. `/api/macro` returned 503 once.
+- `/api/health` itself answered 1102 on 1 of 10 tries.
+Failures come back in 0.15–0.37 s, which looks like isolate startup or memory, not slow upstreams. Check `wrangler tail` for `exceededCpu` vs `exceededMemory` and diff the per-request work added in #18/#19 (`shared/currency.ts` on every ticker, calendar row and share-meta path).
+
+Added bar: the checks below must hold **on a cold Monday morning**, not just right after a deploy. Run the 150-name loop from `docs/critique/2026-11-02-0700.md`.
 
 ## Why
 On 2026-11-01 at about 06:55 UTC, production answered many requests with `503` and the 17-byte body `error code: 1102`. That's Cloudflare's "Worker exceeded resource limits" (CPU time or memory). Measured with `curl`:
@@ -27,6 +37,8 @@ On a phone, the ticker sheet then shows only "We couldn't reach the market data 
 - Client: when `/api/ticker` fails, the sheet still shows what the calendar row already knows (date, session, estimates) and offers a "Try again" button.
 
 ## Acceptance criteria
+- [ ] The un-busted first call to `/api/ticker/:sym` for each of the 150 largest universe names returns 0 bodies of `error code: 1102` (record the loop and result in the PR)
+- [ ] 20 consecutive `GET /t/AXON` and `GET /t/UBER` return 200 with og:title; no route ever serves Cloudflare's raw error page
 - [ ] A loop of 60 cache-busted `GET /api/ticker/:sym` over 30 large caps against production returns 0 responses with body `error code: 1102` (record the command and result in the PR)
 - [ ] 20 consecutive `GET /t/NVDA` return 200 with `og:title` present
 - [ ] `/api/health` fails (`ok:false`, 503) when the ticker path throws (unit test with a stubbed failure)
