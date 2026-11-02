@@ -39,7 +39,7 @@ function FactorList({ factors }: { factors: Factor[] }) {
   );
 }
 
-function Reactions({ history, expected }: { history: Reaction[]; expected: number | null }) {
+function Reactions({ history, expected, usd }: { history: Reaction[]; expected: number | null; usd: boolean }) {
   const rows = [...history].reverse();
   const max = Math.max(4, ...rows.map((r) => Math.abs(r.move ?? 0)));
   return (
@@ -72,7 +72,7 @@ function Reactions({ history, expected }: { history: Reaction[]; expected: numbe
           ))}
         </tbody>
       </table>
-      <p className="muted small rx-basis">Estimates use the calendar's consensus wherever we have it for that quarter. Actuals are <Term k="adjustedeps">adjusted EPS</Term>, the figure analysts forecast, so they can differ from the profit in the company's filings.</p>
+      <p className="muted small rx-basis">{usd && "Estimates use the calendar's consensus wherever we have it for that quarter. "}Actuals are <Term k="adjustedeps">adjusted EPS</Term>, the figure analysts forecast, so they can differ from the profit in the company's filings.</p>
     </div>
   );
 }
@@ -233,7 +233,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
             {data.history.length > 0 && (
               <section className="card">
                 <h4 className="eyebrow">How it's reacted · {data.beatRate ? `${data.beatRate.beats}/${data.beatRate.total} beats` : "recent reports"}</h4>
-                <Reactions history={data.history} expected={data.expectedMove} />
+                <Reactions history={data.history} expected={data.expectedMove} usd={isUsd(estCur)} />
               </section>
             )}
 
