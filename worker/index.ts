@@ -12,7 +12,7 @@ import { storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../shared/story";
 import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
-import { buildIcs, cardSvg, quartersFrom, shapeChart, type IcsItem } from "../shared/depth";
+import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { periodKey, pickConsensus } from "../shared/compare";
 
 interface Env {
@@ -142,7 +142,7 @@ async function candles(symbol: string, range: string, ctx: ExecutionContext): Pr
     throw lastErr;
   });
 }
-const nyDate = (t: number) => new Date(t * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+// nyDate: see shared/depth.ts (arithmetic, never Intl in a hot loop).
 
 // ── /api/ticker/:symbol ────────────────────────────────────────────────
 /** Finnhub's metric=all is ~200 KB (170 KB of quarterly series). Keep only what the grades and quarter bars read,
@@ -202,9 +202,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // Past prints: Nasdaq gives report dates; Finnhub gives estimate/actual. Join on order (both newest-first).
   // Finnhub figures only fill gaps when they're in dollars too.
   const history: Reaction[] = [];
+  const barDates = chart ? chart.t.map(nyDate) : []; // computed once per build
   const closeOn = (day: string, offset: number) => {
     if (!chart) return null;
-    const dates = chart.t.map(nyDate);
+    const dates = barDates;
     let i = dates.findIndex((d) => d >= day);
     if (i < 0) return null;
     if (dates[i] !== day && offset === 0) return null;

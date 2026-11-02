@@ -3,13 +3,43 @@ import { useEffect, useState } from "react";
 import { BASE } from "./router";
 
 const mem = new Map<string, Promise<unknown>>();
+async function fetchJson(path: string) {
+  const r = await fetch(path);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error ?? "We couldn't reach the market data service.");
+  return body;
+}
+
+const CAL_CHUNK_DAYS = 7;
+const isoAdd = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+/** Long calendar ranges are fetched a week at a time: each Worker invocation then parses at most ~5 raw upstream
+ *  days, which keeps a cold month well inside the free plan's CPU budget (Cloudflare 1102). Chunks merge and dedupe;
+ *  a failed chunk becomes a warning instead of failing the month. */
+async function fetchCalendar(path: string): Promise<CalendarResponse> {
+  const u = new URL(path, location.origin);
+  const from = u.searchParams.get("from")!, to = u.searchParams.get("to")!;
+  if (!from || !to || isoAdd(from, CAL_CHUNK_DAYS) > to) return fetchJson(path);
+  const chunks: [string, string][] = [];
+  for (let d = from; d <= to; d = isoAdd(d, CAL_CHUNK_DAYS)) { const e = isoAdd(d, CAL_CHUNK_DAYS - 1); chunks.push([d, e < to ? e : to]); }
+  const parts = await Promise.allSettled(chunks.map(([f, t]) => fetchJson(`${BASE}/api/calendar?from=${f}&to=${t}`) as Promise<CalendarResponse>));
+  if (parts.every((p) => p.status === "rejected")) throw (parts[0] as PromiseRejectedResult).reason;
+  const seen = new Set<string>();
+  const out: CalendarResponse = { from, to, events: [], asOf: new Date().toISOString(), warnings: [] };
+  parts.forEach((p, i) => {
+    if (p.status === "rejected") { out.warnings.push(`Couldn't load ${chunks[i][0]}–${chunks[i][1]} — showing the rest.`); return; }
+    out.warnings.push(...(p.value.warnings ?? []));
+    for (const e of p.value.events ?? []) {
+      const k = `${e.s}|${e.d}`;
+      if (e.d < from || e.d > to || seen.has(k)) continue;
+      seen.add(k); out.events.push(e);
+    }
+  });
+  return out;
+}
+
 function get<T>(path: string): Promise<T> {
   if (!mem.has(path)) {
-    const p = fetch(path).then(async (r) => {
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.error ?? "We couldn't reach the market data service.");
-      return body;
-    });
+    const p = (path.startsWith(`${BASE}/api/calendar?`) ? fetchCalendar(path) : fetchJson(path)) as Promise<unknown>;
     p.catch(() => mem.delete(path));
     mem.set(path, p);
   }

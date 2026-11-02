@@ -36,7 +36,10 @@ export function shapeChart(t: number[], c: number[], days = 252, max = 260) {
   return { t: idx.map((i) => t[i]), c: idx.map((i) => r2(c[i]) as number), s50: idx.map((i) => r2(s50[i])), s200: idx.map((i) => r2(s200[i])) };
 }
 
-export const nyDate = (t: number) => new Date(t * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+/** Trading-day date (YYYY-MM-DD) of a Yahoo daily bar. Daily bars are stamped at the 9:30 ET open (13:30/14:30 UTC),
+ *  so the UTC calendar date *is* the New York date. Plain arithmetic, not Intl: a timezone-aware toLocaleDateString
+ *  per candle cost ~10k Intl calls per sheet and blew the Workers free-plan CPU budget (Cloudflare 1102). */
+export const nyDate = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
 
 /** Place each past report on the chart: the first chart point on/after the report date. */
 export function placeMarkers(chartT: number[], history: Reaction[]) {
