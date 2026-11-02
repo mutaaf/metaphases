@@ -25,6 +25,7 @@ import { actions } from "../lib/store";
 import { chaptersDone } from "../../shared/kidsQuestContent";
 import { QuestPage, StartHere, W, WordChips } from "./KidsQuest";
 import { VoiceCorner } from "./KidsVoice";
+import { AppNudge, AppPage } from "./KidsAppPage";
 import { canSpeak, markKidTyped, speakText, useVoiceSettings } from "../lib/voice";
 import "../styles/kids.css";
 
@@ -294,6 +295,7 @@ function StoryPage() {
         </div>
       </header>
       <StartHere />
+      <AppNudge />
       {loading && macro.loading ? (
         <div className="k-story"><Skeleton h={28} w="50%" /><Skeleton h={120} /><Skeleton h={60} /></div>
       ) : (
@@ -894,6 +896,7 @@ function GrownUps() {
     <div className="k-page k-grownups">
       <header className="k-hero"><Luna size={56} /><div><span className="k-eyebrow">Grown-up corner</span><h1>About <em>Metaphases Kids</em></h1></div></header>
       <ShareWithParent />
+      <AppNudge />
       <section className="k-section">
         <h2>What kids learn</h2>
         <ul className="k-list">
@@ -1165,6 +1168,7 @@ export default function KidsApp() {
     path === "/kids/ask" ? <AskPage /> :
     path === "/kids/start" ? <QuestPage key={location.search} /> :
     path === "/kids/grownups" ? <GrownUps /> :
+    path === "/kids/app" ? <AppPage Gate={ParentGate} /> :
     <StoryPage />;
   const tabOn = (t: string) => (t === "/kids" ? path === "/kids" : path.startsWith(t));
   return (

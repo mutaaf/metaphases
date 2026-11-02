@@ -648,3 +648,29 @@ html:has(.kids) { scroll-padding-top: 84px; scroll-padding-bottom: calc(110px + 
 .kids .k-code { grid-template-columns: minmax(0, 1fr); }
 .kids .k-code > *, .kids .k-ask-row > * { min-width: 0; }
 .kids .k-ask-row .k-btn { flex: none; }
+
+/* ── Moon Club app page (/kids/app) + nudge card ─────────────────────────────────────── */
+.kids .k-app-nudge {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 14px;
+  padding: 12px 16px; border-radius: 20px; background: var(--k-card); border: 1px solid var(--k-line);
+  box-shadow: var(--k-shadow, none); color: var(--k-ink); text-decoration: none; min-height: 68px;
+  transition: transform .18s cubic-bezier(.2,.8,.2,1);
+}
+.kids .k-app-nudge:active { transform: scale(.98); }
+.kids .k-app-nudge img { width: 44px; height: 44px; border-radius: 11px; }
+.kids .k-app-nudge b { display: block; font: 700 16px var(--display); }
+.kids .k-app-nudge small { display: block; color: var(--k-ink-2); font-size: 14px; }
+.kids .k-app-nudge-go { font-size: 28px; color: var(--k-ink-2); line-height: 1; }
+.kids .k-app-hero { display: grid; justify-items: center; text-align: center; gap: 10px; padding: 12px 0 4px; }
+.kids .k-app-icon { width: 96px; height: 96px; border-radius: 22px; box-shadow: 0 12px 30px rgba(35, 70, 216, .22); }
+.kids .k-app-hero h1 { margin: 0; font: 800 clamp(30px, 7vw, 46px)/1.05 var(--display); letter-spacing: -.02em; }
+.kids .k-app-lede { margin: 0; max-width: 34ch; font-size: 18px; color: var(--k-ink-2); }
+.kids .k-app-cta { min-width: 200px; min-height: 52px; font-size: 18px; margin-top: 6px; }
+.kids .k-app-shots {
+  list-style: none; margin: 0; padding: 4px 2px 12px; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(180px, 30%);
+  gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+}
+.kids .k-app-shots li { scroll-snap-align: center; }
+.kids .k-app-shots img { display: block; width: 100%; height: auto; border-radius: 26px; border: 1px solid var(--k-line); box-shadow: 0 14px 34px rgba(29, 27, 51, .14); }
+@media (max-width: 520px) { .kids .k-app-shots { grid-auto-columns: 62%; } }
+.kids .k-app-steps { margin-bottom: 14px; }
