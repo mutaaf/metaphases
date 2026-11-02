@@ -80,3 +80,23 @@ ${lines(wrap(when, 24), 96, 980, 72, 80, `font-family="Instrument Serif" font-st
 ${lines(wrap(blurb, 36), 96, 1180, 42, 58, `font-family="Schibsted Grotesk" fill="#3b3a37"`)}`;
   return frame("The big event this week", body);
 }
+
+/** Metaphases Kids invite card: friendly, no prices, no tickers — just the idea. */
+export function storyKidsSvg(): string {
+  const moons = [0, 1, 2, 3, 4].map((k) => {
+    const cx = 180 + k * 180, cy = 1180, r = 62;
+    const ring = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#f5f3ee" stroke="${ACCENT}" stroke-width="8"/>`;
+    if (k === 0) return ring;
+    if (k === 4) return ring + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${ACCENT}"/>`;
+    if (k === 2) return ring + `<path d="M${cx} ${cy - r}a${r} ${r} 0 0 1 0 ${2 * r}z" fill="${ACCENT}"/>`;
+    const rx = (r * 0.6).toFixed(1);
+    const sweep = k === 1 ? 0 : 1;
+    return ring + `<path d="M${cx} ${cy - r}a${r} ${r} 0 0 1 0 ${2 * r}a${rx} ${r} 0 0 ${sweep} 0-${2 * r}z" fill="${ACCENT}"/>`;
+  }).join("");
+  const body = `
+${lines(["Learn how the", "market works."], 84, 520, 132, 140, `font-family="Schibsted Grotesk" font-weight="900" letter-spacing="-4" fill="${INK}"`)}
+${lines(["With pretend money,", "real prices and a", "moon called Luna."], 96, 820, 68, 80, `font-family="Instrument Serif" font-style="italic" fill="${ACCENT}"`)}
+${moons}
+${lines(["Guess company report cards. Build a", "pretend piggy bank. Learn what a share is.", "No real money. No ads. Nothing to buy."], 96, 1400, 38, 54, `font-family="Schibsted Grotesk" fill="#3b3a37"`)}`;
+  return frame("Metaphases Kids · Market Moon Club", body);
+}

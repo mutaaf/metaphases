@@ -4,7 +4,7 @@
 //   POST /api/ai/models  {provider}  + x-mp-key → {provider, models, suggested}   (BYOK connect test)
 //   GET  /api/ai/status  → {edge, models, freeLimitPerHour, providers}
 // The free brain (Workers AI) is rate-limited per IP; BYOK calls are the user's own spend and aren't.
-import { buildMessages, isTask } from "./prompts";
+import { buildMessages, FREE_ONLY, isTask } from "./prompts";
 import { describeError, EDGE_MODELS, isProvider, listModels, pickModel, PROVIDERS, streamChat, type ProviderId } from "./providers";
 
 export interface AiEnv { AI?: { run(model: string, input: unknown, opts?: unknown): Promise<unknown> } }
@@ -62,9 +62,11 @@ export async function handleAi(p: string, req: Request, env: AiEnv): Promise<Res
   if (p === "/api/ai/stream" && req.method === "POST") {
     const body = await readBody(req);
     if (!body || !isTask(body.task)) return json({ error: "Unknown AI task." }, 400);
-    const key = req.headers.get("x-mp-key") ?? "";
-    const provider: ProviderId = isProvider(body.provider) && body.provider !== "edge" && key ? body.provider : "edge";
-    let model = typeof body.model === "string" && body.model.length < 120 ? body.model : "";
+    // Kid surfaces never use a grown-up's key: the free brain with the kid-safe prompt only.
+    const freeOnly = FREE_ONLY.includes(body.task);
+    const key = freeOnly ? "" : req.headers.get("x-mp-key") ?? "";
+    const provider: ProviderId = !freeOnly && isProvider(body.provider) && body.provider !== "edge" && key ? body.provider : "edge";
+    let model = !freeOnly && typeof body.model === "string" && body.model.length < 120 ? body.model : "";
     if (provider === "edge") {
       if (!env.AI) return json({ error: "The free brain isn't available here. Add your own key in AI settings." }, 503);
       const ip = await ipHash(req);
