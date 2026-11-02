@@ -15,7 +15,8 @@
     "lint": "tsc -b",
     "check:fast": "node scripts/check-backlog.mjs && npm run lint && npm test && vite build",
     "check": "npm run check:fast && playwright test",
-    "refresh:data": "python3 scripts/build_universe.py && python3 scripts/refresh_etfs.py"
+    "refresh:data": "python3 scripts/build_universe.py && python3 scripts/refresh_etfs.py",
+    "export:kids": "npx -y tsx scripts/export-kids-content.ts"
   },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
