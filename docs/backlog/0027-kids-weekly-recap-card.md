@@ -1,12 +1,12 @@
 ---
 id: 0027
 title: Kids weekly recap — "your week in the Moon Club" card a grown-up can print or share
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: engagement
 created: 2026-11-02
-pr:
+pr: 27
 by: operator
 ---
 
@@ -18,10 +18,10 @@ Kids remember what they can show someone. A once-a-week recap ("You guessed 3 re
 - Read-aloud, and a "Show a grown-up" button that opens the parental gate, then offers a 9:16 image via a new worker route `/og/story/kids-recap.png?…` whose query carries only counts (no names, no free text). Never shared from the kid side.
 
 ## Acceptance criteria
-- [ ] Recap renders from local data only; no network call except the gated image
-- [ ] The image contains no personal data and no prices beyond percentages
-- [ ] Sharing is only reachable behind the parental gate
-- [ ] Works at 390×844 and 1440×900; reading level ≤ grade 5
+- [x] Recap renders from local data only; no network call except the gated image
+- [x] The image contains no personal data and no prices beyond percentages
+- [x] Sharing is only reachable behind the parental gate
+- [x] Works at 390×844 and 1440×900; reading level ≤ grade 5
 
 ## Test plan
 Unit: recap builder from a fixture state. E2E: Friday clock → card visible; share is gated.
