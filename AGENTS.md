@@ -84,5 +84,5 @@ The thresholds in `shared/grades.ts` must stay identical to Market Digest's `GRA
 - [ ] Looked at it in screenshots at 390×844 and 1440×900
 - [ ] Loading, empty, error and partial states handled; new jargon wrapped in `<Term>`
 - [ ] New route or surface has share meta + title
-- [ ] `docs/CHANGELOG.md` line; ticket set to `shipped` with its PR number
+- [ ] `docs/CHANGELOG.md` line; ticket set to `shipped` with its PR number. **House style for every update and release note:** clear about what changed, then a little fun, with a family-friendly pop-culture nod (Pixar, Star Wars, Marvel, Mario, Pokémon, Back to the Future, Apollo 13…). Rules: a name-drop or a famous line under 15 words; never song lyrics; no logos; nothing PG-13. The native kids app follows the same style (`mutaaf/moon-club` `release-notes/README.md`).
 - [ ] **Launcher registration** for any new public surface: deep links in mutaafaziz.com ⌘K and Digital Craft /labs (operator PRs)
