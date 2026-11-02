@@ -147,14 +147,15 @@ export function levelFor(points: number): { index: number; name: string; next: n
   return { index: i, name: LEVELS[i].name, next, progress: Math.max(0, Math.min(1, progress)) };
 }
 
-export interface KidsProgress { guesses: Guess[]; lessons: string[]; piggy: boolean; piggyCount: number }
+export interface KidsProgress { guesses: Guess[]; lessons: string[]; piggy: boolean; piggyCount: number; quest?: boolean }
 export function pointsFor(p: KidsProgress): number {
   const tries = p.guesses.length * 2;
   const right = p.guesses.filter((g) => g.result === "right").length * 10 + p.guesses.filter((g) => g.priceResult === "right").length * 5;
-  return tries + right + p.lessons.length * 10 + (p.piggy ? 5 : 0);
+  return tries + right + p.lessons.length * 10 + (p.piggy ? 5 : 0) + (p.quest ? 15 : 0);
 }
 export interface Badge { id: string; name: string; why: string; phase: number }
 export const BADGES: Badge[] = [
+  { id: "lemonade", name: "Lemonade Boss", why: "You ran Luna's lemonade stand and learned the big words.", phase: 2 },
   { id: "first-guess", name: "First Guess", why: "You made your first report card guess.", phase: 0 },
   { id: "good-guess", name: "Sharp Eye", why: "One of your guesses was right!", phase: 1 },
   { id: "streak-3", name: "Hot Streak", why: "Three right guesses in a row.", phase: 3 },
@@ -166,6 +167,7 @@ export const BADGES: Badge[] = [
 ];
 export function badgesFor(p: KidsProgress, totalLessons: number): string[] {
   const out: string[] = [];
+  if (p.quest) out.push("lemonade");
   if (p.guesses.length) out.push("first-guess");
   if (p.guesses.some((g) => g.result === "right")) out.push("good-guess");
   const resolved = p.guesses.filter((g) => g.result).sort((a, b) => a.d.localeCompare(b.d));

@@ -22,7 +22,10 @@ import { useDialog } from "../lib/dialog";
 import { kids, useKids } from "../lib/kidsStore";
 import { appPath, BASE, href, navigate, useLocation } from "../lib/router";
 import { actions } from "../lib/store";
+import { QuestPage, StartHere, W, WordChips } from "./KidsQuest";
 import "../styles/kids.css";
+
+const progressOf = (st: ReturnType<typeof useKids>) => ({ guesses: st.guesses, lessons: st.lessons, piggy: !!st.piggy, piggyCount: st.piggy?.holdings.length ?? 0, quest: st.questDone });
 
 // ── Little pieces ───────────────────────────────────────────────────────────────────────────
 /** Luna, the club's moon. Mostly lit, with a calm face. */
@@ -131,6 +134,7 @@ function ReportStory({ e, co, today }: { e: EarningsEvent; co: KidCo; today: str
         <ReadAloud text={read} />
         <button className="k-btn k-btn-primary" onClick={(ev) => { ev.stopPropagation(); navigate("/kids/guess"); }}>Guess: beat or miss? 🎯</button>
       </div>
+      <WordChips ks={["company", "report", "guess", "profit"]} />
     </>
   );
 }
@@ -158,7 +162,7 @@ function QuizCard({ q, seed }: { q: Quiz; seed: number }) {
 function useRecap(): Recap | null {
   const st = useKids();
   const today = todayISO();
-  const points = pointsFor({ guesses: st.guesses, lessons: st.lessons, piggy: !!st.piggy, piggyCount: st.piggy?.holdings.length ?? 0 });
+  const points = pointsFor(progressOf(st));
   return useMemo(() => buildRecap({ guesses: st.guesses, lessonDates: st.lessonDates, piggy: st.piggy, points, level: levelFor(points).index }, today), [st, today, points]);
 }
 
@@ -283,6 +287,7 @@ function StoryPage() {
           <h1>Today's <em>Market Story</em></h1>
         </div>
       </header>
+      <StartHere />
       {loading && macro.loading ? (
         <div className="k-story"><Skeleton h={28} w="50%" /><Skeleton h={120} /><Skeleton h={60} /></div>
       ) : (
@@ -310,6 +315,7 @@ function StoryPage() {
                 <p className="k-line">{s.w.line}</p>
                 <p className="k-small">Grown-ups check a "mood meter" for the market. Today it says {s.score} out of 100. 0 is very scared, 100 is very brave.</p>
                 <div className="k-card-actions"><ReadAloud text={`Market weather: ${s.w.title}. ${s.w.line}`} /></div>
+                <WordChips ks={["mood", "stock", "share"]} />
               </>
             )}
             {s.kind === "recap" && <RecapCard r={s.r} />}
@@ -398,7 +404,7 @@ function GuessPage() {
         <span className="k-hero-emoji" aria-hidden>🎯</span>
         <div><span className="k-eyebrow">A guessing game</span><h1>Guess the <em>Report Card</em></h1></div>
       </header>
-      <p className="k-intro">Before a company shares its report card, grown-ups guess its profit. Will the company <b>beat</b> that guess (do better) or <b>miss</b> (do worse)? Make your guess, then come back to see!</p>
+      <p className="k-intro">Before a <W k="company" /> shares its <W k="report" />, grown-ups guess its <W k="profit" />. Will the company <W k="beat"><b>beat</b></W> that guess (do better) or <W k="miss"><b>miss</b></W> (do worse)? Make your guess, then come back to see!</p>
       <ReadAloud text="Before a company shares its report card, grown-ups guess its profit. Will the company beat that guess, or miss? Make your guess, then come back to see." />
 
       <LeagueBoard events={events} />
@@ -482,7 +488,7 @@ function PiggySetup() {
   };
   return (
     <>
-      <p className="k-intro">You have <b>🌙 $1,000 pretend coins</b>. Pick up to 5 companies you know. Your coins will follow their <b>real prices</b>, but it's all pretend. Nothing is bought for real.</p>
+      <p className="k-intro">You have <b>🌙 $1,000 pretend coins</b>. Pick up to 5 <W k="company">companies</W> you know. Your coins buy pretend <W k="share">shares</W> that follow their <W k="price">real prices</W>, but it's all pretend. Nothing is bought for real.</p>
       <ReadAloud text="You have one thousand pretend coins. Pick up to five companies you know. Your coins will follow their real prices, but it's all pretend. Nothing is bought for real." />
       <ul className="k-pickgrid" aria-label="Companies you can pick">
         {KID_COMPANIES.map((c) => {
@@ -592,7 +598,7 @@ function PiggyPage() {
 // ── Moon School ─────────────────────────────────────────────────────────────────────────────
 function Badges() {
   const st = useKids();
-  const have = new Set(badgesFor({ guesses: st.guesses, lessons: st.lessons, piggy: !!st.piggy, piggyCount: st.piggy?.holdings.length ?? 0 }, LESSONS.length));
+  const have = new Set(badgesFor(progressOf(st), LESSONS.length));
   return (
     <section className="k-section" aria-label="Your badges">
       <h2>Your moon badges</h2>
@@ -617,6 +623,7 @@ function SchoolPage() {
         <span className="k-hero-emoji" aria-hidden>🎓</span>
         <div><span className="k-eyebrow">{lessons.length} of {LESSONS.length} done</span><h1>Moon <em>School</em></h1></div>
       </header>
+      <StartHere />
       <p className="k-intro">Short lessons, one idea each. Finish a lesson to fill your moon!</p>
       <ul className="k-lessons">
         {LESSONS.map((l, i) => {
@@ -1016,7 +1023,7 @@ const KTABS = [
 
 function NewBadgeToast() {
   const st = useKids();
-  const have = badgesFor({ guesses: st.guesses, lessons: st.lessons, piggy: !!st.piggy, piggyCount: st.piggy?.holdings.length ?? 0 }, LESSONS.length);
+  const have = badgesFor(progressOf(st), LESSONS.length);
   const fresh = have.filter((b) => !st.seenBadges.includes(b));
   if (!fresh.length) return null;
   const b = BADGES.find((x) => x.id === fresh[0])!;
@@ -1034,7 +1041,7 @@ export default function KidsApp() {
   const path = appPath();
   const st = useKids();
   const [gate, setGate] = useState(false);
-  const points = pointsFor({ guesses: st.guesses, lessons: st.lessons, piggy: !!st.piggy, piggyCount: st.piggy?.holdings.length ?? 0 });
+  const points = pointsFor(progressOf(st));
   const lvl = levelFor(points);
   useEffect(() => { if (!path.endsWith("/print")) document.title = "Metaphases Kids: the Market Moon Club"; window.scrollTo({ top: 0 }); }, [path]);
   const lessonId = path.match(/^\/kids\/school\/([a-z-]+)(\/print)?$/);
@@ -1046,6 +1053,7 @@ export default function KidsApp() {
     path === "/kids/school" ? <SchoolPage /> :
     lesson ? <LessonPage key={lesson.id} lesson={lesson} /> :
     path === "/kids/ask" ? <AskPage /> :
+    path === "/kids/start" ? <QuestPage key={location.search} /> :
     path === "/kids/grownups" ? <GrownUps /> :
     <StoryPage />;
   const tabOn = (t: string) => (t === "/kids" ? path === "/kids" : path.startsWith(t));
