@@ -250,7 +250,9 @@ export const KID_WORDS: KidWord[] = [
 
 // ── Tap-a-word: picture cards for every word a kid meets on a card (unit-tested reading level) ──
 export type QuestStage = "company" | "shares" | "price" | "report";
-export interface KidTerm { word: string; emoji: string; means: string; example: string; play?: QuestStage }
+/** Where "Play it" jumps: a lemonade stage, or a later chapter's stage ("save:jar", "dividends:payout"). */
+export type QuestPlay = QuestStage | `save:${string}` | `dividends:${string}`;
+export interface KidTerm { word: string; emoji: string; means: string; example: string; play?: QuestPlay }
 export const KID_TERMS = {
   company: { word: "Company", emoji: "🏪", means: "A team of people who sell something to make money.", example: "Nike is a company. It sells sneakers.", play: "company" },
   profit: { word: "Profit", emoji: "✨", means: "The money left after a company pays its bills.", example: "You sell lemonade for $10. The lemons cost $4. You keep $6.", play: "company" },
@@ -262,6 +264,10 @@ export const KID_TERMS = {
   beat: { word: "Beat", emoji: "👍", means: "The company made more than the grown-ups guessed.", example: "They guessed $2. It made $3. It beat!", play: "report" },
   miss: { word: "Miss", emoji: "👎", means: "The company made less than the grown-ups guessed.", example: "They guessed $2. It made $1. It missed.", play: "report" },
   mood: { word: "Market mood", emoji: "🌦️", means: "How brave or scared people feel about buying shares today.", example: "Sunny means brave. Stormy means scared." },
+  saving: { word: "Saving", emoji: "🫙", means: "Keeping money safe so you can use it later.", example: "You put $10 in a jar at the bank. It stays safe.", play: "save:jar" },
+  investing: { word: "Investing", emoji: "🌳", means: "Using money to buy a slice of a company so it can grow.", example: "It can grow more than a jar, but it can go down too.", play: "save:tree" },
+  interest: { word: "Interest", emoji: "➕", means: "A little extra money the bank pays you for keeping your money there.", example: "Keep $10 in the bank for a year. Get 20 cents extra.", play: "save:jar" },
+  dividend: { word: "Dividend", emoji: "🪙", means: "A little of a company's profit, shared with each owner.", example: "Own one slice. Get $1 when the company shares.", play: "dividends:payout" },
 } satisfies Record<string, KidTerm>;
 export type KidTermKey = keyof typeof KID_TERMS;
 

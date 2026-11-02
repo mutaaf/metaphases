@@ -22,12 +22,13 @@ import { useDialog } from "../lib/dialog";
 import { kids, useKids } from "../lib/kidsStore";
 import { appPath, BASE, href, navigate, useLocation } from "../lib/router";
 import { actions } from "../lib/store";
+import { chaptersDone } from "../../shared/kidsQuestContent";
 import { QuestPage, StartHere, W, WordChips } from "./KidsQuest";
 import { VoiceCorner } from "./KidsVoice";
 import { canSpeak, markKidTyped, speakText, useVoiceSettings } from "../lib/voice";
 import "../styles/kids.css";
 
-const progressOf = (st: ReturnType<typeof useKids>) => ({ guesses: st.guesses, lessons: st.lessons, piggy: !!st.piggy, piggyCount: st.piggy?.holdings.length ?? 0, quest: st.questDone });
+const progressOf = (st: ReturnType<typeof useKids>) => ({ guesses: st.guesses, lessons: st.lessons, piggy: !!st.piggy, piggyCount: st.piggy?.holdings.length ?? 0, quest: st.questDone, chapters: chaptersDone(st.quest, st.questDone) });
 
 // ── Little pieces ───────────────────────────────────────────────────────────────────────────
 /** Luna, the club's moon. Mostly lit, with a calm face. */
