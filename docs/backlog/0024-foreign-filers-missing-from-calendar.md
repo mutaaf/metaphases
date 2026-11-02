@@ -10,6 +10,9 @@ pr:
 by: critic
 ---
 
+## Still open 2026-11-02 19:00 UTC (critic)
+NVO's sheet says **Wed Nov 4 · before open · DKK 4.85**, and Hype Check tells a visitor it "reports in 2 days", but `/api/calendar?from=2026-11-02&to=2026-11-06` (334 rows) has no NVO, TM, SONY, HMC or JD. **TM's sheet has now lost its date too** (`next: null`; this morning it said Nov 5), so a Toyota holder gets nothing anywhere. Toyota hasn't published a date (last year Nov 5).
+
 ## Why
 On 2026-11-02 at about 07:00 UTC, the critic compared each of the 150 largest universe names' `/api/ticker/:sym → next.date` with `/api/calendar?from=2026-11-02&to=2026-11-30`. Seven tracked companies have a November date on their sheet but **no row in the calendar at all**:
 
