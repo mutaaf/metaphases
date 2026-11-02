@@ -7,6 +7,8 @@ import { writeFileSync } from "node:fs";
 import * as K from "../shared/kids";
 import * as C from "../shared/kidsContent";
 import * as W from "../shared/kidsWeek";
+import * as T from "../shared/kidsTransfer";
+import { TRANSFER_SAMPLE } from "../shared/kidsTransfer.sample";
 
 type Step = { t: "say"; emoji: string; text: string } | { t: "check"; q: string; options: string[]; answer: number; why: string } | { t: "sort"; q: string; buckets: [string, string]; items: { emoji: string; text: string; b: 0 | 1 }[]; why: string };
 
@@ -88,6 +90,16 @@ async function main() {
     ],
     leagueRows: [{ players: players.slice(1, 3), limit: 10, out: W.leagueRows(players.slice(1, 3), 10) }],
     evenSplitDefault: coinsSplit,
+    // Move my progress (web → app): the app must decode `code` to `state`, and reject every `bad` code.
+    transfer: (() => {
+      const code = T.encodeTransfer(TRANSFER_SAMPLE);
+      const flip = (i: number) => code.slice(0, i) + (code[i] === "A" ? "B" : "A") + code.slice(i + 1);
+      return {
+        code, state: TRANSFER_SAMPLE, pasted: `Moon Club progress:\n${code.slice(0, 30)}\n${code.slice(30)}\n`,
+        checksums: ["", "abc", "eyJ2IjoxfQ", code.slice(T.TRANSFER_PREFIX.length, code.lastIndexOf("-"))].map((body) => ({ body, out: T.transferChecksum(body) })),
+        bad: [{ code: "hello", why: "notACode" }, { code: flip(T.TRANSFER_PREFIX.length + 12), why: "damaged" }, { code: code.slice(0, -1), why: "damaged" }],
+      };
+    })(),
   };
   function K_WORDS_LEN() { return C.KID_WORDS.length; }
 

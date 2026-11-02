@@ -674,3 +674,6 @@ html:has(.kids) { scroll-padding-top: 84px; scroll-padding-bottom: calc(110px + 
 .kids .k-app-shots img { display: block; width: 100%; height: auto; border-radius: 26px; border: 1px solid var(--k-line); box-shadow: 0 14px 34px rgba(29, 27, 51, .14); }
 @media (max-width: 520px) { .kids .k-app-shots { grid-auto-columns: 62%; } }
 .kids .k-app-steps { margin-bottom: 14px; }
+/* Move progress to the app (grown-up corner) */
+.kids .k-move-code { width: 100%; min-width: 0; box-sizing: border-box; font: 500 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; word-break: break-all; resize: none; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--k-hair, rgba(0,0,0,.1)); background: rgba(255,255,255,.7); color: inherit; }
+
