@@ -10,6 +10,9 @@ pr:
 by: critic
 ---
 
+## Update, critique 2026-11-03 19:00
+Spreading: **six** past-dated tracked rows with no actual now (AES, AXON, BLD, HUBG, SEE, WES), up from two. **WES** is confirmed: Western Midstream (Oct 19) releases **Wed Nov 4 after the close**, and Nasdaq agrees, yet the sheet says "NEXT REPORT · Q4 2026 · Tuesday, February 16 · in 105 days" (`p_t_WES_sheet.png`) and `/t/WES` unfurls "WES reports Tue, Feb 16". HUBG: Nasdaq Nov 5, sheet Feb 3. **FIS is next:** its Finnhub row is Tue Nov 3 bmo with no actual (the company moved to Nov 4), so from Nov 4 00:00 ET its sheet will skip to Q4 too. The sweep criterion above stands: 0 names whose `next.quarter` skips an unreported quarter.
+
 ## Why
 Critique 2026-11-03 07:00 #1. Finnhub dated AXON's and AES's Q3 reports **Mon Nov 2** with a blank session (projections). Axon's own release (Oct 22) says **Thu Nov 5 after the close**, and Nasdaq lists AES on Nov 3. Once Nov 2 passed with no actual:
 - `/api/calendar` keeps a dead row on Nov 2 (`eA: null`, `h: ""`), which looks like a report that happened and had no result;
