@@ -60,4 +60,42 @@ describe("calendar fetching", () => {
     expect(calls.length).toBe(1 + 5);
     expect(new Set(r.events.map((e) => e.d)).size).toBe(5);
   });
+
+  it("caps in-flight per-day calls when a busy week is truncated", async () => {
+    let inFlight = 0, peak = 0;
+    rowsFor = (from, to) => (from === to ? [row("AAPL", from)] : Array.from({ length: 1500 }, (_, i) => row(`X${i}`, from)));
+    const base = (globalThis.fetch as any).getMockImplementation();
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      inFlight++; peak = Math.max(peak, inFlight);
+      await new Promise((ok) => setTimeout(ok, 5));
+      try { return await base(u); } finally { inFlight--; }
+    }));
+    const r = await get("2027-01-04", "2027-01-22"); // three busy weeks
+    expect(new Set(r.events.map((e) => e.d)).size).toBe(15);
+    expect(peak).toBeLessThanOrEqual(6);
+  });
+
+  it("a failed range call serves the last good copy without fanning out into per-day calls", async () => {
+    rowsFor = () => ["2027-03-01", "2027-03-02", "2027-03-03", "2027-03-04", "2027-03-05"].map((d) => row("AAPL", d));
+    await get("2027-03-01", "2027-03-05"); // warm the stale copies
+    (globalThis as any).caches.default.store.forEach((_: string, k: string) => {
+      if (!k.includes("stale")) (globalThis as any).caches.default.store.delete(k);
+    });
+    calls = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => { calls.push(new URL(u).search); return new Response("down", { status: 500 }); }));
+    const r = await get("2027-03-01", "2027-03-05");
+    expect(calls.length).toBe(1);
+    expect(r.warnings).toEqual([]);
+    expect(r.events.length).toBe(5);
+  });
+
+  it("a failed range call with no stale copy says so for each day and caches nothing as empty", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => { calls.push(new URL(u).search); return new Response("down", { status: 500 }); }));
+    const r = await get("2027-06-07", "2027-06-11");
+    expect(calls.length).toBe(1);
+    expect(r.warnings.length).toBe(5);
+    expect(r.events).toEqual([]);
+    const keys = [...(globalThis as any).caches.default.store.keys()].filter((k: string) => k.includes("cal%3Av2%3A2027-06"));
+    expect(keys).toEqual([]);
+  });
 });

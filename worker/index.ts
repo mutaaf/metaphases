@@ -121,6 +121,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext): Pr
   if (!missing.length) return out;
   const from = days[Math.min(...missing)], to = days[Math.max(...missing)];
   let byDay: Map<string, EarningsEvent[]> | null = null;
+  let rangeError: unknown = null;
   try {
     const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${from}&to=${to}&token=${env.FINNHUB_API_KEY}`);
     const rows = data.earningsCalendar ?? [];
@@ -128,18 +129,31 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext): Pr
       byDay = new Map();
       for (const e of toEvents(rows)) (byDay.get(e.d) ?? byDay.set(e.d, []).get(e.d)!).push(e);
     }
-  } catch { /* fall through to per-day */ }
-  await Promise.all(missing.map(async (i) => {
+  } catch (e) {
+    // A failed range call (429 after retries, upstream down) must not fan out into per-day retries:
+    // that only deepens the rate limit. Go straight to the last good copy.
+    rangeError = e;
+  }
+  const settle = async (i: number, load: () => Promise<EarningsEvent[]>) => {
     const d = days[i];
     try {
-      const ev = byDay ? (byDay.get(d) ?? []) : await fetchCalendarDay(d, env);
+      const ev = await load();
       putDay(d, ev, today, ctx);
       out[i] = { status: "fulfilled", value: ev };
     } catch (reason) {
       const stale = await caches.default.match(CAL(`cal:stale:v2:${d}`));
       out[i] = stale ? { status: "fulfilled", value: (await stale.json()) as EarningsEvent[] } : { status: "rejected", reason };
     }
-  }));
+  };
+  if (rangeError) {
+    await Promise.all(missing.map((i) => settle(i, () => Promise.reject(rangeError))));
+  } else if (byDay) {
+    const m = byDay;
+    await Promise.all(missing.map((i) => settle(i, async () => m.get(days[i]) ?? [])));
+  } else {
+    // Truncated busy week: day by day, at most 2 in flight (3 weeks in parallel stays ≤ 6 calls at once).
+    await pool(missing, 2, (i) => settle(i, () => fetchCalendarDay(days[i], env)));
+  }
   return out;
 }
 
