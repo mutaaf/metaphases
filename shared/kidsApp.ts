@@ -4,7 +4,7 @@
 export const MOON_CLUB_APP = {
   name: "Moon Club",
   /** e.g. "https://testflight.apple.com/join/AbCd1234". Null until Beta App Review approves the public link. */
-  testflight: null as string | null,
+  testflight: "https://testflight.apple.com/join/yW7rzq7P" as string | null,
   /** The App Store listing, once Moon Club is released publicly (after the COPPA review). */
   appStore: null as string | null,
 };
