@@ -22,6 +22,11 @@ export const UNITS: Unit[] = [
   { id: "growing", title: "Saving and investing", emoji: "🌱", blurb: "Keep it safe, or help it grow." },
   { id: "dividends", title: "Dividends", emoji: "🍰", blurb: "When your slice pays you." },
   { id: "smart", title: "Money-smart", emoji: "🧠", blurb: "Spread out, be patient, check facts." },
+  // Market World (the Moon Club app's map): reading a chart, one idea at a time. Clues, never promises.
+  { id: "candles", title: "Candles", emoji: "🕯️", blurb: "A whole day of a price in one tiny picture." },
+  { id: "trends", title: "Trends", emoji: "🛤️", blurb: "Up, down or sideways over many days." },
+  { id: "patterns", title: "Floors and ceilings", emoji: "⛰️", blurb: "Spots a price keeps bouncing off." },
+  { id: "signals", title: "Busy days and smooth lines", emoji: "🌊", blurb: "Volume, averages and report-day jumps." },
 ];
 
 const say = (emoji: string, text: string): Step => ({ t: "say", emoji, text });
@@ -229,6 +234,89 @@ export const LESSONS: Lesson[] = [
     say("🙋", "If it feels too good to be true, stop and ask a grown-up."),
     check("Someone says \"Double your money by Friday, for sure!\" What do you do?", ["Stop and ask a grown-up", "Send them your money", "Tell them your password"], "Big promises that are for sure are a red flag. Ask a grown-up."),
   ]),
+  // ── Candles ──
+  L("candles", "candle", "What's a candle?", "🕯️", [
+    say("🕯️", "A candle is a tiny picture of one day of a price."),
+    say("📊", "The fat part is the body. It shows where the price started and where it ended."),
+    say("📈", "Green means the price ended higher than it started. Red means it ended lower."),
+    check("A candle is green. What happened that day?", ["The price ended higher", "The price ended lower", "Nothing at all"], "Green means it ended higher than it started."),
+  ]),
+  L("candles", "wicks", "Wicks and colors", "📊", [
+    say("🕯️", "The thin lines on the top and bottom are called wicks."),
+    say("📈", "The top of the wick is the highest price that day. The bottom is the lowest."),
+    say("🎢", "A long wick means the price went far, then came back."),
+    check("What does the top of the wick show?", ["The highest price that day", "The price next year", "How many people own it"], "The top of the wick is the highest the price got that day."),
+    sort("Green or red candle?", ["Green", "Red"], [
+      { emoji: "👍", text: "Starts at $5, ends at $8", b: 0 }, { emoji: "👎", text: "Starts at $9, ends at $6", b: 1 },
+      { emoji: "👍", text: "Starts at $2, ends at $3", b: 0 }, { emoji: "👎", text: "Starts at $7, ends at $4", b: 1 },
+    ], "Ended higher is green. Ended lower is red."),
+  ]),
+  L("candles", "tug-of-war", "Tug-of-war days", "🤝", [
+    say("🤝", "Some days, buyers and sellers pull hard both ways, like a game of tug-of-war."),
+    say("🕯️", "The price goes way up and way down, but ends near where it started."),
+    say("📊", "That candle has a tiny body and long wicks on top and bottom."),
+    check("A candle has a tiny body and long wicks. What kind of day was it?", ["A tug-of-war day", "A calm day", "A day with no trading"], "Long wicks and a tiny body mean the price swung both ways."),
+  ]),
+  // ── Trends ──
+  L("trends", "trend", "What's a trend?", "📈", [
+    say("🛤️", "A trend is the way a price is going over many days."),
+    say("📈", "If most days end higher, the trend goes up."),
+    say("🎢", "If most days end lower, the trend goes down."),
+    say("〰️", "Prices wiggle every day. Look at the big picture, not one day."),
+    check("A price wiggles but keeps climbing for a month. The trend is…", ["Up", "Down", "Sideways"], "It keeps climbing, so the trend is up, even with wiggles."),
+  ]),
+  L("trends", "sideways", "Sideways days", "〰️", [
+    say("〰️", "Sometimes a price goes up, then down, then up again, but stays in the same place."),
+    say("🛤️", "That is a sideways trend. It is like walking on flat ground."),
+    check("A price starts at $10. After a month of wiggles it is still $10. The trend is…", ["Sideways", "Up", "Down"], "It ended where it started, so it went sideways."),
+    say("🤞", "A trend shows what already happened. It does not promise what comes next."),
+    check("Does an up trend promise the price will keep going up?", ["No, it can change", "Yes, always"], "A trend can change any day. It is a clue, not a promise."),
+  ]),
+  L("trends", "zoom-out", "Zoom out", "🔭", [
+    say("🔭", "One day can look scary. Ten days can tell a calmer story."),
+    say("📈", "Zoom out to see more days. The trend is easier to spot."),
+    say("🐢", "People who invest for years look at years, not days."),
+    check("One red day in a month of green days. What is the trend?", ["Still up", "Now down", "Sideways"], "One red day does not change a month of going up."),
+  ]),
+  // ── Floors and ceilings ──
+  L("patterns", "floor-ceiling", "Floors and ceilings", "🪜", [
+    say("🪜", "Sometimes a price keeps falling to the same low spot, then bounces. That spot is the floor."),
+    say("🏠", "Sometimes a price keeps stopping at the same high spot. That spot is the ceiling."),
+    say("🔤", "Grown-ups call the floor support. They call the ceiling resistance."),
+    check("A price keeps bouncing up from $20. What is $20?", ["The floor", "The ceiling", "The wick"], "A spot it keeps bouncing up from is the floor."),
+  ]),
+  L("patterns", "breakout", "Breakouts", "🚀", [
+    say("🚀", "When a price pushes up through its ceiling, that is a breakout."),
+    say("🎢", "When a price falls through its floor, that is a breakdown."),
+    say("🤔", "Lots of breakouts fail. The price can fall right back. That is normal!"),
+    check("The ceiling was $50. Now the price is $55. What happened?", ["A breakout", "A breakdown", "Nothing"], "It pushed up through the ceiling. That is a breakout."),
+  ]),
+  L("patterns", "clues", "Clues, not promises", "🤞", [
+    say("🕵️", "Shapes on a chart are clues. They show what happened before."),
+    say("🤞", "A clue is not a promise. News and surprises can change the price fast."),
+    say("🙋", "People who know a lot still guess wrong. That is normal."),
+    check("A chart shows a shape you know. What does it mean?", ["It is a clue, not a promise", "The price must go up", "Buy right now"], "A shape is only a clue. Nobody knows for sure what comes next."),
+    check("Who knows for sure what a price will do next?", ["Nobody", "A video", "My friend"], "Nobody can know for sure. Not even experts."),
+  ]),
+  // ── Busy days and smooth lines ──
+  L("signals", "volume", "Volume", "🔊", [
+    say("🔊", "Volume means how many shares people traded in a day."),
+    say("📣", "A busy day has lots of trading. A quiet day has a little."),
+    say("📝", "Report card days are often busy. Lots of people react to the news."),
+    check("What does volume tell you?", ["How many shares were traded", "How loud the market is", "The price next week"], "Volume counts how many shares changed hands."),
+  ]),
+  L("signals", "moving-average", "The smooth line", "〰️", [
+    say("〰️", "Prices zig and zag. That can make the trend hard to see."),
+    say("➕", "A moving average takes the last few prices and finds the middle."),
+    say("📈", "That makes a smooth line. It helps you see the trend."),
+    check("Why do people use a moving average?", ["To see the trend more easily", "To make the price go up", "To count shares"], "The smooth line hides the wiggles, so the trend is easier to see."),
+  ]),
+  L("signals", "report-jump", "Report-day jumps", "🎢", [
+    say("📝", "On report card day, a price can jump up or drop down fast."),
+    say("👍", "A beat can make a price jump. But not always!"),
+    say("😮", "Sometimes a company beats and the price still drops. People wanted even more."),
+    check("A company beat the guess. Will the price always go up?", ["No, not always", "Yes, always"], "Not always. People may have wanted even more."),
+  ]),
 ];
 export const lessonUnit = (l: Lesson) => UNITS.find((u) => u.id === l.unit)!;
 
@@ -268,6 +356,15 @@ export const KID_TERMS = {
   investing: { word: "Investing", emoji: "🌳", means: "Using money to buy a slice of a company so it can grow.", example: "It can grow more than a jar, but it can go down too.", play: "save:tree" },
   interest: { word: "Interest", emoji: "➕", means: "A little extra money the bank pays you for keeping your money there.", example: "Keep $10 in the bank for a year. Get 20 cents extra.", play: "save:jar" },
   dividend: { word: "Dividend", emoji: "🪙", means: "A little of a company's profit, shared with each owner.", example: "Own one slice. Get $1 when the company shares.", play: "dividends:payout" },
+  candle: { word: "Candle", emoji: "🕯️", means: "A tiny picture of one day of a price.", example: "A green candle means the price ended higher that day." },
+  wick: { word: "Wick", emoji: "📊", means: "The thin line on a candle. It shows the highest and lowest price that day.", example: "A long wick means the price went far, then came back." },
+  trend: { word: "Trend", emoji: "🛤️", means: "The way a price is going over many days: up, down or sideways.", example: "Most days end higher, so the trend is up." },
+  support: { word: "Support (floor)", emoji: "🪜", means: "A low spot a price keeps bouncing up from.", example: "The price fell to $20 three times and bounced each time." },
+  resistance: { word: "Resistance (ceiling)", emoji: "🏠", means: "A high spot a price keeps stopping at.", example: "The price hit $50 twice and turned back down." },
+  breakout: { word: "Breakout", emoji: "🚀", means: "When a price pushes up through its ceiling.", example: "The ceiling was $50. Now it is $55. Lots of breakouts fail, too." },
+  pattern: { word: "Pattern", emoji: "🕵️", means: "A shape on a chart. It is a clue, not a promise.", example: "Two hills in a row is a pattern. The next day can still surprise you." },
+  volume: { word: "Volume", emoji: "🔊", means: "How many shares people traded in a day.", example: "Report card days often have big volume." },
+  average: { word: "Moving average", emoji: "〰️", means: "A smooth line made from the middle of the last few prices.", example: "It hides the wiggles, so the trend is easier to see." },
 } satisfies Record<string, KidTerm>;
 export type KidTermKey = keyof typeof KID_TERMS;
 
