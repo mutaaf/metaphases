@@ -1,4 +1,5 @@
 import { test, expect } from "./fixtures";
+import { readFileSync } from "node:fs";
 
 test("the ticker sheet charts a year of prices with every report marked", async ({ page }) => {
   await page.goto("./t/NVDA");
@@ -55,4 +56,27 @@ test("a revenue figure on a different basis from its estimate isn't judged (0011
 
   await page.goto("./retrace");
   await expect(page.locator(".stat-row .rev-excluded")).toContainText(/\d+ can't compare/);
+});
+
+test("a date the company announced itself says so and links its announcement (0013)", async ({ page }) => {
+  const src = "https://newsroom.arm.com/news/arm-announces-earnings-release-date-for-second-quarter-fiscal-year-ending-2027";
+  // The worker applies data/date-overrides.json (unit-tested); here the sheet gets its output shape.
+  await page.route("**/api/ticker/ARM", async (r) => {
+    const body = JSON.parse(readFileSync(new URL("../fixtures/ticker-NVDA.json", import.meta.url), "utf8").replaceAll('"NVDA"', '"ARM"'));
+    body.next = { ...body.next, date: "2026-11-04", session: "amc", quarter: 2, confirmed: src };
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/ARM");
+  const card = page.locator(".next-card");
+  await expect(card.locator("h3")).toContainText("November 4");
+  await expect(card.locator(".nc-confirmed")).toContainText("Confirmed by the company");
+  await expect(card.locator(".nc-confirmed a")).toHaveAttribute("href", src);
+  const w = await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth), document.documentElement.scrollWidth - document.documentElement.clientWidth));
+  expect(w).toBeLessThanOrEqual(0);
+});
+
+test("the sheet shows no company-confirmed label for a feed date", async ({ page }) => {
+  await page.goto("./t/NVDA");
+  await expect(page.locator(".next-card h3")).toBeVisible();
+  await expect(page.locator(".nc-confirmed")).toHaveCount(0);
 });

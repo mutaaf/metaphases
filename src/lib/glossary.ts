@@ -38,5 +38,6 @@ export const GLOSSARY: Record<string, { term: string; def: string; eg?: string }
   pce: { term: "PCE inflation", def: "Personal Consumption Expenditures prices — the inflation measure the Federal Reserve targets (2% a year)." },
   gdp: { term: "GDP growth", def: "Gross Domestic Product — the total value of everything the US economy produces. Its growth rate is the broadest read on whether the economy is expanding." },
   fomc: { term: "FOMC", def: "The Federal Reserve committee that sets US interest rates. It meets eight times a year." },
+  companydate: { term: "Confirmed by the company", def: "Most calendars, including our data feed, often show a projected date until a company announces its own. When the company has published a different date or time, Metaphases shows the company's and links to its announcement." },
   cpi: { term: "CPI", def: "Consumer Price Index — the most-watched measure of inflation." },
 };

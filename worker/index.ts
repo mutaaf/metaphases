@@ -19,6 +19,8 @@ import { handleAi } from "./ai";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { periodKey, pickConsensus } from "../shared/compare";
+import overridesFile from "../data/date-overrides.json" with { type: "json" };
+import { applyToEvents, applyToRows, type DateOverrides } from "../shared/dateOverrides";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -32,6 +34,8 @@ const BASE = "/metaphases";
 const SITE = "https://mutaafaziz.com";
 const U = universe as Record<string, { n: string; mc: number; c?: string; ec?: string }>;
 const FH = "https://finnhub.io/api/v1";
+/** Company-announced dates that beat Finnhub's projection (0013). */
+const OVERRIDES = overridesFile as unknown as DateOverrides;
 const UA = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", Accept: "application/json" };
 
 // ── tiny cache helper on the edge Cache API (free, per-colo) ─────────────
@@ -186,7 +190,8 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
   const warnings: string[] = [];
   const events: EarningsEvent[] = [];
   results.forEach((r, i) => (r.status === "fulfilled" ? events.push(...r.value) : warnings.push(`Couldn't load ${days[i]} — showing the rest.`)));
-  const body: CalendarResponse = { from, to, events, asOf: new Date().toISOString(), warnings };
+  const fixed = applyToEvents(events, OVERRIDES, from, to, iso(todayNY()), (s) => s in U);
+  const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings };
   return json(body, 600);
 }
 
@@ -254,7 +259,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     settle("Price history unavailable — setup grade skipped.", candles(symbol, "2y", ctx)),
   ]);
 
-  const cal: any[] = upcoming?.earningsCalendar ?? [];
+  const cal: any[] = applyToRows(symbol, upcoming?.earningsCalendar ?? [], OVERRIDES, today);
   const nextE = cal.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
   const lastE = cal.filter((e) => e.date < today).sort((a, b) => b.date.localeCompare(a.date))[0];
   const habit: Session = (nextE?.hour || lastE?.hour || "") as Session;
@@ -343,7 +348,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     symbol,
     profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, marketCap: profile.marketCapitalization, currency: typeof profile.currency === "string" ? profile.currency : "USD", exchange: profile.exchange, ipo: profile.ipo } : null,
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
-    next: nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate, currency } : null,
+    next: nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate, currency, ...(nextE.source ? { confirmed: nextE.source } : {}) } : null,
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
@@ -474,7 +479,7 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
   if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
     const label = new Date(day + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
     try {
-      const evs = (await calendarDay(day, env, ctx)).filter((e) => e.t).sort((a, b) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0));
+      const evs = applyToEvents(await calendarDay(day, env, ctx), OVERRIDES, day, day, iso(todayNY()), (s) => s in U).filter((e) => e.t).sort((a, b) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0));
       const top = evs.slice(0, 4).map((e) => e.s).join(", ");
       return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };
     } catch { return { title: `Earnings on ${label} · Metaphases`, desc: PAGES["/"].desc }; }
@@ -611,7 +616,7 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
   results.forEach((r, i) => {
     if (r.status !== "fulfilled") return;
     const sym = syms[i];
-    for (const e of (r.value?.earningsCalendar ?? []) as any[]) {
+    for (const e of applyToRows(sym, r.value?.earningsCalendar ?? [], OVERRIDES, today)) {
       if (e.date < today) continue;
       items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: e.epsEstimate ?? null, cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}` });
     }
