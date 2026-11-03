@@ -45,7 +45,7 @@ export function AppPage({ Gate }: { Gate: ComponentType<{ onPass: () => void; on
           <li><b>Made for touch.</b> Springy animations, haptics, and a moving aurora sky that pauses to save battery.</li>
           <li><b>Luna can think on the device.</b> On iPhones and iPads with Apple Intelligence, kids' questions never leave the device.</li>
           <li><b>Same club.</b> Family League codes work between the app and this website.</li>
-          <li><b>Same promises.</b> Pretend money only, no ads, no accounts, no tracking.</li>
+          <li><b>Same promises.</b> Pretend money only, no ads, no accounts, no tracking. <a href={href("/kids/privacy")} onClick={(e) => { e.preventDefault(); navigate("/kids/privacy"); }}>Read the privacy policy</a>.</li>
         </ul>
       </section>
 
