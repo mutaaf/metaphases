@@ -1,43 +1,76 @@
-// /kids/privacy: the plain-language privacy policy for Metaphases Kids (website) and the Moon Club app.
-// Keep it TRUE: update it whenever a data flow changes (AGENTS.md kids rules).
+// /kids/privacy: the privacy policy for the Moon Club app (iPhone/iPad) and the Metaphases Kids website.
+// Apple App Review links here. Keep it TRUE: update it (and the date) whenever a data flow changes
+// (AGENTS.md kids rules). Written for grown-ups, so plain text; no links out (the email is plain text).
 import { navigate } from "../lib/router";
+
+export const PRIVACY_EFFECTIVE = "November 3, 2026";
+export const PRIVACY_CONTACT = "mutaaf@digitalcraftai.com";
 
 export function PrivacyPage() {
   return (
     <div className="k-page k-privacy">
-      <header className="k-hero"><div><span className="k-eyebrow">Updated November 2, 2026</span><h1>Privacy, <em>in plain words</em></h1></div></header>
+      <header className="k-hero"><div><span className="k-eyebrow">Effective {PRIVACY_EFFECTIVE}</span><h1>Privacy, <em>in plain words</em></h1></div></header>
       <section className="k-section">
-        <h2>The short version</h2>
-        <p>Metaphases Kids (this website) and the Moon Club app for iPhone and iPad don't collect personal information about your child. They have no accounts, no ads, no analytics and no tracking, and we never sell anything to anyone.</p>
+        <p>This policy covers <b>Moon Club</b>, the app for iPhone and iPad, and the <b>Metaphases Kids</b> website (mutaafaziz.com/metaphases/kids). Both are made by Mutaaf Aziz, an individual developer ("we" below).</p>
       </section>
       <section className="k-section">
-        <h2>What stays on your device</h2>
+        <h2>The short version</h2>
         <ul className="k-list">
-          <li>Progress (lessons, quests, badges, guesses, the pretend piggy bank, Family League players) is saved only in this browser or on the device.</li>
-          <li>Family League players are emoji, not names. League and progress codes hold only companies, dates, picks and lesson progress.</li>
+          <li>No accounts, no sign-up, and we never ask for names or email addresses.</li>
+          <li>No ads, no analytics, no tracking, and no third-party SDKs.</li>
+          <li>No in-app purchases. All money in the app is pretend.</li>
+          <li>We don't sell or share any data, because we don't collect it.</li>
         </ul>
+      </section>
+      <section className="k-section">
+        <h2>What stays on the device</h2>
+        <ul className="k-list">
+          <li><b>Progress.</b> Lessons, quests, badges, guesses, the pretend piggy bank and Family League players are saved on the device (on the website, in this browser). League players are emoji, not names.</li>
+          <li><b>Widgets.</b> Home Screen widgets keep a small snapshot on the device, such as a streak or the pretend piggy bank total. They never hold anything a child typed.</li>
+          <li><b>Luna's answers.</b> An answer may be kept on the device for up to 7 days so the same question loads fast.</li>
+        </ul>
+      </section>
+      <section className="k-section">
+        <h2>Optional iCloud sync (app)</h2>
+        <p>iCloud sync is off by default. Only a grown-up can turn it on, behind the grown-up check. Progress then syncs through your family's own iCloud key-value storage, which Apple keeps in your Apple account. We never receive it.</p>
       </section>
       <section className="k-section">
         <h2>When something leaves the device</h2>
         <ul className="k-list">
-          <li><b>Market data.</b> The app and website download public prices, report dates and market mood from mutaafaziz.com. These requests carry nothing about your child.</li>
-          <li><b>Ask Luna, free mode.</b> A typed question is sent to our server to get an answer from a kid-safe AI model, with no name or account attached. We don't store questions. Our hosting provider (Cloudflare) processes the request, and basic request logs and rate limits may apply.</li>
-          <li><b>Ask Luna, on-device mode (app).</b> With Apple Intelligence, questions are answered on the iPhone or iPad and never leave it.</li>
-          <li><b>Ask Luna or the voice with a grown-up's own key.</b> A grown-up can choose to use their own AI account (Anthropic, OpenAI, Google or xAI). Before any of your child's questions are sent, the grown-up has to turn on a consent switch that names the company. Questions then go straight from the device to that company under the grown-up's account and their terms. The key is stored in the device's Keychain (in the browser on the website), never on our servers.</li>
-          <li><b>iCloud sync (app, optional).</b> If a grown-up turns it on, progress syncs through your family's own iCloud account. We can't see it.</li>
+          <li><b>Market data.</b> The app and website download public prices, report dates and market mood from mutaafaziz.com. It's read-only, and nothing about your child is sent with it.</li>
+          <li><b>Ask Luna on the device.</b> On iPhones and iPads with Apple Intelligence, Luna answers on the device and the question never leaves it.</li>
+          <li><b>Ask Luna through our server.</b> Otherwise, the question text (up to 200 characters, with no name, account or device ID) goes to our server at mutaafaziz.com. The server passes it to Cloudflare Workers AI, which writes the answer right away. We don't store or log questions or answers. Luna tells kids not to type personal details, and we ask grown-ups to remind them too.</li>
+          <li><b>Stopping abuse.</b> To keep the free helper from being overused, our server counts requests per scrambled (hashed) IP address for up to one hour. The IP address itself isn't stored.</li>
         </ul>
       </section>
       <section className="k-section">
-        <h2>Grown-ups are in charge</h2>
+        <h2>A grown-up's own AI key (beta and website only)</h2>
+        <p>The App Store version of Moon Club does not offer these features.</p>
         <ul className="k-list">
-          <li>Settings, sharing and anything that leaves kids mode sit behind a grown-up check.</li>
-          <li>You can erase all progress at any time in the grown-up corner.</li>
-          <li>Nothing here is investment advice, and all money in the app is pretend.</li>
+          <li><b>Ask Luna on your own key (TestFlight beta app).</b> Behind the grown-up check, a grown-up can add their own key from Anthropic, OpenAI, Google or xAI. Nothing is sent until the grown-up turns on a consent switch that names that company. After that, your child's questions go from the device to that company, under the grown-up's account and that company's terms. The key stays in the device's Keychain. On the website, Ask Luna always uses the free helper above and never a grown-up's key.</li>
+          <li><b>Read-aloud voice on your own key (website and beta app).</b> Behind the grown-up check, a grown-up can pick a voice from OpenAI or Google on their own key. Only app text and Luna's answers are read this way, never what your child types. On the website, the text passes through our server to that company; the key isn't stored or logged there.</li>
         </ul>
       </section>
       <section className="k-section">
-        <h2>Questions</h2>
-        <p>Email Mutaaf Aziz at mutaaf.aziz@gmail.com.</p>
+        <h2>Deleting data</h2>
+        <ul className="k-list">
+          <li>"Reset all progress" in the grown-ups corner erases progress on the device.</li>
+          <li>Deleting the app removes everything it saved on the device, including widget snapshots and cached answers.</li>
+          <li>The copy in your family's iCloud can be cleared by turning sync off or using Reset.</li>
+          <li>On the website, clearing this site's data in your browser erases it too.</li>
+        </ul>
+      </section>
+      <section className="k-section">
+        <h2>Children's privacy</h2>
+        <p>Moon Club and Metaphases Kids are made for kids about 8 to 12, learning with a grown-up. We don't knowingly collect personal information from children, in line with the U.S. Children's Online Privacy Protection Act (COPPA). Settings, sharing and anything that leaves kids mode sit behind a grown-up check. Parents can contact us at any time with questions or to ask about any data.</p>
+      </section>
+      <section className="k-section">
+        <h2>Changes to this policy</h2>
+        <p>If we change how anything works, we'll update this page and the date at the top.</p>
+      </section>
+      <section className="k-section">
+        <h2>Contact</h2>
+        <p>Mutaaf Aziz · <b data-testid="privacy-contact">{PRIVACY_CONTACT}</b></p>
       </section>
       <div className="k-nav"><button className="k-btn" onClick={() => navigate("/kids")}>Back to the club</button></div>
     </div>
