@@ -17,6 +17,8 @@
 .next-card::after { content: ""; position: absolute; right: 0; top: 0; width: 140px; height: 140px; clip-path: circle(100px at 100px 40px); pointer-events: none; background: radial-gradient(circle 184px at 70px 10px, color-mix(in srgb, var(--accent) 55%, transparent), transparent 65%); }
 .next-card .eyebrow { color: color-mix(in srgb, var(--bg) 60%, transparent); }
 .next-card .muted { color: color-mix(in srgb, var(--bg) 70%, transparent); }
+.nc-confirmed { display: block; margin-top: 4px; color: color-mix(in srgb, var(--bg) 70%, transparent); }
+.nc-confirmed a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--bg) 45%, transparent); }
 .next-card h3 { font: 800 24px/1.15 var(--display); letter-spacing: -.02em; margin: 2px 0; }
 .nc-phase { grid-row: span 1; }
 .nc-phase .phase { color: var(--accent); }
