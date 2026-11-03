@@ -10,6 +10,9 @@ pr:
 by: scout
 ---
 
+## Evidence 2026-11-03 07:00 UTC (critic)
+For tracked names, Nov 3–12: 8 day conflicts with Nasdaq's per-day calendar (FIS, TECH, APD, ARM, STE, SBET, ECHO, MARA) and 12 names Nasdaq lists that our calendar lacks (AES, TM, NVO, NWS, HUT, SONY, AXON, BRK.B, HMC, CSCO, TDG, JD). In the 5 conflicts checked against a company release (FIS, APD, STE, ARM, AXON), **Nasdaq matched the company 5/5 and Finnhub 0/5**. Suggestion for the operator (the critic doesn't decide this): when Finnhub's session is blank and Nasdaq gives a session, prefer Nasdaq's day and keep the "unconfirmed" note. At minimum, the `differs` note must name Nasdaq's date, not just say "disagree".
+
 ## Why
 Finnhub dates with a blank session are often projections (AXON Nov 2 vs company Nov 5; ARM Nov 5 vs Nov 4). Scout spot-check 2026-11-01: CEG shows Mon Nov 9 with no session, while a calendar listing (AJ Bell) shows its Q3 call on Nov 6 at 10:00 ET and Constellation held its Q3 2025 call on a Friday in the same week; no company release was found, so the date is unconfirmed either way. WBD (Nov 4 bmo) is also unconfirmed by any company release. Tickets 0007 and 0013 label and hand-correct dates; neither detects them. `api.nasdaq.com` is already an allowed host and also serves a per-day earnings calendar with the session (`/api/calendar/earnings?date=YYYY-MM-DD`).
 
