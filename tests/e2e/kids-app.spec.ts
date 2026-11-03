@@ -42,5 +42,17 @@ test.describe("Kids privacy policy", () => {
     await page.goto("./kids/privacy");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("in plain words");
     await expect(page.locator(".k-privacy a[href^='http']")).toHaveCount(0);
+    await expect(page.locator(".k-privacy a[href^='mailto']")).toHaveCount(0);
+    await expect(page.getByTestId("privacy-contact")).toHaveText("mutaaf@digitalcraftai.com");
+    await expect(page.locator(".k-privacy")).toContainText("Effective November 3, 2026");
+    await expect(page.locator(".k-privacy")).toContainText("Cloudflare Workers AI");
+    await expect(page).toHaveTitle(/Privacy/);
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(over).toBeLessThanOrEqual(0);
+  });
+  test("is linked from the app page", async ({ page }) => {
+    await page.goto("./kids/app");
+    await page.getByRole("link", { name: "Read the privacy policy" }).click();
+    await expect(page).toHaveURL(/kids\/privacy$/);
   });
 });

@@ -1196,7 +1196,7 @@ export default function KidsApp() {
   const [gate, setGate] = useState(false);
   const points = pointsFor(progressOf(st));
   const lvl = levelFor(points);
-  useEffect(() => { if (!path.endsWith("/print")) document.title = "Metaphases Kids: the Market Moon Club"; window.scrollTo({ top: 0 }); }, [path]);
+  useEffect(() => { if (!path.endsWith("/print")) document.title = path === "/kids/privacy" ? "Privacy policy · Moon Club and Metaphases Kids" : "Metaphases Kids: the Market Moon Club"; window.scrollTo({ top: 0 }); }, [path]);
   const lessonId = path.match(/^\/kids\/school\/([a-z-]+)(\/print)?$/);
   const lesson = lessonId ? LESSONS.find((l) => l.id === lessonId[1]) : undefined;
   if (lesson && lessonId?.[2]) return <WorksheetPage lesson={lesson} />;
