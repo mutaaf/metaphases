@@ -21,6 +21,11 @@ Earnings calendar at **mutaafaziz.com/metaphases/**: a Cloudflare Worker on rout
 - Headless Chrome won't screenshot below about 500px wide, so render icons at 1024 and downscale with `sips` (`scripts/brand/`).
 - **Parallel e2e runs collide**: Playwright reuses any server already on :4188 locally, so two worktrees running `npm run check` at once test each other's builds (mass failures). Give each its own port: `E2E_PORT=4231 npm run check`.
 - `shared/market.ts` holds FOMC dates and NYSE holidays; update it yearly.
+- **Kids lesson packs** (`packs/`, `shared/kidsPacks.ts`; the full program is in moon-club `docs/PACKS.md`):
+  - **Editing.** Edit `packs/<id>/pack.json` directly, then `npm test`. `validatePack` checks reading level, card fit, glyphs, links, advice phrases, ids and sign-offs.
+  - **JSON imports.** Import pack JSON with `with { type: "json" }`. Playwright's Node loader fails without the import attribute ("needs an import attribute of type: json"), even though Vite and tsc don't mind.
+  - **Signing.** After editing any non-core pack, run `npm run packs:sign`, or the signature test and `export:kids` fail with "signature is stale". The signing key is at `~/.config/metaphases/kids-pack-signing.jwk`, outside the repo; back it up. The app trusts its public key (`packs/channel.json` → `kids-content.json` `channel.publicKey`). `/api/kids/packs` lists only `ready` packs, which need a human sign-off.
+  - **`/api/kids/why`** uses Yahoo (stock, SPY, equal-weight sector funds RSPT/RSPC/RSPD/RSPS, `events=div`, raw closes) and Nasdaq, plus one cached Finnhub calendar call per company per day, for the report session only.
 
 ## Autonomy (same pattern as COLD GAS / arcade games)
 - Read `AGENTS.md` (operating manual) and `agents/prompts/*`. Steering lives in `agents/control.json`; cadence is set on the routines at claude.ai/code/routines.

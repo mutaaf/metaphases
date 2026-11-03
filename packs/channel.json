@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "publicKey": "Rr1jkmN/61muHIPrXAana7n5tNlxQwX7Ys8fdeDQMSQ=",
+  "packs": [
+    {
+      "id": "guest-coach-nova",
+      "version": "1.0.0",
+      "title": "Coach Nova's Maker Lab",
+      "kind": "extend",
+      "creator": "Coach Nova",
+      "ready": false,
+      "sha256": "e54a4e1062080b1280df877c9b8b15886b3421454742db10db120b90971c5e9d",
+      "sig": "+RJ6TMgzXiOsyAXI9IDGGpoaoSzo7wWOxbYdk67Hn6GaCfZqX7SG0uJk6006hawfgBH+B/9SMjfshPbwHWSpCw=="
+    }
+  ]
+}

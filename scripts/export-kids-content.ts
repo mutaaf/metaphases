@@ -9,6 +9,11 @@ import * as C from "../shared/kidsContent";
 import * as W from "../shared/kidsWeek";
 import * as T from "../shared/kidsTransfer";
 import { TRANSFER_SAMPLE } from "../shared/kidsTransfer.sample";
+import * as P from "../shared/kidsPacks";
+import * as Y from "../shared/kidsWhy";
+import * as CO from "../shared/kidsCoach";
+import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { createPublicKey, verify } from "node:crypto";
 
 type Step = { t: "say"; emoji: string; text: string } | { t: "check"; q: string; options: string[]; answer: number; why: string } | { t: "sort"; q: string; buckets: [string, string]; items: { emoji: string; text: string; b: 0 | 1 }[]; why: string };
 
@@ -17,7 +22,7 @@ async function main() {
   const anyC = C as any;
   // Lessons: step-based when available (micro-lessons), else screens + quiz turned into steps.
   const lessons = (C.LESSONS as any[]).map((l) => ({
-    id: l.id, unit: l.unit ?? "school", title: l.title, emoji: l.emoji,
+    id: l.id, unit: l.unit ?? "school", title: l.title, emoji: l.emoji, track: l.track, objectives: l.objectives,
     steps: (l.steps as Step[] | undefined) ?? [
       ...l.screens.map((text: string) => ({ t: "say", emoji: l.emoji, text })),
       ...l.quiz.map((q: any) => ({ t: "check", ...q })),
@@ -103,6 +108,116 @@ async function main() {
   };
   function K_WORDS_LEN() { return C.KID_WORDS.length; }
 
+  // ── Lesson packs: every pack in packs/ (Core is the top-level content; the rest ship as `packs`) ──
+  const core = C.CORE_PACK;
+  const extra = readdirSync("packs", { withFileTypes: true })
+    .filter((d) => d.isDirectory() && d.name !== "core" && existsSync(`packs/${d.name}/pack.json`))
+    .map((d) => JSON.parse(readFileSync(`packs/${d.name}/pack.json`, "utf8")) as P.LessonPack);
+  for (const p of [core, ...extra]) {
+    const issues = P.validatePack(p, p.kind === "core" ? undefined : core);
+    if (issues.length) throw new Error(`pack ${p.id} is invalid:\n${issues.map((i) => `  ${i.code} ${i.at}: ${i.msg}`).join("\n")}`);
+  }
+  const channel = JSON.parse(readFileSync("packs/channel.json", "utf8"));
+  // Bad packs (one mutation each) and the codes BOTH validators must report.
+  const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+  const guest = extra[0];
+  const mut = (name: string, base: P.LessonPack, f: (p: any) => void, withCore = true) => { const p = clone(base); f(p); return { name, pack: p, withCore, codes: [...new Set(P.validatePack(p, withCore && p.kind !== "core" ? core : undefined).map((i) => i.code))].sort() }; };
+  const packVectors = guest ? [
+    mut("good guest", guest, () => {}),
+    mut("bad format", guest, (p) => { p.format = 2; }),
+    mut("bad id", guest, (p) => { p.id = "Bad Id!"; }),
+    mut("needs newer content", guest, (p) => { p.requires.content = 99; }),
+    mut("answer out of range", guest, (p) => { p.units[0].lessons[0].steps[3].answer = 9; }),
+    mut("too few steps", guest, (p) => { p.units[0].lessons[0].steps = p.units[0].lessons[0].steps.slice(2); }),
+    mut("grown-up prose", guest, (p) => { p.units[0].lessons[0].steps[1].text = "Consensus estimates incorporate analysts' expectations regarding quarterly profitability and operational efficiency."; }),
+    mut("a link", guest, (p) => { p.units[0].lessons[0].steps[0].text = "Visit coachnova.com for more!"; }),
+    mut("a handle", guest, (p) => { p.creator.bio = "Say hi to @coachnova on video."; }),
+    mut("advice", guest, (p) => { p.units[0].lessons[0].steps[2].text = "You should buy a cookie company now."; }),
+    mut("promotion", guest, (p) => { p.units[0].lessons[0].steps[2].text = "Please subscribe to my channel."; }),
+    mut("advice in a wrong answer is fine", guest, (p) => { p.units[0].lessons[2].steps[4].options[2] = "Buy now"; }),
+    mut("quoted hype is fine", guest, (p) => { p.units[0].lessons[0].steps[2].text = "A video says \"buy now\". That is hype."; }),
+    mut("undeclared glyph", guest, (p) => { p.glyphs = p.glyphs.slice(1); }),
+    mut("collides with core", guest, (p) => { p.units[0].lessons[0].id = "money"; }),
+    mut("unknown map ref", guest, (p) => { p.regions[0].nodes[0].ref = "nope"; }),
+    mut("no boss", guest, (p) => { p.regions[0].nodes.pop(); }),
+    mut("no sign-off", guest, (p) => { p.reviewers = []; }),
+    mut("too long for one card", guest, (p) => { p.units[0].lessons[0].steps[3].q = "Coach Nova bakes forty comet cookies on Saturday and sells every single one of them at the school fair."; }),
+    mut("emoji in words", guest, (p) => { p.units[0].lessons[0].steps[0].text = "Hi there 🚀 friends."; }),
+    mut("sort with one bucket", core, (p) => { const l = p.units[0].lessons[2]; l.steps[2].items.forEach((i: any) => (i.b = 0)); }, false),
+    mut("core without courses", core, (p) => { delete p.guess; }, false),
+  ] : [];
+  // A real Ed25519 signature over a pack's served bytes, so the app's verifier is tested against Node's.
+  const sigEntry = guest ? channel.packs.find((x: any) => x.id === guest.id) : null;
+  const packSig = sigEntry ? (() => {
+    const bytes = Buffer.from(JSON.stringify(guest), "utf8");
+    const key = createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: Buffer.from(channel.publicKey, "base64").toString("base64url") }, format: "jwk" });
+    if (!verify(null, bytes, key, Buffer.from(sigEntry.sig, "base64"))) throw new Error(`packs/channel.json: ${guest.id}'s signature is stale. Run npm run packs:sign.`);
+    return { publicKey: channel.publicKey, body: bytes.toString("base64"), sig: sigEntry.sig, sha256: sigEntry.sha256, tampered: Buffer.from(JSON.stringify({ ...guest, title: "Tampered" }), "utf8").toString("base64") };
+  })() : null;
+  const composed = P.composePacks(core, extra);
+  const composeVector = { packs: extra.map((p) => p.id), units: composed.units.map((u) => u.id), lessons: composed.units.flatMap((u) => u.lessons.map((l) => l.id)), regions: composed.regions.map((r) => r.id), glossary: Object.keys(composed.glossary).sort(), glyphs: composed.glyphs };
+
+  // ── "Why did it move?" vectors: hand-made inputs covering every cause, plus the input builder ──
+  const W0 = (o: Partial<Y.WhyInput>): Y.WhyInput => ({ s: "DIS", nick: "Disney", range: "1d", move: -1, market: null, sector: null, report: null, dividend: null, normal: 1.5, asOf: "2026-10-30", ...o });
+  const grp = (m: number | null) => ({ etf: "RSPC", name: Y.KID_GROUPS.media.name, move: m });
+  const whyCases: { input: Y.WhyInput; today: string }[] = [
+    { today: "2026-10-30", input: W0({ move: 0.3 }) },
+    { today: "2026-10-30", input: W0({ move: -0.02 }) },
+    { today: "2026-10-30", input: W0({ move: null }) },
+    { today: "2026-10-30", input: W0({ move: 6.2, report: { date: "2026-10-29", eA: 1.2, eE: 1.0 } }) },
+    { today: "2026-10-30", input: W0({ move: -5.1, report: { date: "2026-10-29", eA: 1.2, eE: 1.0 } }) },
+    { today: "2026-10-30", input: W0({ move: -4.0, report: { date: "2026-10-30", eA: 0.8, eE: 1.0 } }) },
+    { today: "2026-10-30", input: W0({ move: 3.0, report: { date: "2026-10-30", eA: 0.8, eE: 1.0 } }) },
+    { today: "2026-10-30", input: W0({ move: 2.2, report: { date: "2026-10-30", eA: 1.0, eE: 1.0 } }) },
+    { today: "2026-10-30", input: W0({ move: -4.4, report: { date: "2026-10-30", eA: null, eE: 1.0 } }) },
+    { today: "2026-10-31", input: W0({ move: -2.0, market: -1.8, sector: grp(-1.9) }) },
+    { today: "2026-10-30", input: W0({ move: -8.0, market: -0.5, sector: grp(-0.6) }) },
+    { today: "2026-10-30", input: W0({ move: -2.5, market: 1.1 }) },
+    { today: "2026-10-30", input: W0({ move: 2.4, market: 0.5, sector: grp(2.2) }) },
+    { today: "2026-10-30", input: W0({ move: -1.9, market: 0.1, dividend: { date: "2026-10-30", amount: 0.5, pct: 1.4 } }) },
+    { today: "2026-10-30", input: W0({ move: -1.2, dividend: { date: "2026-10-30", amount: 0.5, pct: null } }) },
+    { today: "2026-10-30", input: W0({ move: 9.5, normal: 1.4 }) },
+    { today: "2026-11-03", input: W0({ range: "5d", move: -4.6, market: -2.4, sector: grp(-3.6), normal: 3.1, asOf: "2026-10-30" }) },
+    { today: "2026-11-03", input: W0({ range: "5d", move: 0.7, market: 0.2, normal: 3.1 }) },
+  ];
+  const series = (start: number, steps: number[], d0 = "2026-08-03"): Y.DailySeries => {
+    const d: string[] = [], c: number[] = []; let x = start; let day = new Date(`${d0}T12:00:00Z`);
+    for (const st of [0, ...steps]) { while ([0, 6].includes(day.getUTCDay())) day = new Date(day.getTime() + 86400000); x = Math.round(x * (1 + st / 100) * 100) / 100; d.push(day.toISOString().slice(0, 10)); c.push(x); day = new Date(day.getTime() + 86400000); }
+    return { d, c };
+  };
+  const wig = Array.from({ length: 60 }, (_, i) => [0.8, -0.6, 1.1, -0.9, 0.4, -1.2, 0.7][i % 7]);
+  const stock = series(100, [...wig, -3.5]), spy = series(500, [...wig.map((v) => v / 2), -1.1]), sec = series(40, [...wig.map((v) => v * 0.7), -2.0]);
+  const last = stock.d[stock.d.length - 1], prevDay = stock.d[stock.d.length - 2];
+  const buildCases = [
+    { s: "DIS", nick: "Disney", range: "1d" as const, stock, spy, sector: sec, reports: [{ date: prevDay, eA: 1.1, eE: 1.0 }], dividends: [] },
+    { s: "DIS", nick: "Disney", range: "1d" as const, stock, spy, sector: sec, reports: [{ date: prevDay, eA: 1.1, eE: 1.0, hour: "bmo" as const }], dividends: [{ date: last, amount: 0.6 }] },
+    { s: "KO", nick: "Coca-Cola", range: "5d" as const, stock, spy, sector: sec, reports: [{ date: last, eA: 0.7, eE: 0.7, hour: "amc" as const }, { date: stock.d[stock.d.length - 4], eA: 0.7, eE: 0.75 }], dividends: [{ date: stock.d[stock.d.length - 3], amount: 0.5 }] },
+    { s: "AAPL", nick: "Apple", range: "5d" as const, stock: { d: stock.d.slice(0, 4), c: stock.c.slice(0, 4) }, spy: null, sector: null, reports: [], dividends: [] },
+  ];
+  const coachCases = {
+    next: [[], ["report-card"], ["report-card", "guess", "beat", "after", "expectations", "guidance"]].map((done) => ({ done, out: CO.courseNext(core.guess!.ladder, done) })),
+    reveal: [{ eA: 1.2, eE: 1, move: 3 }, { eA: 1.2, eE: 1, move: -2 }, { eA: 0.8, eE: 1, move: -2 }, { eA: 0.8, eE: 1, move: 1 }, { eA: 1, eE: 1.004, move: 1 }, { eA: null, eE: 1, move: 1 }, { eA: 1.2, eE: 1, move: null }].map((r) => ({ r, out: CO.guessReveal(core.guess!, r) })),
+    piggy: [
+      { holdings: 3, started: "2026-10-01", today: "2026-10-31", value: 1010, start: 1000, peeks: 9 },
+      { holdings: 3, started: "2026-10-01", today: "2026-10-31", value: 850, start: 1000, peeks: 1 },
+      { holdings: 3, started: "2026-10-01", today: "2026-10-31", value: 1120, start: 1000, peeks: 1 },
+      { holdings: 1, started: "2026-10-01", today: "2026-10-31", value: 1000, start: 1000, peeks: 0 },
+      { holdings: 3, started: "2026-10-28", today: "2026-10-31", value: 1000, start: 1000, peeks: 0 },
+      { holdings: 3, started: "2026-09-01", today: "2026-10-31", value: 1000, start: 1000, peeks: 0 },
+      { holdings: 5, started: "2026-10-10", today: "2026-10-31", value: 1000, start: 1000, peeks: 0 },
+      { holdings: 3, started: "2026-10-10", today: "2026-10-31", value: 1000, start: 1000, peeks: 3 },
+    ].map((x) => ({ x, out: CO.piggyTip(core.piggy!, x) })),
+  };
+  Object.assign(vectors, {
+    packValidate: packVectors,
+    packSig,
+    compose: composeVector,
+    why: whyCases.map(({ input, today }) => ({ input, today, out: Y.whyMoved(input, today) })),
+    whyBuild: buildCases.map((a) => { const input = Y.buildWhyInput(a); return { args: a, input }; }),
+    reportResult: [[1, 1], [1.004, 1], [1.02, 1], [0.98, 1], [-0.1, -0.1], [0.003, 0], [-0.2, -0.25]].map(([eA, eE]) => ({ eA, eE, out: Y.reportResult(eA, eE) })),
+    coach: coachCases,
+  });
+
   const doc = {
     version: 1,
     generated: new Date().toISOString(),
@@ -116,6 +231,13 @@ async function main() {
     badges: K.BADGES, levels: K.LEVELS,
     startCoins: K.START_COINS, maxPicks: K.MAX_PICKS,
     players: W.PLAYERS, playerNames: W.PLAYER_NAMES, maxCodeGuesses: W.MAX_CODE_GUESSES,
+    // Lesson packs (shared/kidsPacks.ts): Core's manifest + courses + map, then every other pack whole.
+    pack: { id: core.id, title: core.title, version: core.version, kind: core.kind, requires: core.requires, ages: core.ages, tracks: core.tracks, curators: core.curators, reviewers: core.reviewers },
+    objectives: core.objectives, regions: core.regions, guessCourse: core.guess, piggyCourse: core.piggy, review: core.review,
+    assessments: core.assessments, games: core.games, glyphs: core.glyphs,
+    packs: extra,
+    channel: { publicKey: channel.publicKey },
+    whyGroups: Y.KID_GROUPS, whySectors: Y.KID_SECTOR,
     vectors,
   };
   writeFileSync(out, JSON.stringify(doc, (_, v) => (v === undefined ? null : v), 2) + "\n");

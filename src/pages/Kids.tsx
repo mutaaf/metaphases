@@ -28,6 +28,9 @@ import { QuestPage, StartHere, W, WordChips } from "./KidsQuest";
 import { VoiceCorner } from "./KidsVoice";
 import { AppNudge, AppPage } from "./KidsAppPage";
 import { PrivacyPage } from "./KidsPrivacy";
+import { WhyCard } from "./KidsWhy";
+import { guessReveal, piggyTip } from "../../shared/kidsCoach";
+import { CORE_PACK } from "../../shared/kidsContent";
 import { canSpeak, markKidTyped, speakText, useVoiceSettings } from "../lib/voice";
 import "../styles/kids.css";
 
@@ -121,6 +124,7 @@ type KidStory =
   | { kind: "recap"; r: Recap }
   | { kind: "weather"; w: Weather; score: number }
   | { kind: "report"; e: EarningsEvent; co: KidCo }
+  | { kind: "why"; s: string }
   | { kind: "word" }
   | { kind: "quiz" }
   | { kind: "next" };
@@ -252,7 +256,9 @@ function StoryPage() {
   const allQuiz = useMemo(() => LESSONS.flatMap((l) => l.quiz), []);
   const quiz = ofTheDay(allQuiz, today, 3);
   const recap = useRecap();
-  const { recapSeen } = useKids();
+  const { recapSeen, piggy, guesses } = useKids();
+  // "Why did it move?": a company the kid cares about (their piggy bank, their latest guess), else Disney.
+  const whySym = piggy?.holdings[0]?.s ?? [...guesses].sort((a, b) => b.d.localeCompare(a.d))[0]?.s ?? "DIS";
 
   const stories: KidStory[] = useMemo(() => {
     const out: KidStory[] = [];
@@ -266,11 +272,11 @@ function StoryPage() {
       seen.add(e.s);
       out.push({ kind: "report", e, co: KID_BY_SYMBOL[e.s] });
     }
-    out.push({ kind: "word" }, { kind: "quiz" });
+    out.push({ kind: "why", s: whySym }, { kind: "word" }, { kind: "quiz" });
     if (recap?.active && !fresh) out.push({ kind: "recap", r: recap });
     out.push({ kind: "next" });
     return out;
-  }, [macro.data, upcoming, today, recap, recapSeen]);
+  }, [macro.data, upcoming, today, recap, recapSeen, whySym]);
   const n = stories.length;
   const go = (d: number) => setI((x) => Math.max(0, Math.min(n - 1, x + d)));
   useEffect(() => {
@@ -330,6 +336,7 @@ function StoryPage() {
             )}
             {s.kind === "recap" && <RecapCard r={s.r} />}
             {s.kind === "report" && <ReportStory e={s.e} co={s.co} today={today} />}
+            {s.kind === "why" && <WhyCard s={s.s} />}
             {s.kind === "word" && (
               <>
                 <span className="k-eyebrow">Big word of the day</span>
@@ -391,7 +398,9 @@ function Reveal({ g, e }: { g: { s: string; d: string; pick: Pick; price?: "up" 
             <b className="k-result-title">{g.result === "right" ? "🎉 You got it right! +10" : "🌧️ Markets surprise everyone!"}</b>
             <span>{whyLine(co.nick, e)}</span>
             {g.price && (g.priceResult ? <span>The price went {move != null && move >= 0 ? "up" : "down"}{move != null ? ` ${Math.abs(move).toFixed(1)}%` : ""}: {g.priceResult === "right" ? "you were right! +5" : "not this time."}</span> : <span className="k-small">We'll know the price part soon.</span>)}
-            {g.result === "wrong" && <span className="k-small">Even grown-up experts guess wrong a lot. That's why spreading out is smart.</span>}
+            {move != null && <span className="k-small">{guessReveal(CORE_PACK.guess!, { eA: e.eA, eE: e.eE, move })}</span>}
+            {g.result === "wrong" && <span className="k-small">{CORE_PACK.guess!.reveal.tryAgain}</span>}
+            <WhyCard s={g.s} range="5d" title="Why did the price move?" />
           </div>
         )}
       </div>
@@ -581,8 +590,9 @@ function PiggyView() {
       </ul>
       <section className="k-basket" aria-label="Eggs in baskets">
         <div className="k-baskets" aria-hidden>{piggy.holdings.map((h) => <span key={h.s} className="k-basket-i">🧺<i>{KID_BY_SYMBOL[h.s]?.emoji}</i></span>)}</div>
-        <p className="k-tip">{basketTip(piggy.holdings.length)}</p>
+        <p className="k-tip">{q.data ? piggyTip(CORE_PACK.piggy!, { holdings: piggy.holdings.length, started: piggy.started, today, value, start: START_COINS, peeks: 0 }).text : basketTip(piggy.holdings.length)}</p>
       </section>
+      {mover && Math.abs(mover.change) >= 0.05 && <WhyCard s={mover.s} title={`Why did ${KID_BY_SYMBOL[mover.s]?.nick ?? mover.s} move?`} />}
       <div className="k-reset">
         {!confirm ? <button className="k-link" onClick={() => setConfirm(true)}>Start over with new pretend coins</button> : (
           <span>Start over? Your pretend bank will be emptied. <button className="k-btn" onClick={() => { kids.resetPiggy(); setConfirm(false); }}>Yes, start over</button> <button className="k-link" onClick={() => setConfirm(false)}>No, keep it</button></span>

@@ -40,6 +40,12 @@ export const test = base.extend<{ lens: "trader" | "everyday" | "kids" | "unset"
       const syms = (new URL(r.request().url()).searchParams.get("s") ?? "").split(",").filter(Boolean);
       r.fulfill({ contentType: "application/json", body: JSON.stringify({ quotes: Object.fromEntries(syms.map((s) => [s, { price: 100, changePct: 1.2, prevClose: 98.8 }])), asOf: "2026-10-31T19:00:00Z", warnings: [] }) });
     });
+    // "Why did it move?" clues: a down day with the whole market down too (inputs only; the page runs the engine).
+    await page.route("**/api/kids/why**", (r) => {
+      const u = new URL(r.request().url()); const s = u.searchParams.get("s") ?? "DIS"; const range = u.searchParams.get("range") ?? "1d";
+      const input = { s, nick: s, range, move: range === "1d" ? -2.1 : -3.4, market: range === "1d" ? -1.6 : -2.5, sector: { etf: "RSPC", name: "the TV, games and internet companies", move: range === "1d" ? -2.4 : -3.9 }, report: null, dividend: null, normal: range === "1d" ? 1.4 : 3.2, asOf: "2026-10-30" };
+      r.fulfill({ contentType: "application/json", body: JSON.stringify({ input, why: null, warnings: [] }) });
+    });
     // Logos come from a third-party CDN; keep tests hermetic.
     await page.route("https://static2.finnhub.io/**", (r) => r.fulfill({ status: 404, body: "" }));
     await use(page);

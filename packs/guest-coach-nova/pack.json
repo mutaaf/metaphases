@@ -1,0 +1,163 @@
+{
+  "$schema": "../pack.schema.json",
+  "format": 1,
+  "id": "guest-coach-nova",
+  "title": "Coach Nova's Maker Lab",
+  "version": "1.0.0",
+  "kind": "extend",
+  "requires": {"content":1,"app":"0.12.0","core":"2.0.0"},
+  "ages": {"min":6,"max":11},
+  "tracks": [],
+  "curators": [
+    {"name":"Metaphases Kids","role":"author"},
+    {"name":"Coach Nova","role":"creator","note":"SAMPLE: a fictional creator. No real person, likeness or brand."}
+  ],
+  "reviewers": [
+    {
+      "name": "Ms. Rivera",
+      "role": "teacher",
+      "signedOff": "2026-11-03",
+      "note": "AI reviewer persona: veteran elementary teacher and reading specialist. Two rounds; see reviews/."
+    },
+    {
+      "name": "Dr. Okafor",
+      "role": "markets",
+      "signedOff": "2026-11-03",
+      "note": "AI reviewer persona: former equity analyst and finance educator. Two rounds; see reviews/."
+    },
+    {
+      "name": "Grown-up sign-off",
+      "role": "human",
+      "signedOff": null,
+      "note": "A person signs the checklist in moon-club docs/PACKS.md before this pack goes on the remote channel."
+    }
+  ],
+  "creator": {
+    "name": "Coach Nova",
+    "fictional": true,
+    "bio": "A made-up science-show host who tests ideas in her garage lab.",
+    "voice": "Curious and upbeat. Loves experiments and saying oops."
+  },
+  "objectives": [
+    {"id":"nova.cost","text":"Work out profit per item from cost and price.","standards":["CEE Econ 14: Entrepreneurship"]},
+    {"id":"nova.choose","text":"Explain why sellers try to be better or cheaper than other sellers.","standards":["CEE Econ 9: Competition"]},
+    {"id":"nova.fan","text":"Tell a feeling about a company from facts about it.","standards":["Jump$tart: Investing","OECD: Financial landscape"]},
+    {"id":"nova.oops","text":"Treat a mistake as something to learn from.","standards":["CFPB: Habits & norms"]}
+  ],
+  "units": [
+    {
+      "id": "nova-lab",
+      "title": "Coach Nova's Maker Lab",
+      "emoji": "🚀",
+      "blurb": "Run a pretend comet-cookie stand with Coach Nova.",
+      "track": "6-8",
+      "objectives": ["nova.cost","nova.choose","nova.fan","nova.oops"],
+      "lessons": [
+        {
+          "id": "nova-cost",
+          "title": "What does one cookie cost?",
+          "emoji": "🧾",
+          "track": "6-8",
+          "objectives": ["nova.cost"],
+          "steps": [
+            {"t":"say","emoji":"🚀","text":"Hi, I'm Coach Nova, a made-up guest host! Today we run a pretend comet-cookie stand."},
+            {"t":"say","emoji":"🧾","text":"Flour, sugar and a bag cost 40 cents per cookie. That is our only cost."},
+            {"t":"say","emoji":"🏷️","text":"We sell each cookie for $1. The 60 cents left over is called profit."},
+            {
+              "t": "check",
+              "q": "A cookie costs 40 cents to make, its only cost. It sells for $1. What is the profit?",
+              "options": ["60 cents","$1.40","40 cents"],
+              "answer": 0,
+              "why": "$1 take away 40 cents is 60 cents."
+            }
+          ]
+        },
+        {
+          "id": "nova-choose",
+          "title": "Two stands, one street",
+          "emoji": "🛒",
+          "track": "6-8",
+          "objectives": ["nova.choose"],
+          "steps": [
+            {"t":"say","emoji":"🏪","text":"A new stand opens next door. It sells cookies too!"},
+            {"t":"say","emoji":"🤔","text":"Kids pick the stand with the better cookie, the nicer price or the shorter line."},
+            {"t":"say","emoji":"🧠","text":"So stands try to get better, or cheaper. That is good news for kids who buy cookies."},
+            {
+              "t": "sort",
+              "q": "Would it help our stand, or hurt it?",
+              "buckets": ["Helps","Hurts"],
+              "items": [
+                {"emoji":"✨","text":"Tastier cookies","b":0},
+                {"emoji":"⏰","text":"A very long line","b":1},
+                {"emoji":"🏷️","text":"A fair price","b":0},
+                {"emoji":"👎","text":"Burnt cookies","b":1}
+              ],
+              "why": "Better cookies, fair prices and short lines bring kids back."
+            }
+          ]
+        },
+        {
+          "id": "nova-fan",
+          "title": "Being a fan is not a fact",
+          "emoji": "⭐",
+          "track": "9-11",
+          "objectives": ["nova.fan"],
+          "steps": [
+            {"t":"say","emoji":"⭐","text":"I love a rocket-toy company. I'm a big fan!"},
+            {"t":"say","emoji":"🤔","text":"But loving a company is not a reason to own its shares. Fans can be wrong about the numbers."},
+            {"t":"say","emoji":"🔍","text":"Check the facts: Does it make a profit? How did its report cards go? Even good facts are not a promise."},
+            {"t":"say","emoji":"🙋","text":"That goes for me too! I'm not telling you to buy anything. Check facts with a grown-up."},
+            {
+              "t": "check",
+              "q": "Your favorite star loves a company. What does that tell you about its shares?",
+              "options": ["Not much. Check the facts.","They will go up","You should get some"],
+              "answer": 0,
+              "why": "Loving a company is a feeling. Facts are what you can check."
+            }
+          ]
+        },
+        {
+          "id": "nova-oops",
+          "title": "My big oops",
+          "emoji": "🧪",
+          "track": "6-8",
+          "objectives": ["nova.oops"],
+          "steps": [
+            {"t":"say","emoji":"🧪","text":"Once, I put all my pretend coins in one company. Then it had a bad month."},
+            {"t":"say","emoji":"📉","text":"My pretend coins dropped a lot. I felt grumpy, and that is OK."},
+            {"t":"say","emoji":"🧠","text":"I learned to spread my coins out. It won't stop every drop, but one company can't sink me."},
+            {
+              "t": "check",
+              "q": "What did Coach Nova learn from her oops?",
+              "options": ["Spread coins out","Never try again","Hide the mistake"],
+              "answer": 0,
+              "why": "She learned to spread out. Mistakes help us learn."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "glossary": {
+    "cost": {"word":"Cost","emoji":"🧾","means":"The money you pay to make or get something.","example":"One cookie costs 40 cents to make."},
+    "fan": {"word":"Fan","emoji":"⭐","means":"Someone who really likes a person, team or company.","example":"Being a fan is a feeling, not a fact about money."}
+  },
+  "words": [],
+  "games": [],
+  "assessments": [{"id":"nova-lab-check","unit":"nova-lab","title":"Maker Lab check","pass":0.8}],
+  "regions": [
+    {
+      "id": "nova-cove",
+      "name": "Comet Cove",
+      "blurb": "Coach Nova's guest island",
+      "art": "🚀",
+      "hue": "teal",
+      "nodes": [
+        {"id":"nova-lab-trail","title":"Coach Nova's Maker Lab","art":"🚀","kind":"unit","ref":"nova-lab"},
+        {"id":"nova-practice","title":"Review stop","art":"🔁","kind":"practice"},
+        {"id":"nova-boss","title":"Coach Nova's Quiz","art":"👑","kind":"review","ref":"nova-cove"}
+      ]
+    }
+  ],
+  "glyphs": ["⏰","✨","⭐","🏪","🏷️","👎","👑","📉","🔁","🔍","🙋","🚀","🛒","🤔","🧠","🧪","🧾"]
+}

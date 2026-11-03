@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mutaafaziz.com/metaphases/kids/pack.schema.json",
+  "title": "Moon Club Lesson Pack",
+  "description": "One curriculum pack for Metaphases Kids and the Moon Club app (format 1). Structure only: the kids rules (reading level, glyph coverage, links, advice phrases, ids that resolve) are checked by shared/kidsPacks.ts validatePack and MoonClubCore PackValidator.",
+  "type": "object",
+  "required": ["format", "id", "title", "version", "kind", "requires", "ages", "tracks", "curators", "reviewers", "creator", "objectives", "units", "glossary", "words", "games", "assessments", "regions", "glyphs"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "format": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,40}$" },
+    "title": { "type": "string", "minLength": 2, "maxLength": 60 },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "kind": { "enum": ["core", "extend", "replace"] },
+    "requires": {
+      "type": "object", "required": ["content"], "additionalProperties": false,
+      "properties": { "content": { "type": "integer", "minimum": 1 }, "app": { "type": "string" }, "core": { "type": "string" } }
+    },
+    "ages": {
+      "type": "object", "required": ["min", "max"], "additionalProperties": false,
+      "properties": { "min": { "type": "integer", "minimum": 4, "maximum": 13 }, "max": { "type": "integer", "minimum": 4, "maximum": 13 } }
+    },
+    "tracks": { "type": "array", "items": { "$ref": "#/$defs/track" } },
+    "curators": { "type": "array", "items": { "$ref": "#/$defs/person" } },
+    "reviewers": { "type": "array", "items": { "$ref": "#/$defs/person" } },
+    "creator": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object", "required": ["name", "fictional", "bio", "voice"], "additionalProperties": false,
+          "properties": { "name": { "type": "string" }, "fictional": { "type": "boolean" }, "bio": { "type": "string", "maxLength": 200 }, "voice": { "type": "string", "maxLength": 200 } }
+        }
+      ]
+    },
+    "objectives": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["id", "text", "standards"], "additionalProperties": false,
+        "properties": { "id": { "type": "string" }, "text": { "type": "string" }, "standards": { "type": "array", "items": { "type": "string" } } }
+      }
+    },
+    "units": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/unit" } },
+    "glossary": { "type": "object", "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" }, "additionalProperties": { "$ref": "#/$defs/term" } },
+    "words": {
+      "type": "array",
+      "items": { "type": "object", "required": ["word", "means", "example"], "additionalProperties": false, "properties": { "word": { "type": "string" }, "means": { "type": "string" }, "example": { "type": "string" } } }
+    },
+    "games": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["id", "unit", "rounds"], "additionalProperties": false,
+        "properties": { "id": { "enum": ["buildCandle", "readDay", "candleMatch", "spotTrend", "drawTrend", "findFloor", "patternDetective", "busyDay", "smoothLine"] }, "unit": { "type": "string" }, "rounds": { "type": "integer", "minimum": 1, "maximum": 12 } }
+      }
+    },
+    "guess": {
+      "type": "object", "required": ["unit", "ladder", "tips", "reveal"], "additionalProperties": false,
+      "properties": {
+        "unit": { "type": "string" },
+        "ladder": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "tips": { "type": "object", "additionalProperties": { "type": "string" } },
+        "reveal": {
+          "type": "object", "required": ["beatUp", "beatDown", "missDown", "missUp", "unknown", "inLine", "tryAgain"], "additionalProperties": false,
+          "properties": { "beatUp": { "type": "string" }, "beatDown": { "type": "string" }, "missDown": { "type": "string" }, "missUp": { "type": "string" }, "unknown": { "type": "string" }, "inLine": { "type": "string" }, "tryAgain": { "type": "string" } }
+        }
+      }
+    },
+    "piggy": {
+      "type": "object", "required": ["unit", "ladder", "peekLimit", "tips"], "additionalProperties": false,
+      "properties": {
+        "unit": { "type": "string" },
+        "ladder": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "peekLimit": { "type": "integer", "minimum": 1 },
+        "tips": {
+          "type": "object", "required": ["oneBasket", "fewBaskets", "manyBaskets", "newBank", "longTime", "bigDrop", "bigRise", "peekMany"], "additionalProperties": false,
+          "properties": {
+            "oneBasket": { "type": "string" }, "fewBaskets": { "type": "string" }, "manyBaskets": { "type": "string" }, "newBank": { "type": "string" },
+            "longTime": { "type": "string" }, "bigDrop": { "type": "string" }, "bigRise": { "type": "string" }, "peekMany": { "type": "string" }
+          }
+        }
+      }
+    },
+    "review": {
+      "type": "object", "required": ["intervals", "retireAt", "perStop", "pass"], "additionalProperties": false,
+      "properties": {
+        "intervals": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 1 },
+        "retireAt": { "type": "integer", "minimum": 1 },
+        "perStop": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "pass": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      }
+    },
+    "assessments": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["id", "unit", "title", "pass"], "additionalProperties": false,
+        "properties": { "id": { "type": "string" }, "unit": { "type": "string" }, "title": { "type": "string" }, "pass": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }, "items": { "type": "array", "items": { "type": "string", "pattern": "^[a-z0-9-]+#\\d+$" } } }
+      }
+    },
+    "regions": { "type": "array", "items": { "$ref": "#/$defs/region" } },
+    "glyphs": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 16 }, "uniqueItems": true }
+  },
+  "$defs": {
+    "track": {
+      "type": "object", "required": ["id", "title", "blurb"], "additionalProperties": false,
+      "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "blurb": { "type": "string" } }
+    },
+    "person": {
+      "type": "object", "required": ["name", "role"], "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "enum": ["author", "teacher", "markets", "human", "creator"] },
+        "signedOff": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "note": { "type": "string" }
+      }
+    },
+    "unit": {
+      "type": "object", "required": ["id", "title", "emoji", "blurb", "lessons"], "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" }, "title": { "type": "string" }, "emoji": { "type": "string" }, "blurb": { "type": "string" },
+        "track": { "type": "string" }, "objectives": { "type": "array", "items": { "type": "string" } },
+        "lessons": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/lesson" } }
+      }
+    },
+    "lesson": {
+      "type": "object", "required": ["id", "title", "emoji", "steps"], "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" }, "title": { "type": "string" }, "emoji": { "type": "string" },
+        "track": { "type": "string" }, "objectives": { "type": "array", "items": { "type": "string" } },
+        "steps": { "type": "array", "minItems": 3, "maxItems": 7, "items": { "$ref": "#/$defs/step" } }
+      }
+    },
+    "step": {
+      "oneOf": [
+        { "type": "object", "required": ["t", "emoji", "text"], "additionalProperties": false, "properties": { "t": { "const": "say" }, "emoji": { "type": "string" }, "text": { "type": "string", "minLength": 1 } } },
+        {
+          "type": "object", "required": ["t", "q", "options", "answer", "why"], "additionalProperties": false,
+          "properties": { "t": { "const": "check" }, "q": { "type": "string" }, "options": { "type": "array", "minItems": 2, "maxItems": 4, "items": { "type": "string" } }, "answer": { "type": "integer", "minimum": 0 }, "why": { "type": "string" } }
+        },
+        {
+          "type": "object", "required": ["t", "q", "buckets", "items", "why"], "additionalProperties": false,
+          "properties": {
+            "t": { "const": "sort" }, "q": { "type": "string" }, "why": { "type": "string" },
+            "buckets": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
+            "items": { "type": "array", "minItems": 4, "items": { "type": "object", "required": ["emoji", "text", "b"], "additionalProperties": false, "properties": { "emoji": { "type": "string" }, "text": { "type": "string" }, "b": { "enum": [0, 1] } } } }
+          }
+        }
+      ]
+    },
+    "term": {
+      "type": "object", "required": ["word", "emoji", "means", "example"], "additionalProperties": false,
+      "properties": { "word": { "type": "string" }, "emoji": { "type": "string" }, "means": { "type": "string" }, "example": { "type": "string" }, "play": { "type": "string" } }
+    },
+    "region": {
+      "type": "object", "required": ["id", "name", "blurb", "art", "hue", "nodes"], "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" }, "name": { "type": "string" }, "blurb": { "type": "string" }, "art": { "type": "string" },
+        "hue": { "enum": ["lemon", "orange", "coral", "berry", "grape", "sky", "teal", "mint", "gold", "slate", "choco", "ink"] },
+        "nodes": {
+          "type": "array", "minItems": 2,
+          "items": {
+            "type": "object", "required": ["id", "title", "art", "kind"], "additionalProperties": false,
+            "properties": { "id": { "type": "string", "pattern": "^[a-z0-9-]+$" }, "title": { "type": "string" }, "art": { "type": "string" }, "kind": { "enum": ["unit", "lesson", "quest", "game", "guess", "review", "timeMachine", "practice"] }, "ref": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}
