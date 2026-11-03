@@ -74,36 +74,94 @@ const todayNY = () => new Date(new Date().toLocaleString("en-US", { timeZone: "A
 // ── /api/calendar ───────────────────────────────────────────────────────
 const BIG_REVENUE = 1e9; // untracked companies still appear if they're this large
 
-async function calendarDay(day: string, env: Env, ctx: ExecutionContext): Promise<EarningsEvent[]> {
-  const today = iso(todayNY());
-  const ttl = day < addDays(today, -3) ? 21600 : 1800; // settled history caches longer
-  const staleKey = `cal:stale:v2:${day}`;
-  try {
-    return await cached(`cal:v2:${day}`, ttl, ctx, async () => {
-      const fresh = await fetchCalendarDay(day, env);
-      ctx.waitUntil(caches.default.put(new Request(`https://cache.metaphases.internal/${encodeURIComponent(staleKey)}`), new Response(JSON.stringify(fresh), { headers: { "Cache-Control": "public, max-age=604800" } })));
-      return fresh;
-    });
-  } catch (e) {
-    // Rate-limited or upstream down: serve the last good copy (kept 7 days) before giving up.
-    const stale = await caches.default.match(new Request(`https://cache.metaphases.internal/${encodeURIComponent(staleKey)}`));
-    if (stale) return (await stale.json()) as EarningsEvent[];
-    throw e;
+const CAL = (key: string) => new Request(`https://cache.metaphases.internal/${encodeURIComponent(key)}`);
+/** How long a day's list stays fresh: settled history 6 h, the next two weeks 30 min, far-ahead dates 6 h (they rarely move). */
+const calTtl = (day: string, today: string) => (day < addDays(today, -3) || day > addDays(today, 14) ? 21600 : 1800);
+/** Finnhub returns at most ~1500 rows per call; a range at or past this is treated as truncated and re-fetched day by day. */
+const RANGE_CAP = 1400;
+
+function toEvents(rows: any[]): EarningsEvent[] {
+  const out: EarningsEvent[] = [];
+  for (const e of rows ?? []) {
+    const tracked = e.symbol in U;
+    if (!tracked && !((e.revenueEstimate ?? 0) >= BIG_REVENUE || (e.revenueActual ?? 0) >= BIG_REVENUE)) continue;
+    if (!tracked && /[.\-]/.test(e.symbol)) continue; // skip foreign share classes without logos
+    out.push({ s: e.symbol, d: e.date, h: (e.hour || "") as Session, q: e.quarter, y: e.year, eE: e.epsEstimate, eA: e.epsActual, rE: e.revenueEstimate, rA: e.revenueActual, t: tracked ? 1 : 0 });
   }
+  return out;
+}
+
+async function putDay(day: string, events: EarningsEvent[], today: string, ctx: ExecutionContext) {
+  const body = JSON.stringify(events);
+  ctx.waitUntil(Promise.all([
+    caches.default.put(CAL(`cal:v2:${day}`), new Response(body, { headers: { "Cache-Control": `public, max-age=${calTtl(day, today)}`, "Content-Type": "application/json" } })),
+    caches.default.put(CAL(`cal:stale:v2:${day}`), new Response(body, { headers: { "Cache-Control": "public, max-age=604800" } })),
+  ]));
 }
 
 async function fetchCalendarDay(day: string, env: Env): Promise<EarningsEvent[]> {
-  {
-    const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${day}&to=${day}&token=${env.FINNHUB_API_KEY}`);
-    const out: EarningsEvent[] = [];
-    for (const e of data.earningsCalendar ?? []) {
-      const tracked = e.symbol in U;
-      if (!tracked && !((e.revenueEstimate ?? 0) >= BIG_REVENUE || (e.revenueActual ?? 0) >= BIG_REVENUE)) continue;
-      if (!tracked && /[.\-]/.test(e.symbol)) continue; // skip foreign share classes without logos
-      out.push({ s: e.symbol, d: e.date, h: (e.hour || "") as Session, q: e.quarter, y: e.year, eE: e.epsEstimate, eA: e.epsActual, rE: e.revenueEstimate, rA: e.revenueActual, t: tracked ? 1 : 0 });
+  const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${day}&to=${day}&token=${env.FINNHUB_API_KEY}`);
+  return toEvents(data.earningsCalendar);
+}
+
+/**
+ * One week's days. Cached days come straight from the cache; the rest come from ONE Finnhub range call
+ * (not one per day), so paging months ahead stays far under the free tier's ~60 calls/min. That burst of
+ * per-day calls is what left months past February empty. A truncated range falls back to per-day calls,
+ * and any failure falls back to the last good copy (kept 7 days).
+ */
+async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext): Promise<PromiseSettledResult<EarningsEvent[]>[]> {
+  const today = iso(todayNY());
+  const out: PromiseSettledResult<EarningsEvent[]>[] = new Array(days.length);
+  const missing: number[] = [];
+  await Promise.all(days.map(async (d, i) => {
+    const hit = await caches.default.match(CAL(`cal:v2:${d}`));
+    if (hit) out[i] = { status: "fulfilled", value: (await hit.json()) as EarningsEvent[] }; else missing.push(i);
+  }));
+  if (!missing.length) return out;
+  const from = days[Math.min(...missing)], to = days[Math.max(...missing)];
+  let byDay: Map<string, EarningsEvent[]> | null = null;
+  let rangeError: unknown = null;
+  try {
+    const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${from}&to=${to}&token=${env.FINNHUB_API_KEY}`);
+    const rows = data.earningsCalendar ?? [];
+    if (rows.length < RANGE_CAP || from === to) {
+      byDay = new Map();
+      for (const e of toEvents(rows)) (byDay.get(e.d) ?? byDay.set(e.d, []).get(e.d)!).push(e);
     }
-    return out;
+  } catch (e) {
+    // A failed range call (429 after retries, upstream down) must not fan out into per-day retries:
+    // that only deepens the rate limit. Go straight to the last good copy.
+    rangeError = e;
   }
+  const settle = async (i: number, load: () => Promise<EarningsEvent[]>) => {
+    const d = days[i];
+    try {
+      const ev = await load();
+      putDay(d, ev, today, ctx);
+      out[i] = { status: "fulfilled", value: ev };
+    } catch (reason) {
+      const stale = await caches.default.match(CAL(`cal:stale:v2:${d}`));
+      out[i] = stale ? { status: "fulfilled", value: (await stale.json()) as EarningsEvent[] } : { status: "rejected", reason };
+    }
+  };
+  if (rangeError) {
+    await Promise.all(missing.map((i) => settle(i, () => Promise.reject(rangeError))));
+  } else if (byDay) {
+    const m = byDay;
+    await Promise.all(missing.map((i) => settle(i, async () => m.get(days[i]) ?? [])));
+  } else {
+    // Truncated busy week: day by day, at most 2 in flight (3 weeks in parallel stays ≤ 6 calls at once).
+    await pool(missing, 2, (i) => settle(i, () => fetchCalendarDay(days[i], env)));
+  }
+  return out;
+}
+
+/** A single day (the share-card and brief paths), through the same cache and fallbacks. */
+async function calendarDay(day: string, env: Env, ctx: ExecutionContext): Promise<EarningsEvent[]> {
+  const [r] = await calendarWeek([day], env, ctx);
+  if (r.status === "fulfilled") return r.value;
+  throw r.reason;
 }
 
 async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -114,8 +172,15 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     const wd = new Date(d + "T12:00:00Z").getUTCDay();
     if (wd !== 0 && wd !== 6) days.push(d);
   }
+  // Group by week (a Monday starts a new group): one upstream call per week at most.
+  const weeks: string[][] = [];
+  for (const d of days) {
+    if (!weeks.length || new Date(d + "T12:00:00Z").getUTCDay() === 1) weeks.push([]);
+    weeks[weeks.length - 1].push(d);
+  }
+  const perWeek = await pool(weeks, 3, (w) => calendarWeek(w, env, ctx));
+  const results = perWeek.flatMap((r, wi) => (r.status === "fulfilled" ? r.value : weeks[wi].map(() => ({ status: "rejected", reason: r.reason }) as PromiseSettledResult<EarningsEvent[]>)));
   const warnings: string[] = [];
-  const results = await pool(days, 6, (d) => calendarDay(d, env, ctx));
   const events: EarningsEvent[] = [];
   results.forEach((r, i) => (r.status === "fulfilled" ? events.push(...r.value) : warnings.push(`Couldn't load ${days[i]} — showing the rest.`)));
   const body: CalendarResponse = { from, to, events, asOf: new Date().toISOString(), warnings };
