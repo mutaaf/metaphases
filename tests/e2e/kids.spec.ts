@@ -18,9 +18,12 @@ test.describe("Metaphases Kids", () => {
     await expect(page.locator(".macro, .top, .tabbar")).toHaveCount(0);
   });
 
-  test("the kids lens opens kids mode from the home page", async ({ page }) => {
+  test("the home page stays the grown-up app even after picking kids mode (kids is its own place)", async ({ page }) => {
     await page.goto("./");
-    await expect(page).toHaveURL(/\/kids$/);
+    await expect(page).not.toHaveURL(/\/kids/);
+    await expect(page.locator(".k-tabbar")).toHaveCount(0);
+    // The grown-up app still links to kids mode.
+    await expect(page.getByRole("link", { name: /^Kids$/ }).first()).toHaveAttribute("href", /\/kids$/);
   });
 
   test("story cards: market weather, report cards from companies kids know, read-aloud", async ({ page }) => {

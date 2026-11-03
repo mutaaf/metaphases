@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 
 export interface WatchItem { s: string; buy?: number; note?: string; added: string }
 export interface Holding { s: string; v: number } // symbol, dollar value
-export interface Prefs { theme: "auto" | "light" | "dark"; tiles: "logo" | "ticker"; view: "month" | "week" | "day"; filter: string; sector: string; brief: "auto" | "open" | "closed"; intro: "new" | "seen" | "dismissed"; lens: "unset" | "everyday" | "trader" | "kids"; install: "new" | "dismissed" }
+export interface Prefs { theme: "auto" | "light" | "dark"; tiles: "logo" | "ticker"; view: "month" | "week" | "day"; filter: string; sector: string; brief: "auto" | "open" | "closed"; intro: "new" | "seen" | "dismissed"; lens: "unset" | "everyday" | "trader"; install: "new" | "dismissed" }
 
 const KEY = "metaphases:v1";
 interface State { watch: WatchItem[]; holdings: Holding[]; prefs: Prefs }
@@ -14,7 +14,7 @@ const DEFAULT: State = {
 };
 
 let state: State = (() => {
-  try { const raw = localStorage.getItem(KEY); if (raw) { const p = JSON.parse(raw); return { ...DEFAULT, ...p, prefs: { ...DEFAULT.prefs, ...p.prefs } }; } } catch {}
+  try { const raw = localStorage.getItem(KEY); if (raw) { const p = JSON.parse(raw); const prefs = { ...DEFAULT.prefs, ...p.prefs }; if ((prefs.lens as string) === "kids") prefs.lens = "everyday"; return { ...DEFAULT, ...p, prefs }; } } catch {}
   return DEFAULT;
 })();
 const subs = new Set<() => void>();
