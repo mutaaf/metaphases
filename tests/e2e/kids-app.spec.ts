@@ -35,3 +35,12 @@ test.describe("Moon Club app page", () => {
     expect(over).toBeLessThanOrEqual(0);
   });
 });
+
+test.describe("Kids privacy policy", () => {
+  test.use({ lens: "kids" });
+  test("is reachable directly (Apple links it) and has no links out", async ({ page }) => {
+    await page.goto("./kids/privacy");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("in plain words");
+    await expect(page.locator(".k-privacy a[href^='http']")).toHaveCount(0);
+  });
+});

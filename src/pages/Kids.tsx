@@ -27,6 +27,7 @@ import { chaptersDone } from "../../shared/kidsQuestContent";
 import { QuestPage, StartHere, W, WordChips } from "./KidsQuest";
 import { VoiceCorner } from "./KidsVoice";
 import { AppNudge, AppPage } from "./KidsAppPage";
+import { PrivacyPage } from "./KidsPrivacy";
 import { canSpeak, markKidTyped, speakText, useVoiceSettings } from "../lib/voice";
 import "../styles/kids.css";
 
@@ -943,6 +944,7 @@ function GrownUps() {
           <li><b>No ads and no links out</b> of kids mode.</li>
           <li><b>Luna, the AI helper,</b> uses a free model with a kid-safe prompt: simple words, money topics only, never advice, and she never asks for personal details. She can still make mistakes, so stay nearby.</li>
           <li>Nothing here is investment advice.</li>
+          <li><a href={href("/kids/privacy")} onClick={(e) => { e.preventDefault(); navigate("/kids/privacy"); }}>Read the full privacy policy</a></li>
         </ul>
       </section>
       <section className="k-section">
@@ -1197,6 +1199,7 @@ export default function KidsApp() {
     path === "/kids/start" ? <QuestPage key={location.search} /> :
     path === "/kids/grownups" ? <GrownUps /> :
     path === "/kids/app" ? <AppPage Gate={ParentGate} /> :
+    path === "/kids/privacy" ? <PrivacyPage /> :
     <StoryPage />;
   const tabOn = (t: string) => (t === "/kids" ? path === "/kids" : path.startsWith(t));
   return (
