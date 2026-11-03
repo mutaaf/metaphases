@@ -56,8 +56,8 @@ export default function App() {
   useEffect(() => {
     if (landed) return;
     landed = true;
-    if (prefs.lens === "kids" && path === "/" && !location.search) navigate("/kids", true);
-    else if (prefs.lens === "everyday" && path === "/" && !location.search && matchMedia("(max-width: 760px)").matches) navigate("/today", true);
+    // Kids mode (/kids) is its own place: the home page always opens the grown-up app, whatever was picked.
+    if (prefs.lens === "everyday" && path === "/" && !location.search && matchMedia("(max-width: 760px)").matches) navigate("/today", true);
   }, []);
 
   // Share URLs: /t/AAPL opens the calendar with AAPL's sheet on top.
