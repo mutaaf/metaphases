@@ -35,6 +35,9 @@ export function activeOverrides(all: DateOverrides, today: string): DateOverride
 const sameReport = (o: DateOverride, d: string, q: number | undefined, y: number | undefined) =>
   (q === o.quarter && y === o.year) || gap(d, o.date) <= SAME_REPORT_DAYS;
 
+/** Which of several rows for the same report to keep: the one on the company's date, then one with results, then estimates. */
+const rank = (e: EarningsEvent, o: DateOverride) => (e.d === o.date ? 4 : 0) + (e.eA != null ? 2 : 0) + (e.eE != null ? 1 : 0);
+
 /**
  * Calendar events for [from, to]: an overridden symbol's row for that report is moved to the company's date
  * and session (estimates kept), or added without estimates when Finnhub has no row, or dropped when the
@@ -49,7 +52,7 @@ export function applyToEvents(events: EarningsEvent[], all: DateOverrides, from:
     const o = live[e.s];
     if (o && sameReport(o, e.d, e.q, e.y)) {
       const prev = found.get(e.s);
-      if (!prev || (prev.d !== o.date && (e.d === o.date || (prev.eE == null && e.eE != null)))) found.set(e.s, e);
+      if (!prev || rank(e, o) > rank(prev, o)) found.set(e.s, e);
       continue;
     }
     out.push(e);
@@ -73,7 +76,7 @@ export function applyToRows(symbol: string, rows: any[], all: DateOverrides, tod
   if (!o) return rows;
   const mine = rows.filter((r) => sameReport(o, r.date, r.quarter, r.year));
   const rest = rows.filter((r) => !mine.includes(r));
-  const base = mine.find((r) => r.date === o.date) ?? mine.find((r) => r.epsEstimate != null) ?? mine[0];
+  const base = mine.find((r) => r.date === o.date) ?? mine.find((r) => r.epsActual != null) ?? mine.find((r) => r.epsEstimate != null) ?? mine[0];
   const fixed = base
     ? { ...base, date: o.date, hour: o.hour, source: o.source }
     : { symbol, date: o.date, hour: o.hour, quarter: o.quarter, year: o.year, epsEstimate: null, epsActual: null, revenueEstimate: null, revenueActual: null, source: o.source };
@@ -90,11 +93,13 @@ export function validateOverrides(raw: unknown, today: string): string[] {
     if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(s)) bad("symbol must be upper case");
     if (!v || typeof v !== "object") { bad("entry must be an object"); continue; }
     if (typeof v.date !== "string" || !ISO.test(v.date)) bad("date must be YYYY-MM-DD");
+    else if ([0, 6].includes(new Date(v.date + "T12:00:00Z").getUTCDay())) bad("date falls on a weekend; check the release");
     if (!["bmo", "amc", "dmh"].includes(v.hour)) bad("hour must be bmo, amc or dmh");
     if (!Number.isInteger(v.quarter) || v.quarter < 1 || v.quarter > 4) bad("quarter must be 1–4");
     if (!Number.isInteger(v.year)) bad("year must be a number");
     if (typeof v.source !== "string" || !/^https:\/\/[^\s]+\.[^\s]+/.test(v.source)) bad("source must be an https URL of the company's announcement");
     if (typeof v.checked !== "string" || !ISO.test(v.checked)) { bad("checked must be YYYY-MM-DD"); continue; }
+    if (v.checked > today) bad(`checked ${v.checked} is in the future`);
     if (typeof v.date === "string" && ISO.test(v.date) && dayNum(today) - dayNum(v.date) <= EXPIRE_DAYS && dayNum(today) - dayNum(v.checked) > MAX_CHECK_AGE)
       bad(`checked ${v.checked} is more than ${MAX_CHECK_AGE} days old; re-read the source`);
   }

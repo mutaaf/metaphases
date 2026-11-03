@@ -44,6 +44,15 @@ describe("date overrides on the calendar", () => {
     expect(out.filter((e) => e.s === "ARM")).toEqual([]);
   });
 
+  it("keeps the row on the company's date whatever the order, and prefers a row with results over a projection", () => {
+    for (const evs of [[ev("ARM", "2026-11-05"), ev("ARM", "2026-11-04", "amc")], [ev("ARM", "2026-11-04", "amc"), ev("ARM", "2026-11-05")]]) {
+      expect(applyToEvents(evs, O, "2026-11-02", "2026-11-06", "2026-11-02").filter((e) => e.s === "ARM").map((e) => e.d)).toEqual(["2026-11-04"]);
+    }
+    const reported = { ...ev("ARM", "2026-11-03"), eA: 0.51 };
+    const out = applyToEvents([ev("ARM", "2026-11-05"), reported], O, "2026-11-02", "2026-11-06", "2026-11-06");
+    expect(out.filter((e) => e.s === "ARM")).toEqual([expect.objectContaining({ d: "2026-11-04", eA: 0.51 })]);
+  });
+
   it("is a no-op when Finnhub agrees", () => {
     const out = applyToEvents([ev("ARM", "2026-11-04", "amc")], O, "2026-11-02", "2026-11-06", "2026-11-02");
     expect(out.filter((e) => e.s === "ARM")).toHaveLength(1);
@@ -90,6 +99,17 @@ describe("validateOverrides", () => {
     expect(errs.some((e) => e.startsWith("C:") && /checked/.test(e))).toBe(true);
     expect(errs.some((e) => e.startsWith("D:") && /source/.test(e))).toBe(true);
     expect(validateOverrides(O, "2026-11-03")).toEqual([]);
+  });
+
+  it("rejects a weekend date and a checked date in the future, and ignores a stale check on an expired entry", () => {
+    const errs = validateOverrides({
+      W: { date: "2026-11-07", hour: "amc", quarter: 1, year: 2027, source: "https://x.com/w", checked: "2026-11-03" },
+      F: { date: "2026-11-04", hour: "amc", quarter: 1, year: 2027, source: "https://x.com/f", checked: "2062-11-03" },
+      X: { date: "2026-09-01", hour: "amc", quarter: 1, year: 2027, source: "https://x.com/x", checked: "2026-08-01" },
+    }, "2026-11-03");
+    expect(errs.some((e) => e.startsWith("W:") && /weekend/.test(e))).toBe(true);
+    expect(errs.some((e) => e.startsWith("F:") && /future/.test(e))).toBe(true);
+    expect(errs.some((e) => e.startsWith("X:"))).toBe(false);
   });
 
   it("the committed data/date-overrides.json is valid today", () => {
