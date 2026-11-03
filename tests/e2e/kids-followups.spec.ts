@@ -67,7 +67,7 @@ test.describe("Kids follow-ups", () => {
     const sheet = page.locator(".k-sheet");
     await expect(sheet).toContainText("What is a share?");
     await expect(sheet).toContainText("If you own a share of a company, you own");
-    await expect(sheet).toContainText("Where do people buy and sell shares?");
+    await expect(sheet).toContainText("Can you take a toy from its store for free?");
     await expect(sheet.getByLabel("Answer key")).toContainText("A tiny piece of it");
     await expect(page.locator(".k-tabbar, .k-top, .tabbar, .top")).toHaveCount(0);
     expect(await page.locator("a[href]").count()).toBe(0);

@@ -126,3 +126,18 @@ test.describe("Metaphases Kids", () => {
     }
   });
 });
+
+test.describe("Kids: why did it move?", () => {
+  test.use({ lens: "kids" });
+  test("the story explains a move with ranked, honest clues and no links out", async ({ page }) => {
+    await page.goto("./kids");
+    const card = page.locator(".k-why");
+    for (let i = 0; i < 8 && !(await card.isVisible()); i++) await page.getByRole("button", { name: "Next card" }).click();
+    await expect(card).toContainText("Why did it move?");
+    await expect(card.locator(".k-why-clue").first()).toContainText("whole market");
+    await expect(card).toContainText("Nobody knows for sure what comes next");
+    await card.getByRole("button", { name: "One week" }).click();
+    await expect(card).toContainText("over the past week");
+    await expect(card.locator("a[href^='http']")).toHaveCount(0);
+  });
+});

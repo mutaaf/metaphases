@@ -1,0 +1,1926 @@
+{
+  "$schema": "../pack.schema.json",
+  "format": 1,
+  "id": "core",
+  "title": "Moon Club Core",
+  "version": "2.0.0",
+  "kind": "core",
+  "requires": {"content":1,"app":"0.12.0"},
+  "ages": {"min":6,"max":11},
+  "tracks": [
+    {"id":"6-8","title":"Little Moons (ages 6–8)","blurb":"Money, choices, companies and saving. Lots of pictures and sorting."},
+    {"id":"9-11","title":"Big Moons (ages 9–11)","blurb":"Shares, report cards, charts and why prices move. Clues, never promises."}
+  ],
+  "curators": [{"name":"Metaphases Kids","role":"author"}],
+  "reviewers": [
+    {
+      "name": "Ms. Rivera",
+      "role": "teacher",
+      "signedOff": "2026-11-03",
+      "note": "AI reviewer persona: veteran elementary teacher and reading specialist. Two rounds; see reviews/."
+    },
+    {
+      "name": "Dr. Okafor",
+      "role": "markets",
+      "signedOff": "2026-11-03",
+      "note": "AI reviewer persona: former equity analyst and finance educator. Two rounds; see reviews/."
+    },
+    {
+      "name": "Grown-up sign-off",
+      "role": "human",
+      "signedOff": null,
+      "note": "A person signs the checklist in moon-club docs/PACKS.md before this pack goes on the remote channel."
+    }
+  ],
+  "creator": null,
+  "objectives": [
+    {"id":"money.why","text":"Explain why people use money instead of trading things.","standards":["Jump$tart: Saving","CEE Econ 11: Money"]},
+    {"id":"money.earn","text":"Say that most people earn money by working.","standards":["Jump$tart: Earning Income"]},
+    {"id":"money.needs","text":"Sort needs from wants.","standards":["Jump$tart: Saving","CFPB: Habits & norms"]},
+    {"id":"money.plan","text":"Describe a budget as a plan made before spending.","standards":["Jump$tart: Saving","CFPB: Executive function"]},
+    {"id":"money.tradeoff","text":"Name what you give up when you choose (a trade-off).","standards":["Jump$tart: Spending","CEE Econ 1: Scarcity"]},
+    {"id":"co.what","text":"Describe a company as a team that sells goods or services.","standards":["CEE Econ 14: Entrepreneurship"]},
+    {"id":"co.profit","text":"Work out profit as money in minus money out.","standards":["CEE Econ 14: Entrepreneurship"]},
+    {"id":"co.grow","text":"Explain that companies can sell shares to raise money to grow.","standards":["Jump$tart: Investing"]},
+    {"id":"sh.share","text":"Explain that a share is a small piece of a company.","standards":["Jump$tart: Investing"]},
+    {"id":"sh.owner","text":"Describe what being a part owner means, including that value can rise or fall.","standards":["Jump$tart: Investing"]},
+    {"id":"sh.market","text":"Say where shares are traded.","standards":["Jump$tart: Investing","OECD: Financial landscape"]},
+    {
+      "id": "sh.price",
+      "text": "Explain that prices move when buyers or sellers are more eager.",
+      "standards": ["CEE Econ 7: Markets & prices","CEE Econ 8: Role of prices"]
+    },
+    {"id":"sh.ticker","text":"Recognize a ticker as a company's short name on the market.","standards":["Jump$tart: Investing"]},
+    {
+      "id": "gr.save-invest",
+      "text": "Tell saving (stays the same) from investing (can grow or shrink).",
+      "standards": ["Jump$tart: Saving","Jump$tart: Investing"]
+    },
+    {"id":"gr.interest","text":"Describe interest as extra money a bank pays.","standards":["Jump$tart: Saving"]},
+    {"id":"gr.compound","text":"Explain why starting early helps growth pile up.","standards":["Jump$tart: Investing"]},
+    {"id":"gr.risk","text":"Sort choices by low and high risk.","standards":["Jump$tart: Managing Risk","OECD: Risk & reward"]},
+    {
+      "id": "gr.when",
+      "text": "Choose saving for soon and investing for a long time away.",
+      "standards": ["Jump$tart: Investing","OECD: Planning & managing finances"]
+    },
+    {"id":"dv.what","text":"Explain a dividend as profit shared with owners.","standards":["Jump$tart: Investing"]},
+    {"id":"dv.why-not","text":"Explain why some companies keep profit to grow.","standards":["Jump$tart: Investing"]},
+    {"id":"dv.reinvest","text":"Compare spending a dividend with reinvesting it.","standards":["Jump$tart: Investing"]},
+    {"id":"dv.day","text":"Explain why the price can drop by about the dividend on its cut-off day.","standards":["Jump$tart: Investing"]},
+    {
+      "id": "sm.spread",
+      "text": "Explain why spreading money across many companies lowers the risk from any one company.",
+      "standards": ["Jump$tart: Managing Risk","OECD: Risk & reward"]
+    },
+    {
+      "id": "sm.patience",
+      "text": "Explain why long-term investors don't react to one bad day.",
+      "standards": ["Jump$tart: Investing","CFPB: Executive function"]
+    },
+    {"id":"sm.hype","text":"Tell hype from facts and ask who is talking and why.","standards":["Jump$tart: Spending","OECD: Financial landscape"]},
+    {"id":"sm.scams","text":"Spot a too-good-to-be-true promise and ask a grown-up.","standards":["Jump$tart: Managing Risk","Jump$tart: Spending"]},
+    {"id":"rc.what","text":"Describe a company report card (earnings report) and how often it comes.","standards":["Jump$tart: Investing"]},
+    {"id":"rc.estimate","text":"Explain that experts estimate profit per share before the report.","standards":["Jump$tart: Investing"]},
+    {"id":"rc.beat","text":"Decide beat or miss by comparing the result with the estimate.","standards":["Jump$tart: Investing"]},
+    {"id":"rc.expect","text":"Explain why a price can fall on a beat (expectations).","standards":["CEE Econ 7: Markets & prices"]},
+    {"id":"rc.guidance","text":"Explain guidance as a company's own guess about what comes next.","standards":["Jump$tart: Investing"]},
+    {"id":"rc.jump","text":"Explain why prices move fast on report day.","standards":["CEE Econ 7: Markets & prices"]},
+    {"id":"pg.pretend","text":"Say that Piggy Bank coins are pretend and follow real prices.","standards":["CFPB: Habits & norms"]},
+    {"id":"pg.spread","text":"Work out how spreading coins limits the hurt from one company.","standards":["Jump$tart: Managing Risk"]},
+    {"id":"pg.time","text":"Explain why time can smooth out ups and downs, without a promise.","standards":["Jump$tart: Investing","OECD: Risk & reward"]},
+    {"id":"pg.updown","text":"Treat a down day as normal, not a mistake.","standards":["CFPB: Executive function"]},
+    {"id":"pg.peek","text":"Choose to check now and then instead of every minute.","standards":["CFPB: Executive function","CFPB: Habits & norms"]},
+    {"id":"why.market","text":"Use the whole market's move as a clue.","standards":["CEE Econ 7: Markets & prices"]},
+    {"id":"why.group","text":"Use a group's (sector's) move as a clue.","standards":["CEE Econ 7: Markets & prices"]},
+    {"id":"why.wiggle","text":"Compare a move with its normal size.","standards":["OECD: Risk & reward"]},
+    {"id":"why.unsure","text":"Say \"we're not sure\" when there are no clues.","standards":["Jump$tart: Spending"]},
+    {"id":"ch.candle","text":"Read a candle's body and color.","standards":["Jump$tart: Investing"]},
+    {"id":"ch.wick","text":"Read a candle's high and low from its wicks.","standards":["Jump$tart: Investing"]},
+    {"id":"ch.tug","text":"Recognize a tug-of-war day (small body, long wicks).","standards":["Jump$tart: Investing"]},
+    {"id":"ch.trend","text":"Tell an up trend from a down trend.","standards":["Jump$tart: Investing"]},
+    {"id":"ch.sideways","text":"Recognize a sideways trend, and that trends can change.","standards":["Jump$tart: Investing"]},
+    {"id":"ch.zoom","text":"Zoom out instead of judging by one day.","standards":["CFPB: Executive function"]},
+    {"id":"ch.support","text":"Find a floor (support) and a ceiling (resistance), and that they can break.","standards":["Jump$tart: Investing"]},
+    {"id":"ch.breakout","text":"Recognize a breakout and that many fail.","standards":["Jump$tart: Investing"]},
+    {"id":"ch.hindsight","text":"Explain why chart shapes look obvious only after the fact.","standards":["Jump$tart: Investing"]},
+    {"id":"ch.clues","text":"Treat chart shapes as clues, never promises.","standards":["Jump$tart: Spending"]},
+    {"id":"ch.volume","text":"Explain volume as how many shares were traded.","standards":["Jump$tart: Investing"]},
+    {"id":"ch.average","text":"Explain a moving average as a smooth, backward-looking line.","standards":["Jump$tart: Investing"]},
+    {"id":"ch.reportday","text":"Explain why report day can bring big moves either way.","standards":["CEE Econ 7: Markets & prices"]}
+  ],
+  "units": [
+    {
+      "id": "money",
+      "title": "Money basics",
+      "emoji": "💰",
+      "blurb": "What money is, and how to plan it.",
+      "track": "6-8",
+      "objectives": ["money.why","money.earn","money.needs","money.plan","money.tradeoff"],
+      "lessons": [
+        {
+          "id": "money",
+          "title": "What is money?",
+          "emoji": "💵",
+          "track": "6-8",
+          "objectives": ["money.why"],
+          "steps": [
+            {"t":"say","emoji":"🐄","text":"Long ago, people traded things. A cow for some bread!"},
+            {"t":"say","emoji":"🤔","text":"That was hard. What if the baker did not want a cow?"},
+            {"t":"say","emoji":"💵","text":"So people made money. Everyone agrees it is worth something, so everyone takes it."},
+            {
+              "t": "check",
+              "q": "Why did people start using money?",
+              "options": ["It makes trading easy","It makes things cost more","So nobody has to work"],
+              "answer": 0,
+              "why": "Money makes trading easy, because everyone takes it."
+            }
+          ]
+        },
+        {
+          "id": "earn",
+          "title": "Where does money come from?",
+          "emoji": "🧑‍🍳",
+          "track": "6-8",
+          "objectives": ["money.earn"],
+          "steps": [
+            {"t":"say","emoji":"🧑‍🍳","text":"Grown-ups earn money by doing work. A cook cooks. A nurse helps sick people."},
+            {"t":"say","emoji":"🍋","text":"With a grown-up's OK, kids can earn too. You can sell lemonade or help a neighbor."},
+            {"t":"say","emoji":"🏦","text":"A bank machine does not make money. It gives back money that was put in first."},
+            {
+              "t": "check",
+              "q": "How do most grown-ups get money?",
+              "options": ["By working at a job","The bank gives it out for free","The store gives it to them"],
+              "answer": 0,
+              "why": "Most grown-ups earn money by doing a job."
+            }
+          ]
+        },
+        {
+          "id": "needs",
+          "title": "Needs and wants",
+          "emoji": "🎒",
+          "track": "6-8",
+          "objectives": ["money.needs"],
+          "steps": [
+            {"t":"say","emoji":"🍎","text":"A need is something you must have. Like food, a home and clothes."},
+            {"t":"say","emoji":"🎮","text":"A want is something nice to have. Like a new game or candy."},
+            {
+              "t": "sort",
+              "q": "Is it a need or a want?",
+              "buckets": ["Need","Want"],
+              "items": [
+                {"emoji":"🍎","text":"Food","b":0},
+                {"emoji":"🎮","text":"A new game","b":1},
+                {"emoji":"🧥","text":"A warm coat","b":0},
+                {"emoji":"🍭","text":"Candy","b":1},
+                {"emoji":"🏠","text":"A home","b":0},
+                {"emoji":"🧸","text":"One more toy","b":1}
+              ],
+              "why": "Needs come first. Wants come next, if there is money left."
+            }
+          ]
+        },
+        {
+          "id": "budget",
+          "title": "Make a money plan",
+          "emoji": "📋",
+          "track": "6-8",
+          "objectives": ["money.plan"],
+          "steps": [
+            {"t":"say","emoji":"📋","text":"A budget is a plan for your money. You plan before you spend."},
+            {"t":"say","emoji":"🫙","text":"Try three jars: Spend, Save and Give. Put some money in each one."},
+            {"t":"say","emoji":"✅","text":"When you see something fun, check your Spend jar first."},
+            {
+              "t": "check",
+              "q": "A budget is…",
+              "options": ["A plan for your money","Money you spend right away","A piggy bank"],
+              "answer": 0,
+              "why": "A budget is a plan. It helps you choose before you spend."
+            }
+          ]
+        },
+        {
+          "id": "choose",
+          "title": "Every choice has a trade-off",
+          "emoji": "⚖️",
+          "track": "6-8",
+          "objectives": ["money.tradeoff"],
+          "steps": [
+            {"t":"say","emoji":"⚖️","text":"You have $5. You can get a kite or a book. Not both!"},
+            {"t":"say","emoji":"🤔","text":"When you pick one thing, you give up the other one. That is called a trade-off."},
+            {"t":"say","emoji":"🧠","text":"Good choosers ask: What do I give up if I pick this?"},
+            {
+              "t": "check",
+              "q": "Sam has $5. He picks candy instead of a kite. What did Sam give up?",
+              "options": ["The kite","The candy","Nothing"],
+              "answer": 0,
+              "why": "Sam picked candy, so he gave up the kite. The kite is the trade-off."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "companies",
+      "title": "Companies",
+      "emoji": "🏪",
+      "blurb": "Who makes the things you love.",
+      "track": "6-8",
+      "objectives": ["co.what","co.profit","co.grow"],
+      "lessons": [
+        {
+          "id": "company",
+          "title": "What is a company?",
+          "emoji": "🏪",
+          "track": "6-8",
+          "objectives": ["co.what"],
+          "steps": [
+            {"t":"say","emoji":"👟","text":"A company is a team of people. They work together to sell something."},
+            {"t":"say","emoji":"🎮","text":"Some sell things you can hold, like shoes. Some sell things you use, like games or shows."},
+            {"t":"say","emoji":"🏪","text":"A shop that cuts hair is a company too. It sells help, not things."},
+            {
+              "t": "check",
+              "q": "What does a company do?",
+              "options": ["Sells things or help","Gives everything away free","Makes the rules for a town"],
+              "answer": 0,
+              "why": "A company sells things, or help like haircuts, to people."
+            }
+          ]
+        },
+        {
+          "id": "profit",
+          "title": "Money in, money out",
+          "emoji": "🧾",
+          "track": "6-8",
+          "objectives": ["co.profit"],
+          "steps": [
+            {"t":"say","emoji":"💵","text":"Money in is all the money a company gets from selling things."},
+            {"t":"say","emoji":"🧾","text":"Money out is what it pays for. Workers, rent and supplies."},
+            {"t":"say","emoji":"✨","text":"Money in take away money out is profit. If money out is bigger, that is a loss."},
+            {
+              "t": "sort",
+              "q": "Money in or money out?",
+              "buckets": ["Money in","Money out"],
+              "items": [
+                {"emoji":"🍋","text":"Selling a cup of lemonade","b":0},
+                {"emoji":"🛒","text":"Buying lemons","b":1},
+                {"emoji":"🥤","text":"Buying cups","b":1},
+                {"emoji":"💵","text":"A neighbor pays $1","b":0}
+              ],
+              "why": "Selling brings money in. Paying for things sends money out."
+            },
+            {
+              "t": "check",
+              "q": "A cookie stand sells $20 of cookies. Its only cost is $5. What is the profit?",
+              "options": ["$15","$25","$5"],
+              "answer": 0,
+              "why": "$20 take away $5 is $15."
+            }
+          ]
+        },
+        {
+          "id": "grow",
+          "title": "How companies grow",
+          "emoji": "🌱",
+          "track": "9-11",
+          "objectives": ["co.grow"],
+          "steps": [
+            {"t":"say","emoji":"🍋","text":"A lemonade stand can grow into a lemonade shop."},
+            {"t":"say","emoji":"🧱","text":"To grow, it needs money for a bigger shop and more workers."},
+            {"t":"say","emoji":"🍕","text":"One way to get that money is to sell small pieces of the company. Those pieces are called shares."},
+            {
+              "t": "check",
+              "q": "Why might a company sell shares?",
+              "options": ["To get money to grow","To pay back its customers","To close some stores"],
+              "answer": 0,
+              "why": "Selling shares brings in money the company can use to grow."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "shares",
+      "title": "Shares and the market",
+      "emoji": "🍕",
+      "blurb": "Owning a tiny slice.",
+      "track": "6-8",
+      "objectives": ["sh.share","sh.owner","sh.market","sh.price","sh.ticker"],
+      "lessons": [
+        {
+          "id": "share",
+          "title": "What is a share?",
+          "emoji": "🍕",
+          "track": "6-8",
+          "objectives": ["sh.share"],
+          "steps": [
+            {"t":"say","emoji":"🍕","text":"Think of a big company like a pizza cut into lots and lots of slices."},
+            {"t":"say","emoji":"🧩","text":"Each slice is called a share. If you own a share, you own a tiny piece of that company."},
+            {"t":"say","emoji":"🏪","text":"Owning a share does not mean you can take things from its stores. You own a tiny piece of the whole company."},
+            {
+              "t": "check",
+              "q": "If you own a share of a company, you own…",
+              "options": ["A tiny piece of it","The whole company","One of its stores"],
+              "answer": 0,
+              "why": "A share is a tiny slice of the company. Like one slice of a pizza."
+            },
+            {
+              "t": "check",
+              "q": "You own a share of a toy company. Can you take a toy from its store for free?",
+              "options": ["No, you own a tiny piece of the company","Yes, any toy you want"],
+              "answer": 0,
+              "why": "A share is a tiny piece of the whole company, not the toys on the shelf."
+            }
+          ]
+        },
+        {
+          "id": "market",
+          "title": "The stock market",
+          "emoji": "🏟️",
+          "track": "6-8",
+          "objectives": ["sh.market"],
+          "steps": [
+            {"t":"say","emoji":"🏟️","text":"The stock market is a big place where people buy and sell shares."},
+            {"t":"say","emoji":"💻","text":"Today it is mostly on computers. It opens in the morning and closes in the afternoon."},
+            {"t":"say","emoji":"🤝","text":"Most trades are between owners. When you buy a share, your money goes to the owner who sold it."},
+            {"t":"say","emoji":"🔔","text":"In New York, a bell rings to start the day and to end it!"},
+            {
+              "t": "check",
+              "q": "What do people trade on the stock market?",
+              "options": ["Shares","Pets","Lunch boxes"],
+              "answer": 0,
+              "why": "The stock market is where shares are traded."
+            },
+            {
+              "t": "check",
+              "q": "Mia buys a share on the stock market. Who usually gets her money?",
+              "options": ["The owner who sold it","The company","The bell ringer"],
+              "answer": 0,
+              "why": "Most trades are between owners. The seller gets the money."
+            }
+          ]
+        },
+        {
+          "id": "prices",
+          "title": "Why do prices go up and down?",
+          "emoji": "🎢",
+          "track": "6-8",
+          "objectives": ["sh.price"],
+          "steps": [
+            {"t":"say","emoji":"🃏","text":"Think of trading cards. When everyone wants one card, people will give more for it."},
+            {"t":"say","emoji":"🏷️","text":"The price of a share is what someone will pay for it right now."},
+            {"t":"say","emoji":"🙋","text":"If buyers want shares more than sellers do, the price goes up. If sellers are in a hurry, it goes down."},
+            {"t":"say","emoji":"〰️","text":"Prices move every day. Small ups and downs are normal."},
+            {
+              "t": "check",
+              "q": "Lots of people really want a share, and few want to sell. The price…",
+              "options": ["Often goes up","Must go down","Stays stuck forever"],
+              "answer": 0,
+              "why": "When buyers want it more than sellers do, the price tends to go up."
+            },
+            {
+              "t": "check",
+              "q": "Is it normal for prices to move a little every day?",
+              "options": ["Yes","No, never"],
+              "answer": 0,
+              "why": "Prices wiggle every day. That is normal."
+            }
+          ]
+        },
+        {
+          "id": "owner",
+          "title": "Being an owner",
+          "emoji": "👑",
+          "track": "9-11",
+          "objectives": ["sh.owner"],
+          "steps": [
+            {"t":"say","emoji":"👑","text":"If you own a share, you are a part owner of the company."},
+            {"t":"say","emoji":"🗳️","text":"Owners can vote on some big choices, like who helps lead the company. Most of the time, one share is one vote."},
+            {"t":"say","emoji":"🙋","text":"People often want a share more when they think the company will make more profit later."},
+            {"t":"say","emoji":"🏷️","text":"A high price does not mean a better company. It depends on how many slices there are."},
+            {
+              "t": "check",
+              "q": "Owning one share of a shoe company makes you…",
+              "options": ["A tiny part owner of it","The boss of it","A worker there"],
+              "answer": 0,
+              "why": "One share makes you a tiny part owner. Lots of other people own parts too."
+            },
+            {
+              "t": "check",
+              "q": "Shop A's share costs $100. Shop B's share costs $10. Which company is better?",
+              "options": ["You can't tell from the price","Shop A","Shop B"],
+              "answer": 0,
+              "why": "Price alone doesn't tell you. It depends on how many slices there are."
+            }
+          ]
+        },
+        {
+          "id": "ticker",
+          "title": "Ticker nicknames",
+          "emoji": "🔤",
+          "track": "9-11",
+          "objectives": ["sh.ticker"],
+          "steps": [
+            {"t":"say","emoji":"🔤","text":"Each company on the market has a short nickname. It is called a ticker."},
+            {"t":"say","emoji":"🍎","text":"Apple is AAPL. Disney is DIS. Coca-Cola is KO."},
+            {"t":"say","emoji":"👀","text":"Grown-ups use tickers to find a company fast."},
+            {
+              "t": "check",
+              "q": "What is DIS?",
+              "options": ["Disney's ticker","A kind of dish","A dinosaur"],
+              "answer": 0,
+              "why": "DIS is Disney's short nickname on the stock market."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "piggy",
+      "title": "Piggy Bank school",
+      "emoji": "🐷",
+      "blurb": "Practice with pretend coins, the smart way.",
+      "track": "6-8",
+      "objectives": ["pg.pretend","pg.spread","pg.updown","pg.peek","pg.time"],
+      "lessons": [
+        {
+          "id": "piggy-start",
+          "title": "Your pretend piggy bank",
+          "emoji": "🐷",
+          "track": "6-8",
+          "objectives": ["pg.pretend"],
+          "steps": [
+            {"t":"say","emoji":"🐷","text":"Your Piggy Bank has 1,000 pretend coins. You pick companies, and the coins follow their real prices."},
+            {"t":"say","emoji":"🎢","text":"This piggy bank is different from a real one. Its coins go up and down with prices."},
+            {"t":"say","emoji":"🎭","text":"It is all pretend. Nothing is bought for real, and no real money can be lost."},
+            {
+              "t": "check",
+              "q": "Is Piggy Bank money real?",
+              "options": ["No, it is pretend","Yes, it is real"],
+              "answer": 0,
+              "why": "It is pretend. It just follows real prices so you can learn."
+            }
+          ]
+        },
+        {
+          "id": "piggy-spread",
+          "title": "Spread your coins",
+          "emoji": "🧺",
+          "track": "6-8",
+          "objectives": ["pg.spread"],
+          "steps": [
+            {"t":"say","emoji":"🧺","text":"Put 200 coins in each of 5 companies. Now your 1,000 coins are spread out."},
+            {"t":"say","emoji":"🥚","text":"Grown-ups say: Don't put all your eggs in one basket. That means spread out!"},
+            {"t":"say","emoji":"📉","text":"Say one company loses half, and the others stay the same. You lose 100 coins. You still have 900."},
+            {"t":"say","emoji":"🥚","text":"Now say all 1,000 coins were in that one company. You would lose 500!"},
+            {
+              "t": "check",
+              "q": "Which piggy bank is hurt less by one bad company?",
+              "options": ["Coins spread over 5 companies","All coins in 1 company"],
+              "answer": 0,
+              "why": "When coins are spread out, one bad company only hurts a small part."
+            },
+            {
+              "t": "sort",
+              "q": "Spread out or all in one?",
+              "buckets": ["Spread out","All in one"],
+              "items": [
+                {"emoji":"🧺","text":"200 coins in 5 companies","b":0},
+                {"emoji":"🥚","text":"1,000 coins in 1 company","b":1},
+                {"emoji":"🍕","text":"A little of many","b":0},
+                {"emoji":"📣","text":"All coins on one tip from a video","b":1}
+              ],
+              "why": "Spreading out means one bad company hurts less."
+            }
+          ]
+        },
+        {
+          "id": "piggy-updown",
+          "title": "Ups and downs are normal",
+          "emoji": "🎢",
+          "track": "6-8",
+          "objectives": ["pg.updown"],
+          "steps": [
+            {"t":"say","emoji":"🎢","text":"Your Piggy Bank line will zig and zag. That is normal!"},
+            {"t":"say","emoji":"🌦️","text":"A down day is like a rainy day. It does not mean you did something wrong."},
+            {"t":"say","emoji":"🧠","text":"When it drops, take a breath. Ask: Is this a big move, or a normal wiggle?"},
+            {
+              "t": "check",
+              "q": "Your piggy bank went down a little today. What does it mean?",
+              "options": ["Prices wiggle, that is normal","You made a big mistake","The piggy bank is broken"],
+              "answer": 0,
+              "why": "Small ups and downs happen every day. They are normal."
+            }
+          ]
+        },
+        {
+          "id": "piggy-peek",
+          "title": "Don't peek every minute",
+          "emoji": "⏰",
+          "track": "6-8",
+          "objectives": ["pg.peek"],
+          "steps": [
+            {"t":"say","emoji":"⏰","text":"Prices change every minute. Peeking every minute can make you feel worried."},
+            {"t":"say","emoji":"🔍","text":"Up close, tiny wiggles look huge. From far away, they look small."},
+            {"t":"say","emoji":"🔭","text":"Try checking once a day or once a week. Then you see the bigger picture."},
+            {
+              "t": "check",
+              "q": "How often is a good time to check your piggy bank?",
+              "options": ["Once a day or so","Every minute","Never again"],
+              "answer": 0,
+              "why": "Checking now and then keeps the wiggles small and your mind calm."
+            }
+          ]
+        },
+        {
+          "id": "piggy-time",
+          "title": "Time and ups and downs",
+          "emoji": "⏳",
+          "track": "9-11",
+          "objectives": ["pg.time"],
+          "steps": [
+            {"t":"say","emoji":"〰️","text":"Over one day, prices bounce up and down a lot."},
+            {"t":"say","emoji":"🔭","text":"Zoom out to many years. In the past, the US market went up in more years than it went down."},
+            {"t":"say","emoji":"🤞","text":"That is history, not a promise. But it is why grown-ups often invest for a long time."},
+            {
+              "t": "check",
+              "q": "Why do many grown-ups invest for many years?",
+              "options": ["Time can smooth out the bumps","Prices only go up","It is the law"],
+              "answer": 0,
+              "why": "Over many years, the bumps matter less. It is still not a promise."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "growing",
+      "title": "Saving and investing",
+      "emoji": "🌱",
+      "blurb": "Keep it safe, or help it grow.",
+      "track": "6-8",
+      "objectives": ["gr.save-invest","gr.interest","gr.risk","gr.compound","gr.when"],
+      "lessons": [
+        {
+          "id": "saving",
+          "title": "Saving vs investing",
+          "emoji": "🫙",
+          "track": "6-8",
+          "objectives": ["gr.save-invest"],
+          "steps": [
+            {"t":"say","emoji":"🫙","text":"Saving is keeping your money safe, like in a jar at home. The number stays the same."},
+            {"t":"say","emoji":"🌳","text":"Investing is using money to buy things like shares. It can grow, but it can also shrink."},
+            {"t":"say","emoji":"🤝","text":"Grown-ups often do both. They save money they need soon. They invest money they will not need for a long time."},
+            {
+              "t": "check",
+              "q": "Money in a jar at home…",
+              "options": ["Stays the same","Grows by itself","Turns into shares"],
+              "answer": 0,
+              "why": "Jar money stays the same number. It does not grow by itself."
+            },
+            {
+              "t": "check",
+              "q": "Investing can make money…",
+              "options": ["Grow or shrink","Only grow","Go away for sure"],
+              "answer": 0,
+              "why": "Investing can go up or down. That is the risk."
+            }
+          ]
+        },
+        {
+          "id": "interest",
+          "title": "Interest: a little extra",
+          "emoji": "🏦",
+          "track": "9-11",
+          "objectives": ["gr.interest"],
+          "steps": [
+            {"t":"say","emoji":"🏦","text":"A bank keeps your money safe. Savings accounts often pay you a little to keep it there."},
+            {"t":"say","emoji":"🪙","text":"That little extra is called interest. Put in $100, and a year later you may have $102."},
+            {"t":"say","emoji":"🏷️","text":"Prices of things often go up over time. So the same $10 may buy a bit less later."},
+            {"t":"say","emoji":"🐢","text":"Interest is slow, but bank savings are very safe."},
+            {
+              "t": "check",
+              "q": "Interest is…",
+              "options": ["A little extra the bank pays you","The money you first put in","Money that buys more every year"],
+              "answer": 0,
+              "why": "It is the small extra the bank adds to your money."
+            }
+          ]
+        },
+        {
+          "id": "risk",
+          "title": "Risk: ups and downs",
+          "emoji": "🎢",
+          "track": "9-11",
+          "objectives": ["gr.risk"],
+          "steps": [
+            {"t":"say","emoji":"🎢","text":"Risk means things might not go the way you hope."},
+            {"t":"say","emoji":"🫙","text":"A savings jar has low risk. It will not grow much, but it will not shrink."},
+            {"t":"say","emoji":"🌳","text":"Investing has more risk. It can grow more, but some years it goes down."},
+            {
+              "t": "sort",
+              "q": "Low risk or high risk?",
+              "buckets": ["Low risk","High risk"],
+              "items": [
+                {"emoji":"🫙","text":"Coins in a jar at home","b":0},
+                {"emoji":"🚀","text":"All your money in one new company","b":1},
+                {"emoji":"🏦","text":"Money in a bank","b":0},
+                {"emoji":"📣","text":"A stock a video says will \"go to the moon\"","b":1}
+              ],
+              "why": "Jars and banks grow slowly or not at all, but rarely shrink. One hot stock can swing a lot."
+            }
+          ]
+        },
+        {
+          "id": "snowball",
+          "title": "The money snowball",
+          "emoji": "⛄",
+          "track": "9-11",
+          "objectives": ["gr.compound"],
+          "steps": [
+            {"t":"say","emoji":"⛄","text":"Roll a snowball and it picks up more snow. It gets bigger as it rolls."},
+            {"t":"say","emoji":"💰","text":"Money can do that too. Say $100 grows to $110. Next year, all $110 can grow."},
+            {"t":"say","emoji":"⏳","text":"Starting early gives the snowball more time to roll. Some years it can shrink, too."},
+            {
+              "t": "check",
+              "q": "Why does starting early help?",
+              "options": ["More time for money to grow","Kids get a special price","It does not help"],
+              "answer": 0,
+              "why": "More years means more time for growth to pile up."
+            }
+          ]
+        },
+        {
+          "id": "which",
+          "title": "Save it or invest it?",
+          "emoji": "🤔",
+          "track": "6-8",
+          "objectives": ["gr.when"],
+          "steps": [
+            {"t":"say","emoji":"🗓️","text":"Need the money soon? Save it. Then it will be there when you need it."},
+            {"t":"say","emoji":"🌳","text":"Is it for something many years away? Investing gives it time to grow, and time to bounce back. No promises."},
+            {
+              "t": "sort",
+              "q": "Save it or invest it?",
+              "buckets": ["Save","Invest"],
+              "items": [
+                {"emoji":"🧸","text":"A toy next week","b":0},
+                {"emoji":"🎓","text":"College in 10 years","b":1},
+                {"emoji":"🎂","text":"A gift for a friend this month","b":0},
+                {"emoji":"🏡","text":"Money for when you are a grown-up","b":1}
+              ],
+              "why": "Soon means save. A long time away means it could be invested."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dividends",
+      "title": "Dividends",
+      "emoji": "🍰",
+      "blurb": "When your slice pays you.",
+      "track": "9-11",
+      "objectives": ["dv.what","dv.why-not","dv.reinvest","dv.day"],
+      "lessons": [
+        {
+          "id": "dividend",
+          "title": "What is a dividend?",
+          "emoji": "🍰",
+          "track": "9-11",
+          "objectives": ["dv.what"],
+          "steps": [
+            {"t":"say","emoji":"🍰","text":"Some companies give part of their profit to their owners. That is a dividend."},
+            {"t":"say","emoji":"🪙","text":"If you own a share, you might get a little money every few months."},
+            {"t":"say","emoji":"🏦","text":"Many big, older companies pay them. Some do not. A company can cut or stop its dividend."},
+            {
+              "t": "check",
+              "q": "A dividend is…",
+              "options": ["Profit a company gives its owners","Money you pay to buy a share","A fee the company charges you"],
+              "answer": 0,
+              "why": "It is a bit of the profit. The owners get it."
+            }
+          ]
+        },
+        {
+          "id": "no-dividend",
+          "title": "Why some don't pay",
+          "emoji": "🚀",
+          "track": "9-11",
+          "objectives": ["dv.why-not"],
+          "steps": [
+            {"t":"say","emoji":"🚀","text":"Some companies keep all their profit to grow faster."},
+            {"t":"say","emoji":"🔧","text":"They build new things, hire workers and open new stores."},
+            {"t":"say","emoji":"🤞","text":"Owners hope the company grows. Then their shares may be worth more later. That is a hope, not a promise."},
+            {
+              "t": "check",
+              "q": "Why might a company skip dividends?",
+              "options": ["To use the money to grow","Because it forgot","It is against the rules"],
+              "answer": 0,
+              "why": "Some companies use all their profit to grow."
+            }
+          ]
+        },
+        {
+          "id": "replant",
+          "title": "Spend it or plant it?",
+          "emoji": "🌻",
+          "track": "9-11",
+          "objectives": ["dv.reinvest"],
+          "steps": [
+            {"t":"say","emoji":"🌻","text":"When you get a dividend, you can spend it. Or you can use it to buy more shares."},
+            {"t":"say","emoji":"⛄","text":"Buying more shares is like adding snow to your snowball."},
+            {"t":"say","emoji":"📅","text":"Both are okay choices. Buying more shares can add up over many years."},
+            {
+              "t": "check",
+              "q": "Using dividends to buy more shares is like…",
+              "options": ["Adding snow to a snowball","Giving the money back","Eating all the cake"],
+              "answer": 0,
+              "why": "More shares can pay you more. So the snowball grows."
+            }
+          ]
+        },
+        {
+          "id": "div-day",
+          "title": "Dividend day dip",
+          "emoji": "📅",
+          "track": "9-11",
+          "objectives": ["dv.day"],
+          "steps": [
+            {"t":"say","emoji":"📅","text":"Each dividend has a cut-off day. You must own the share before that day to get the payout."},
+            {"t":"say","emoji":"🍰","text":"On that day, the share price often drops by about the size of the payout."},
+            {"t":"say","emoji":"🪙","text":"The money did not vanish. It moved from the company to its owners."},
+            {
+              "t": "check",
+              "q": "A $50 share pays a $1 dividend. On the cut-off day, the price might be about…",
+              "options": ["$49","$51","$60"],
+              "answer": 0,
+              "why": "The price often drops by about the payout. $50 take away $1 is about $49."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "smart",
+      "title": "Money-smart",
+      "emoji": "🧠",
+      "blurb": "Spread out, be patient, check facts.",
+      "track": "6-8",
+      "objectives": ["sm.spread","sm.patience","sm.hype","sm.scams","ch.clues"],
+      "lessons": [
+        {
+          "id": "baskets",
+          "title": "Don't put all your eggs in one basket",
+          "emoji": "🧺",
+          "track": "6-8",
+          "objectives": ["sm.spread"],
+          "steps": [
+            {"t":"say","emoji":"🥚","text":"Imagine you carry all your eggs in one basket. If you trip, they all break!"},
+            {"t":"say","emoji":"🧺","text":"If you split them into many baskets, one trip only breaks a few."},
+            {"t":"say","emoji":"🍕","text":"Money works the same way. A little of many companies is usually safer than a lot of one."},
+            {"t":"say","emoji":"🌦️","text":"Spreading out helps when one company has trouble. If the whole market drops, most baskets drop together."},
+            {
+              "t": "check",
+              "q": "Why split your eggs into many baskets?",
+              "options": ["So one trip doesn't break them all","So you can carry more eggs","Because baskets are pretty"],
+              "answer": 0,
+              "why": "If one basket falls, the others are still safe."
+            },
+            {
+              "t": "check",
+              "q": "Which is usually safer?",
+              "options": ["A little of many companies","All your money in one company"],
+              "answer": 0,
+              "why": "Spreading out means one bad company hurts less."
+            }
+          ]
+        },
+        {
+          "id": "patience",
+          "title": "Be patient like the moon",
+          "emoji": "🌙",
+          "track": "6-8",
+          "objectives": ["sm.patience"],
+          "steps": [
+            {"t":"say","emoji":"🌙","text":"The moon takes about two weeks to go from new moon to full moon. It does not rush."},
+            {"t":"say","emoji":"📈","text":"Some companies grow over many years. Some days their price goes down. Some days it goes up."},
+            {"t":"say","emoji":"🐢","text":"People who invest for a long time often do better than people who buy and sell every day."},
+            {
+              "t": "check",
+              "q": "Good investing is usually…",
+              "options": ["Slow and patient","Fast and wild","Done every minute"],
+              "answer": 0,
+              "why": "In the past, waiting a long time has often worked better than rushing."
+            },
+            {
+              "t": "check",
+              "q": "A price goes down for one day. Is that a reason to worry a lot?",
+              "options": ["No, small drops are normal","Yes, always"],
+              "answer": 0,
+              "why": "Prices go up and down. One bad day is normal."
+            }
+          ]
+        },
+        {
+          "id": "hype",
+          "title": "Hype vs facts",
+          "emoji": "📣",
+          "track": "9-11",
+          "objectives": ["sm.hype"],
+          "steps": [
+            {"t":"say","emoji":"📣","text":"Sometimes a video says a stock will \"go to the moon\". That is called hype."},
+            {"t":"say","emoji":"🎭","text":"Hype is exciting. But the person in the video might want something from you, or might just be wrong."},
+            {"t":"say","emoji":"🔍","text":"Facts are things you can check, like how much profit a company made."},
+            {"t":"say","emoji":"❓","text":"Before you believe a video, ask: What are the facts? Who is telling me this? Why?"},
+            {
+              "t": "check",
+              "q": "A video says \"this stock will go to the moon!\" That is…",
+              "options": ["Hype","A fact","A school rule"],
+              "answer": 0,
+              "why": "It's an exciting guess, not a fact you can check."
+            },
+            {
+              "t": "check",
+              "q": "What should you do before believing a video?",
+              "options": ["Check the facts with a grown-up","Tell everyone right away","Buy right now"],
+              "answer": 0,
+              "why": "Always check the facts, and ask a grown-up."
+            }
+          ]
+        },
+        {
+          "id": "too-good",
+          "title": "Too good to be true",
+          "emoji": "🚩",
+          "track": "6-8",
+          "objectives": ["sm.scams"],
+          "steps": [
+            {"t":"say","emoji":"🚩","text":"If someone promises lots of money, fast and for sure, that is a red flag."},
+            {"t":"say","emoji":"🕵️","text":"Real investing has ups and downs. Nobody can promise it only goes up."},
+            {"t":"say","emoji":"🙋","text":"If it feels too good to be true, stop and ask a grown-up."},
+            {
+              "t": "check",
+              "q": "Someone says \"Double your money by Friday, for sure!\" What do you do?",
+              "options": ["Stop and ask a grown-up","Send them your money","Tell them your password"],
+              "answer": 0,
+              "why": "Big promises that are \"for sure\" are a red flag. Ask a grown-up."
+            }
+          ]
+        },
+        {
+          "id": "clues",
+          "title": "Clues, not promises",
+          "emoji": "🤞",
+          "track": "6-8",
+          "objectives": ["ch.clues"],
+          "steps": [
+            {"t":"say","emoji":"🕵️","text":"Your Piggy Bank line shows what prices did before. It is a clue."},
+            {"t":"say","emoji":"🤞","text":"A clue is not a promise. News and surprises can change the price fast."},
+            {"t":"say","emoji":"🙋","text":"People who know a lot still guess wrong. That is normal."},
+            {
+              "t": "check",
+              "q": "A price went up three days in a row. What does that tell you?",
+              "options": ["It is a clue, not a promise","It must go up again","It will drop tomorrow"],
+              "answer": 0,
+              "why": "Three days up is only a clue. Nobody knows for sure what comes next."
+            },
+            {
+              "t": "check",
+              "q": "Who knows for sure what a price will do next?",
+              "options": ["Nobody","A video","My friend"],
+              "answer": 0,
+              "why": "Nobody can know for sure. Not even experts."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "title": "Report cards",
+      "emoji": "📝",
+      "blurb": "Guesses, beats, misses and what comes next.",
+      "track": "6-8",
+      "objectives": ["rc.what","rc.estimate","rc.beat","rc.expect","rc.guidance","rc.jump"],
+      "lessons": [
+        {
+          "id": "report-card",
+          "title": "What is a report card?",
+          "emoji": "📝",
+          "track": "6-8",
+          "objectives": ["rc.what"],
+          "steps": [
+            {"t":"say","emoji":"🎒","text":"You get a report card from school. Companies get one too!"},
+            {"t":"say","emoji":"📅","text":"Big US companies tell everyone how they did four times a year. Grown-ups call this an earnings report."},
+            {"t":"say","emoji":"💵","text":"It says how much money came in, and how much profit the company made."},
+            {"t":"say","emoji":"🌙","text":"Moon Club shows how long until each report card. We draw that wait as a moon."},
+            {
+              "t": "check",
+              "q": "How many times a year does a big US company share its report card?",
+              "options": ["4 times","Once","Every day"],
+              "answer": 0,
+              "why": "Big US companies report four times a year, about once every three months."
+            },
+            {
+              "t": "check",
+              "q": "What do grown-ups call a company's report card?",
+              "options": ["An earnings report","A gift card","A birthday card"],
+              "answer": 0,
+              "why": "It is called an earnings report."
+            }
+          ]
+        },
+        {
+          "id": "guess",
+          "title": "The grown-ups' guess",
+          "emoji": "🔮",
+          "track": "6-8",
+          "objectives": ["rc.estimate"],
+          "steps": [
+            {"t":"say","emoji":"🔮","text":"Before a report card, experts guess the profit for each share. Their guess is called an estimate."},
+            {"t":"say","emoji":"📊","text":"Lots of experts guess. Grown-ups mix all the guesses into one number, the average. That is the number to beat."},
+            {"t":"say","emoji":"⏳","text":"Then everyone waits to see what really happened."},
+            {
+              "t": "check",
+              "q": "What are the experts guessing?",
+              "options": ["The company's profit for each share","The price next year","How many stores it has"],
+              "answer": 0,
+              "why": "They guess the profit, so we can see if the company beats it."
+            },
+            {
+              "t": "check",
+              "q": "Three experts guess $1, $2 and $3. Their average is $2. What is the number to beat?",
+              "options": ["$2","$3","$1"],
+              "answer": 0,
+              "why": "$1 + $2 + $3 is $6. Split by 3, that is $2, the number to beat."
+            }
+          ]
+        },
+        {
+          "id": "beat",
+          "title": "What does \"beat\" mean?",
+          "emoji": "🎯",
+          "track": "6-8",
+          "objectives": ["rc.beat"],
+          "steps": [
+            {"t":"say","emoji":"🫙","text":"It is like guessing how many jellybeans are in a jar. Then you count them!"},
+            {"t":"say","emoji":"🎯","text":"If the company makes more than the guess, it beat. If it makes less, it missed."},
+            {
+              "t": "check",
+              "q": "Grown-ups guessed $2. The company made $3. Did it beat or miss?",
+              "options": ["Beat","Miss"],
+              "answer": 0,
+              "why": "$3 is more than the $2 guess, so it beat."
+            },
+            {
+              "t": "check",
+              "q": "Grown-ups guessed $2. The company made $1. Did it beat or miss?",
+              "options": ["Miss","Beat"],
+              "answer": 0,
+              "why": "$1 is less than the $2 guess, so it missed."
+            }
+          ]
+        },
+        {
+          "id": "after",
+          "title": "Why prices jump on report day",
+          "emoji": "🎢",
+          "track": "6-8",
+          "objectives": ["rc.jump"],
+          "steps": [
+            {"t":"say","emoji":"📝","text":"On report card day, prices can jump up or fall down fast."},
+            {"t":"say","emoji":"😮","text":"That is because people learn lots of new facts all at once."},
+            {"t":"say","emoji":"🔭","text":"They also hear what the company thinks comes next."},
+            {
+              "t": "check",
+              "q": "Why can a price jump on report card day?",
+              "options": ["People learn new facts all at once","The market closes early that day","Companies change their tickers"],
+              "answer": 0,
+              "why": "New facts arrive all at once, so people change their minds fast."
+            }
+          ]
+        },
+        {
+          "id": "expectations",
+          "title": "Why a beat can still drop",
+          "emoji": "🎂",
+          "track": "9-11",
+          "objectives": ["rc.expect"],
+          "steps": [
+            {"t":"say","emoji":"🎂","text":"Imagine you hope for a big cake on your birthday. You get a cupcake. Yum, but you hoped for more!"},
+            {"t":"say","emoji":"🔮","text":"Prices work like that. Before report day, people already hope for things. Those hopes are in the price."},
+            {"t":"say","emoji":"📉","text":"So a company can beat the guess and its price can still drop. People hoped for even more."},
+            {"t":"say","emoji":"📈","text":"It works the other way too. A miss can still go up if people feared even worse."},
+            {
+              "t": "check",
+              "q": "A company beat the guess, but its price went down. Why might that be?",
+              "options": ["People hoped for even more","The report card got lost","A beat always makes prices drop"],
+              "answer": 0,
+              "why": "People hoped for even more, so a small beat let them down."
+            },
+            {
+              "t": "check",
+              "q": "Does a beat always make the price go up?",
+              "options": ["No, not always","Yes, always"],
+              "answer": 0,
+              "why": "No. What people hoped for matters too."
+            }
+          ]
+        },
+        {
+          "id": "guidance",
+          "title": "What comes next: guidance",
+          "emoji": "🔭",
+          "track": "9-11",
+          "objectives": ["rc.guidance"],
+          "steps": [
+            {"t":"say","emoji":"🔭","text":"On report day, many companies also say what they think will happen next. That is called guidance."},
+            {"t":"say","emoji":"😮","text":"If a company says next time looks great, people may cheer. If it says it looks slow, people may worry."},
+            {"t":"say","emoji":"🤷","text":"Guidance is the company's own guess. It can be wrong too."},
+            {
+              "t": "check",
+              "q": "A company beat this time, but says next time looks slow. What might happen to the price?",
+              "options": ["It could go down","It must go up","Prices never move"],
+              "answer": 0,
+              "why": "People care about what comes next, not just today. A slow forecast can make the price drop."
+            },
+            {
+              "t": "check",
+              "q": "Guidance is…",
+              "options": ["What a company thinks will happen next","A promise that can't be wrong","A kind of share"],
+              "answer": 0,
+              "why": "Guidance is the company's own guess about what comes next."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "why",
+      "title": "Why did it move?",
+      "emoji": "🔍",
+      "blurb": "Clues for why a price went up or down.",
+      "track": "9-11",
+      "objectives": ["why.wiggle","why.market","why.group","why.unsure"],
+      "lessons": [
+        {
+          "id": "why-wiggle",
+          "title": "Normal wiggles",
+          "emoji": "〰️",
+          "track": "9-11",
+          "objectives": ["why.wiggle"],
+          "steps": [
+            {"t":"say","emoji":"〰️","text":"Every price wiggles a little every day, even with no news."},
+            {"t":"say","emoji":"📏","text":"Each company has its own normal wiggle size. Some wiggle a lot. Some wiggle a little."},
+            {"t":"say","emoji":"🔍","text":"A big move is a clue that something happened. A small move is often just a wiggle."},
+            {
+              "t": "check",
+              "q": "A price moved just a tiny bit today. What is it most likely?",
+              "options": ["A normal wiggle","Huge news","A broken market"],
+              "answer": 0,
+              "why": "Small moves happen every day. They are usually just wiggles."
+            }
+          ]
+        },
+        {
+          "id": "why-market",
+          "title": "The whole market moves",
+          "emoji": "🌍",
+          "track": "9-11",
+          "objectives": ["why.market"],
+          "steps": [
+            {"t":"say","emoji":"🌍","text":"Some days, almost every price goes up. Some days, almost every price goes down."},
+            {"t":"say","emoji":"🌦️","text":"That is the whole market moving, like weather over a whole town."},
+            {"t":"say","emoji":"🔍","text":"So if your company dropped, check: Did the whole market drop too?"},
+            {
+              "t": "check",
+              "q": "Almost every company went down today. Yours did too. What is a good clue?",
+              "options": ["The whole market went down","Your company broke","Nobody traded"],
+              "answer": 0,
+              "why": "When almost everything drops, the whole market is a big clue."
+            }
+          ]
+        },
+        {
+          "id": "why-group",
+          "title": "Groups move together",
+          "emoji": "👥",
+          "track": "9-11",
+          "objectives": ["why.group"],
+          "steps": [
+            {"t":"say","emoji":"👥","text":"Companies that do the same kind of work are a group. Like all the game makers."},
+            {"t":"say","emoji":"🎮","text":"News about one game maker can move the whole group, up or down together."},
+            {"t":"say","emoji":"🔍","text":"Grown-ups call a group like this a sector."},
+            {
+              "t": "check",
+              "q": "Lots of game makers went up today. What might be a clue?",
+              "options": ["News about games moved the group","Games are free now","The market is closed"],
+              "answer": 0,
+              "why": "Groups often move together, so news about the group is a clue."
+            }
+          ]
+        },
+        {
+          "id": "why-unsure",
+          "title": "Sometimes we don't know",
+          "emoji": "🤷",
+          "track": "9-11",
+          "objectives": ["why.unsure"],
+          "steps": [
+            {"t":"say","emoji":"🤷","text":"Sometimes a price moves and nobody can say why for sure."},
+            {"t":"say","emoji":"🕵️","text":"Good detectives say \"we're not sure yet\" instead of making up a story."},
+            {"t":"say","emoji":"🔍","text":"We look at clues: report cards, the whole market, the group and the size of the move."},
+            {
+              "t": "check",
+              "q": "A price moved and there are no clues. What is the honest answer?",
+              "options": ["We're not sure yet","Make up a reason","It will keep going that way"],
+              "answer": 0,
+              "why": "Honest detectives say when they don't know. Making up a reason isn't fair."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "candles",
+      "title": "Candles",
+      "emoji": "🕯️",
+      "blurb": "A whole day of a price in one tiny picture.",
+      "track": "9-11",
+      "objectives": ["ch.candle","ch.wick","ch.tug"],
+      "lessons": [
+        {
+          "id": "candle",
+          "title": "What's a candle?",
+          "emoji": "🕯️",
+          "track": "9-11",
+          "objectives": ["ch.candle"],
+          "steps": [
+            {"t":"say","emoji":"🕯️","text":"A candle is a tiny picture of one day of a price."},
+            {"t":"say","emoji":"📊","text":"The fat part is the body. It shows where the price started and where it ended."},
+            {"t":"say","emoji":"📈","text":"Green means the price ended higher than it started. Red means it ended lower. In some countries, red means up!"},
+            {"t":"say","emoji":"🤞","text":"A chart shows what already happened. It is a clue, not a promise."},
+            {
+              "t": "check",
+              "q": "A candle is green. What happened that day?",
+              "options": ["It ended higher than it started","It ended lower than it started","Nothing at all"],
+              "answer": 0,
+              "why": "Green means it ended higher than it started."
+            }
+          ]
+        },
+        {
+          "id": "wicks",
+          "title": "Wicks and colors",
+          "emoji": "📊",
+          "track": "9-11",
+          "objectives": ["ch.wick"],
+          "steps": [
+            {"t":"say","emoji":"🕯️","text":"The thin lines on the top and bottom are called wicks."},
+            {"t":"say","emoji":"📈","text":"The top of the wick is the highest price that day. The bottom is the lowest."},
+            {"t":"say","emoji":"🎢","text":"A long wick means the price went far, then came back."},
+            {
+              "t": "check",
+              "q": "What does the top of the wick show?",
+              "options": ["The highest price that day","The price next year","How many people own it"],
+              "answer": 0,
+              "why": "The top of the wick is the highest the price got that day."
+            },
+            {
+              "t": "sort",
+              "q": "Green or red candle?",
+              "buckets": ["Green","Red"],
+              "items": [
+                {"emoji":"👍","text":"Starts at $5, ends at $8","b":0},
+                {"emoji":"👎","text":"Starts at $9, ends at $6","b":1},
+                {"emoji":"👍","text":"Starts at $2, ends at $3","b":0},
+                {"emoji":"👎","text":"Starts at $7, ends at $4","b":1}
+              ],
+              "why": "Ended higher is green. Ended lower is red."
+            }
+          ]
+        },
+        {
+          "id": "tug-of-war",
+          "title": "Tug-of-war days",
+          "emoji": "🤝",
+          "track": "9-11",
+          "objectives": ["ch.tug"],
+          "steps": [
+            {"t":"say","emoji":"🤝","text":"Some days, buyers and sellers pull hard both ways, like a game of tug-of-war."},
+            {"t":"say","emoji":"🕯️","text":"The price goes way up and way down, but ends near where it started."},
+            {"t":"say","emoji":"📊","text":"That candle has a tiny body and long wicks on top and bottom."},
+            {
+              "t": "check",
+              "q": "A candle has a tiny body and long wicks. What kind of day was it?",
+              "options": ["A tug-of-war day","A calm day","A day with no trading"],
+              "answer": 0,
+              "why": "Long wicks and a tiny body mean the price swung both ways."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trends",
+      "title": "Trends",
+      "emoji": "🛤️",
+      "blurb": "Up, down or sideways over many days.",
+      "track": "9-11",
+      "objectives": ["ch.trend","ch.sideways","ch.zoom"],
+      "lessons": [
+        {
+          "id": "trend",
+          "title": "What's a trend?",
+          "emoji": "📈",
+          "track": "9-11",
+          "objectives": ["ch.trend"],
+          "steps": [
+            {"t":"say","emoji":"🛤️","text":"A trend is the way a price has been going over many days."},
+            {"t":"say","emoji":"📈","text":"If the price keeps climbing over many days, the trend is up. Each high and each low is a bit higher."},
+            {"t":"say","emoji":"📉","text":"If the price keeps sliding over many days, the trend is down. Each high and each low is a bit lower."},
+            {"t":"say","emoji":"〰️","text":"Prices wiggle every day. Look at the big picture, not one day."},
+            {
+              "t": "check",
+              "q": "A price wiggles but keeps climbing for a month. The trend is…",
+              "options": ["Up","Down","Sideways"],
+              "answer": 0,
+              "why": "It keeps climbing, so the trend is up, even with wiggles."
+            }
+          ]
+        },
+        {
+          "id": "sideways",
+          "title": "Sideways days",
+          "emoji": "〰️",
+          "track": "9-11",
+          "objectives": ["ch.sideways"],
+          "steps": [
+            {"t":"say","emoji":"〰️","text":"Sometimes a price goes up, then down, then up again, but stays in the same small range."},
+            {"t":"say","emoji":"🛤️","text":"That is a sideways trend. It is like walking on flat ground."},
+            {
+              "t": "check",
+              "q": "A price stays between $9 and $11 for a whole month. The trend is…",
+              "options": ["Sideways","Up","Down"],
+              "answer": 0,
+              "why": "It stayed in a small, flat range, so it went sideways."
+            },
+            {"t":"say","emoji":"🤞","text":"A trend shows what already happened. It does not promise what comes next."},
+            {
+              "t": "check",
+              "q": "Does an up trend promise the price will keep going up?",
+              "options": ["No, it can change","Yes, always"],
+              "answer": 0,
+              "why": "A trend can change any day. It is a clue, not a promise."
+            }
+          ]
+        },
+        {
+          "id": "zoom-out",
+          "title": "Zoom out",
+          "emoji": "🔭",
+          "track": "9-11",
+          "objectives": ["ch.zoom"],
+          "steps": [
+            {"t":"say","emoji":"🔭","text":"One day can look scary. Many days can tell a calmer story."},
+            {"t":"say","emoji":"📈","text":"Zoom out to see more days. The trend is easier to spot."},
+            {"t":"say","emoji":"🐢","text":"People who invest for years look at years, not days."},
+            {
+              "t": "check",
+              "q": "One small red day in a month of green days. What is the trend?",
+              "options": ["Still up","Now down","Sideways"],
+              "answer": 0,
+              "why": "One small red day does not change a month of going up."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "patterns",
+      "title": "Floors and ceilings",
+      "emoji": "⛰️",
+      "blurb": "Spots a price keeps bouncing off.",
+      "track": "9-11",
+      "objectives": ["ch.support","ch.breakout","ch.hindsight"],
+      "lessons": [
+        {
+          "id": "floor-ceiling",
+          "title": "Floors and ceilings",
+          "emoji": "🪜",
+          "track": "9-11",
+          "objectives": ["ch.support"],
+          "steps": [
+            {"t":"say","emoji":"🪜","text":"Sometimes a price keeps falling to the same low spot, then bounces. That spot is the floor."},
+            {"t":"say","emoji":"🏠","text":"Sometimes a price keeps stopping at the same high spot. That spot is the ceiling."},
+            {"t":"say","emoji":"🔤","text":"Grown-ups call the floor support. They call the ceiling resistance."},
+            {"t":"say","emoji":"🤞","text":"Floors and ceilings can break. They show where the price turned before, not where it must turn."},
+            {
+              "t": "check",
+              "q": "A price keeps bouncing up from $20. What is $20?",
+              "options": ["The floor","The ceiling","The wick"],
+              "answer": 0,
+              "why": "A spot it keeps bouncing up from is the floor."
+            }
+          ]
+        },
+        {
+          "id": "breakout",
+          "title": "Breakouts",
+          "emoji": "🚀",
+          "track": "9-11",
+          "objectives": ["ch.breakout"],
+          "steps": [
+            {"t":"say","emoji":"🚀","text":"When a price pushes up through its ceiling, that is a breakout."},
+            {"t":"say","emoji":"📉","text":"When a price falls through its floor, that is a breakdown."},
+            {"t":"say","emoji":"🤔","text":"Lots of breakouts fail. The price can fall right back. That is normal!"},
+            {
+              "t": "check",
+              "q": "The ceiling was $50. Now the price is $55. What happened?",
+              "options": ["A breakout","A breakdown","Nothing"],
+              "answer": 0,
+              "why": "It pushed up through the ceiling. That is a breakout."
+            },
+            {
+              "t": "check",
+              "q": "After a breakout, the price…",
+              "options": ["Might keep going, or fall back","Must keep going up","Can never fall again"],
+              "answer": 0,
+              "why": "A breakout is a clue, not a promise. Many fall back."
+            }
+          ]
+        },
+        {
+          "id": "hindsight",
+          "title": "Looking back is easy",
+          "emoji": "🔭",
+          "track": "9-11",
+          "objectives": ["ch.hindsight"],
+          "steps": [
+            {"t":"say","emoji":"🔭","text":"After a price moves, its chart shape can look so clear. Of course it went up!"},
+            {"t":"say","emoji":"🤔","text":"But on that day, nobody knew which way it would go. Lots of shapes just fizzle out."},
+            {"t":"say","emoji":"🕵️","text":"That is why shapes are clues. Looking back is easy. Looking ahead is hard."},
+            {
+              "t": "check",
+              "q": "A chart shape looks obvious after the price moved. Did people know on that day?",
+              "options": ["No, it only looks clear now","Yes, everyone knew","Yes, the shape was a promise"],
+              "answer": 0,
+              "why": "Looking back is easy. On the day, nobody knew for sure."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "signals",
+      "title": "Busy days and smooth lines",
+      "emoji": "🌊",
+      "blurb": "Volume, averages and report-day jumps.",
+      "track": "9-11",
+      "objectives": ["ch.volume","ch.average","ch.reportday"],
+      "lessons": [
+        {
+          "id": "volume",
+          "title": "Volume",
+          "emoji": "🔊",
+          "track": "9-11",
+          "objectives": ["ch.volume"],
+          "steps": [
+            {"t":"say","emoji":"🔊","text":"Volume means how many shares people traded in a day."},
+            {"t":"say","emoji":"📣","text":"A busy day has lots of trading. A quiet day has less."},
+            {"t":"say","emoji":"📝","text":"Report card days are often busy. Lots of people react to the news."},
+            {
+              "t": "check",
+              "q": "What does volume tell you?",
+              "options": ["How many shares were traded","How loud the market is","The price next week"],
+              "answer": 0,
+              "why": "Volume counts how many shares changed hands."
+            }
+          ]
+        },
+        {
+          "id": "moving-average",
+          "title": "The smooth line",
+          "emoji": "〰️",
+          "track": "9-11",
+          "objectives": ["ch.average"],
+          "steps": [
+            {"t":"say","emoji":"〰️","text":"Prices zig and zag. That can make the trend hard to see."},
+            {"t":"say","emoji":"➕","text":"Prices of $4, $6 and $5 add up to $15. Split by 3, the average is $5."},
+            {"t":"say","emoji":"📈","text":"Find that average again every day, and you get a smooth line. It helps you see the trend."},
+            {"t":"say","emoji":"🤞","text":"The smooth line only looks back. It does not know what comes next."},
+            {
+              "t": "check",
+              "q": "Why do people use a moving average?",
+              "options": ["To see the trend more easily","To make the price go up","To count shares"],
+              "answer": 0,
+              "why": "The smooth line hides the wiggles, so the trend is easier to see."
+            }
+          ]
+        },
+        {
+          "id": "report-jump",
+          "title": "Report day on a chart",
+          "emoji": "🎢",
+          "track": "9-11",
+          "objectives": ["ch.reportday"],
+          "steps": [
+            {"t":"say","emoji":"📝","text":"On report card day, a price can jump up or drop down fast."},
+            {"t":"say","emoji":"🕯️","text":"On a chart, report day often has a tall candle and big volume."},
+            {"t":"say","emoji":"😮","text":"A beat can still drop, and a miss can still rise. Hopes matter."},
+            {
+              "t": "check",
+              "q": "A company beat the guess. Will the price always go up?",
+              "options": ["No, not always","Yes, always"],
+              "answer": 0,
+              "why": "Not always. People may have wanted even more."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "glossary": {
+    "company": {
+      "word": "Company",
+      "emoji": "🏪",
+      "means": "A team of people who sell something to make money.",
+      "example": "A bike shop is a company. It sells bikes.",
+      "play": "company"
+    },
+    "profit": {
+      "word": "Profit",
+      "emoji": "✨",
+      "means": "The money left after a company pays its bills.",
+      "example": "You sell lemonade for $10. The lemons cost $4. You keep $6.",
+      "play": "company"
+    },
+    "share": {
+      "word": "Share",
+      "emoji": "🍕",
+      "means": "A tiny slice of a company that someone can own.",
+      "example": "Cut a giant pizza into a million slices. One slice is one share.",
+      "play": "shares"
+    },
+    "stock": {
+      "word": "Stock market",
+      "emoji": "🏟️",
+      "means": "A big market where people buy and sell shares.",
+      "example": "It is like a giant trading-card swap, but for slices of companies.",
+      "play": "price"
+    },
+    "price": {
+      "word": "Price",
+      "emoji": "🏷️",
+      "means": "What someone will pay for one share right now.",
+      "example": "When lots of kids want a card, it costs more.",
+      "play": "price"
+    },
+    "report": {
+      "word": "Report card",
+      "emoji": "📝",
+      "means": "A company tells how much money it made. Big US companies do it 4 times a year.",
+      "example": "Lots of them come out in spring, summer, fall and winter.",
+      "play": "report"
+    },
+    "guess": {
+      "word": "Grown-ups' guess",
+      "emoji": "🔮",
+      "means": "Before the report card, experts guess the profit for each share. It is also called an estimate.",
+      "example": "They guess $2. That is the number to beat.",
+      "play": "report"
+    },
+    "beat": {
+      "word": "Beat",
+      "emoji": "👍",
+      "means": "The company made more than the grown-ups guessed.",
+      "example": "They guessed $2. It made $3. It beat!",
+      "play": "report"
+    },
+    "miss": {
+      "word": "Miss",
+      "emoji": "👎",
+      "means": "The company made less than the grown-ups guessed.",
+      "example": "They guessed $2. It made $1. It missed.",
+      "play": "report"
+    },
+    "mood": {
+      "word": "Market weather",
+      "emoji": "🌦️",
+      "means": "How people feel about buying shares today: hopeful or worried.",
+      "example": "Sun means hope. A storm means worry."
+    },
+    "saving": {
+      "word": "Saving",
+      "emoji": "🫙",
+      "means": "Keeping money safe so you can use it later.",
+      "example": "You put $10 in a jar. Next month, it is still $10.",
+      "play": "save:jar"
+    },
+    "investing": {
+      "word": "Investing",
+      "emoji": "🌳",
+      "means": "Using money to buy things like shares, hoping they grow.",
+      "example": "It can grow more than a jar, but it can shrink too.",
+      "play": "save:tree"
+    },
+    "interest": {
+      "word": "Interest",
+      "emoji": "➕",
+      "means": "A little extra money the bank pays you for keeping your money there.",
+      "example": "Keep $10 in the bank for a year. Get 20 cents extra.",
+      "play": "save:jar"
+    },
+    "dividend": {
+      "word": "Dividend",
+      "emoji": "🪙",
+      "means": "A little of a company's profit, shared with each owner.",
+      "example": "Own one share. The company pays you $1 of its profit.",
+      "play": "dividends:payout"
+    },
+    "candle": {"word":"Candle","emoji":"🕯️","means":"A tiny picture of one day of a price.","example":"A green candle means the price ended higher that day."},
+    "wick": {
+      "word": "Wick",
+      "emoji": "📊",
+      "means": "The thin line on a candle. It shows the highest and lowest price that day.",
+      "example": "A long wick means the price went far, then came back."
+    },
+    "trend": {
+      "word": "Trend",
+      "emoji": "🛤️",
+      "means": "The way a price has been going over many days: up, down or sideways.",
+      "example": "Each high and each low is higher than the last one, so the trend is up."
+    },
+    "support": {
+      "word": "Support (floor)",
+      "emoji": "🪜",
+      "means": "A low spot a price has bounced up from before.",
+      "example": "The price fell to $20 three times and bounced each time. Floors can still break."
+    },
+    "resistance": {
+      "word": "Resistance (ceiling)",
+      "emoji": "🏠",
+      "means": "A high spot a price has stopped at before.",
+      "example": "The price hit $50 twice and turned back down."
+    },
+    "breakout": {
+      "word": "Breakout",
+      "emoji": "🚀",
+      "means": "When a price pushes up through its ceiling.",
+      "example": "The ceiling was $50. Now it is $55. Lots of breakouts fail, too."
+    },
+    "pattern": {
+      "word": "Pattern",
+      "emoji": "🕵️",
+      "means": "A shape on a chart. It is a clue, not a promise.",
+      "example": "Two hills in a row is a pattern. The next day can still surprise you."
+    },
+    "volume": {"word":"Volume","emoji":"🔊","means":"How many shares people traded in a day.","example":"Report card days often have big volume."},
+    "average": {
+      "word": "Moving average",
+      "emoji": "〰️",
+      "means": "A smooth line made from the average of the last few prices.",
+      "example": "It hides the wiggles, so the trend is easier to see. It only looks back."
+    },
+    "tradeoff": {
+      "word": "Trade-off",
+      "emoji": "⚖️",
+      "means": "What you give up when you pick one thing over another.",
+      "example": "You buy the kite, so you can't buy the book. The book is the trade-off."
+    },
+    "expectations": {
+      "word": "Hopes (expectations)",
+      "emoji": "🎂",
+      "means": "What people already think will happen. Prices include these hopes.",
+      "example": "A company can beat the guess and still drop if people hoped for more."
+    },
+    "guidance": {
+      "word": "Guidance",
+      "emoji": "🔭",
+      "means": "What a company says it thinks will happen next.",
+      "example": "\"Next time looks slow\" is guidance. It can be wrong too."
+    },
+    "sector": {
+      "word": "Group (sector)",
+      "emoji": "👥",
+      "means": "Companies that do the same kind of work.",
+      "example": "All the game makers are one group. They often move together."
+    },
+    "diversify": {
+      "word": "Spread out",
+      "emoji": "🧺",
+      "means": "Owning a little of many things instead of a lot of one.",
+      "example": "200 pretend coins in 5 companies is spread out."
+    },
+    "fund": {
+      "word": "Fund",
+      "emoji": "📦",
+      "means": "A basket that holds a little of many companies at once.",
+      "example": "Some shares are pieces of a fund. One fund can hold hundreds of companies."
+    },
+    "wiggle": {
+      "word": "Normal wiggle",
+      "emoji": "〰️",
+      "means": "The small ups and downs a price makes every day, even with no news.",
+      "example": "Up a little, down a little. That is a wiggle."
+    }
+  },
+  "words": [
+    {"word":"Share","means":"A tiny piece of a company that you can own.","example":"If a company were a pizza, one share would be one small slice."},
+    {
+      "word": "Profit",
+      "means": "The money a company has left after it pays all its bills.",
+      "example": "You sell lemonade for $10. The lemons cost $4. Your profit is $6."
+    },
+    {
+      "word": "Earnings",
+      "means": "A company's profit. The earnings report is its report card.",
+      "example": "A big US company reports its earnings four times a year."
+    },
+    {"word":"Beat","means":"When a company does better than grown-ups guessed.","example":"Grown-ups guessed $1. It made $2. It beat!"},
+    {"word":"Miss","means":"When a company does worse than grown-ups guessed.","example":"Grown-ups guessed $2. It made $1. It missed."},
+    {"word":"Stock market","means":"The place where people buy and sell shares.","example":"It's like a giant trading card swap, but for companies."},
+    {"word":"Price","means":"What someone will pay for one share right now.","example":"If many people want a share, its price often goes up."},
+    {"word":"Invest","means":"Using money now so it might grow later.","example":"Planting a seed so it can grow into a tree."},
+    {"word":"Save","means":"Keeping money safe so you can use it later.","example":"Putting coins in a jar."},
+    {"word":"Spread out","means":"Owning a little of many things instead of a lot of one.","example":"Not putting all your eggs in one basket."},
+    {"word":"Hype","means":"Lots of excited talk that might not be true.","example":"\"This will go to the moon!\" is hype, not a fact."},
+    {"word":"Market weather","means":"How people feel about buying shares today: hopeful or worried.","example":"Sun means hope. A storm means worry."},
+    {"word":"Trade-off","means":"What you give up when you choose something else.","example":"Pick the kite, and the book is the trade-off."},
+    {"word":"Guidance","means":"What a company thinks will happen next.","example":"It is the company's own guess. It can be wrong."},
+    {"word":"Sector","means":"A group of companies that do the same kind of work.","example":"All the game makers are one sector."}
+  ],
+  "games": [
+    {"id":"buildCandle","unit":"candles","rounds":5},
+    {"id":"readDay","unit":"candles","rounds":5},
+    {"id":"candleMatch","unit":"candles","rounds":6},
+    {"id":"spotTrend","unit":"trends","rounds":5},
+    {"id":"drawTrend","unit":"trends","rounds":3},
+    {"id":"findFloor","unit":"patterns","rounds":3},
+    {"id":"patternDetective","unit":"patterns","rounds":4},
+    {"id":"busyDay","unit":"signals","rounds":5},
+    {"id":"smoothLine","unit":"signals","rounds":3}
+  ],
+  "guess": {
+    "unit": "report",
+    "ladder": ["report-card","guess","beat","after","expectations","guidance"],
+    "tips": {
+      "report-card": "Big US companies share how they did four times a year. That is their report card.",
+      "guess": "Before report day, experts guess the profit for each share. Their average is the number to beat.",
+      "beat": "Made more than the guess? It beat. Made less? It missed.",
+      "expectations": "A beat can still make the price drop if people hoped for even more.",
+      "guidance": "Listen for what comes next. A company's guess about next time can move the price.",
+      "after": "Report day can be bumpy. New facts arrive all at once."
+    },
+    "reveal": {
+      "beatUp": "It beat the guess, and the price went up. People may have liked the news.",
+      "beatDown": "It beat the guess, but the price went down. People may have hoped for even more, or worried about what comes next.",
+      "missDown": "It missed the guess, and the price went down. People may have been let down.",
+      "missUp": "It missed the guess, but the price went up. Maybe people feared worse, or liked what it said about next time.",
+      "unknown": "We don't know the price move yet. Check back soon!",
+      "inLine": "It matched the guess exactly. Then hopes and what comes next matter most.",
+      "tryAgain": "Good thinking! Even experts guess wrong a lot. That is how we learn."
+    }
+  },
+  "piggy": {
+    "unit": "piggy",
+    "ladder": ["piggy-start","piggy-spread","piggy-updown","piggy-peek","piggy-time"],
+    "peekLimit": 3,
+    "tips": {
+      "oneBasket": "All your coins are in one basket. If that company has a bad day, all your pretend coins feel it.",
+      "fewBaskets": "{n} baskets! If one company has a bad day, the others can help balance it out.",
+      "manyBaskets": "{n} baskets: nicely spread out! One bad company won't spoil the whole bunch.",
+      "newBank": "Your Piggy Bank is brand new. Prices need time. Come back in a few days!",
+      "longTime": "Your Piggy Bank is {days} days old. Look at the whole line, not just today.",
+      "bigDrop": "Your pretend coins are down {pct}% since you started. Big drops happen to everyone. It is not your fault.",
+      "bigRise": "Your pretend coins are up {pct}% since you started. Prices can fall again too. Spreading out is still a good habit.",
+      "peekMany": "You've looked {n} times today. Curious is great! Prices wiggle all day, so once a day is plenty."
+    }
+  },
+  "review": {"intervals":[0,1,3,7],"retireAt":4,"perStop":5,"pass":0.8},
+  "assessments": [
+    {"id":"money-check","unit":"money","title":"Money basics check","pass":0.8},
+    {"id":"companies-check","unit":"companies","title":"Companies check","pass":0.8},
+    {"id":"shares-check","unit":"shares","title":"Shares and the market check","pass":0.8},
+    {"id":"piggy-check","unit":"piggy","title":"Piggy Bank school check","pass":0.8},
+    {"id":"growing-check","unit":"growing","title":"Saving and investing check","pass":0.8},
+    {"id":"dividends-check","unit":"dividends","title":"Dividends check","pass":0.8},
+    {"id":"smart-check","unit":"smart","title":"Money-smart check","pass":0.8},
+    {"id":"report-check","unit":"report","title":"Report cards check","pass":0.8},
+    {"id":"why-check","unit":"why","title":"Why did it move? check","pass":0.8},
+    {"id":"candles-check","unit":"candles","title":"Candles check","pass":0.8},
+    {"id":"trends-check","unit":"trends","title":"Trends check","pass":0.8},
+    {"id":"patterns-check","unit":"patterns","title":"Floors and ceilings check","pass":0.8},
+    {"id":"signals-check","unit":"signals","title":"Busy days and smooth lines check","pass":0.8}
+  ],
+  "regions": [
+    {
+      "id": "coast",
+      "name": "Lemonade Coast",
+      "blurb": "Companies, shares and prices",
+      "art": "🍋",
+      "hue": "lemon",
+      "nodes": [
+        {"id":"coast-quest","title":"Luna's Lemonade Stand","art":"🍋","kind":"quest","ref":"lemonade"},
+        {"id":"coast-money","title":"Money basics","art":"💰","kind":"unit","ref":"money"},
+        {"id":"coast-companies","title":"Companies","art":"🏪","kind":"unit","ref":"companies"},
+        {"id":"coast-shares","title":"Shares and the market","art":"🍕","kind":"unit","ref":"shares"},
+        {"id":"coast-piggy","title":"Piggy Bank school","art":"🐷","kind":"unit","ref":"piggy"},
+        {"id":"coast-practice","title":"Review stop","art":"🔁","kind":"practice"},
+        {"id":"coast-boss","title":"Captain's Quiz","art":"👑","kind":"review","ref":"coast"}
+      ]
+    },
+    {
+      "id": "isle",
+      "name": "Saver's Isle",
+      "blurb": "Saving, investing and dividends",
+      "art": "🌳",
+      "hue": "mint",
+      "nodes": [
+        {"id":"isle-growing","title":"Saving and investing","art":"🌱","kind":"unit","ref":"growing"},
+        {"id":"isle-save","title":"Save or Grow?","art":"🌳","kind":"quest","ref":"save"},
+        {"id":"isle-dividends","title":"Dividends","art":"🍰","kind":"unit","ref":"dividends"},
+        {"id":"isle-slice","title":"Your Slice Pays You","art":"🪙","kind":"quest","ref":"dividends"},
+        {"id":"isle-smart","title":"Money-smart","art":"🧠","kind":"unit","ref":"smart"},
+        {"id":"isle-practice","title":"Review stop","art":"🔁","kind":"practice"},
+        {"id":"isle-boss","title":"Island Quiz","art":"👑","kind":"review","ref":"isle"}
+      ]
+    },
+    {
+      "id": "canyon",
+      "name": "Candle Canyon",
+      "blurb": "A whole day in one picture",
+      "art": "🕯️",
+      "hue": "coral",
+      "nodes": [
+        {"id":"canyon-candle","title":"What's a candle?","art":"🕯️","kind":"lesson","ref":"candle"},
+        {"id":"canyon-build","title":"Build the candle","art":"🧱","kind":"game","ref":"buildCandle"},
+        {"id":"canyon-wicks","title":"Wicks and colors","art":"📊","kind":"lesson","ref":"wicks"},
+        {"id":"canyon-read","title":"Read the day","art":"👀","kind":"game","ref":"readDay"},
+        {"id":"canyon-tug","title":"Tug-of-war days","art":"🤝","kind":"lesson","ref":"tug-of-war"},
+        {"id":"canyon-match","title":"Candle match","art":"🧩","kind":"game","ref":"candleMatch"},
+        {"id":"canyon-practice","title":"Review stop","art":"🔁","kind":"practice"},
+        {"id":"canyon-boss","title":"Chart Time Machine","art":"⏳","kind":"timeMachine","ref":"AAPL"}
+      ]
+    },
+    {
+      "id": "trails",
+      "name": "Trend Trails",
+      "blurb": "Up, down or sideways?",
+      "art": "🛤️",
+      "hue": "orange",
+      "nodes": [
+        {"id":"trails-trend","title":"What's a trend?","art":"📈","kind":"lesson","ref":"trend"},
+        {"id":"trails-spot","title":"Spot the trend","art":"🔍","kind":"game","ref":"spotTrend"},
+        {"id":"trails-sideways","title":"Sideways days","art":"〰️","kind":"lesson","ref":"sideways"},
+        {"id":"trails-draw","title":"Draw the trendline","art":"🛤️","kind":"game","ref":"drawTrend"},
+        {"id":"trails-zoom","title":"Zoom out","art":"🔭","kind":"lesson","ref":"zoom-out"},
+        {"id":"trails-practice","title":"Review stop","art":"🔁","kind":"practice"},
+        {"id":"trails-boss","title":"Chart Time Machine","art":"⏳","kind":"timeMachine","ref":"DIS"}
+      ]
+    },
+    {
+      "id": "peaks",
+      "name": "Pattern Peaks",
+      "blurb": "Floors, ceilings and clues",
+      "art": "⛰️",
+      "hue": "grape",
+      "nodes": [
+        {"id":"peaks-floor","title":"Floors and ceilings","art":"🪜","kind":"lesson","ref":"floor-ceiling"},
+        {"id":"peaks-find","title":"Find the floor","art":"🔍","kind":"game","ref":"findFloor"},
+        {"id":"peaks-breakout","title":"Breakouts","art":"🚀","kind":"lesson","ref":"breakout"},
+        {"id":"peaks-detective","title":"Pattern detective","art":"🕵️","kind":"game","ref":"patternDetective"},
+        {"id":"peaks-clues","title":"Clues, not promises","art":"🤞","kind":"lesson","ref":"clues"},
+        {"id":"peaks-practice","title":"Review stop","art":"🔁","kind":"practice"},
+        {"id":"peaks-boss","title":"Chart Time Machine","art":"⏳","kind":"timeMachine","ref":"NKE"}
+      ]
+    },
+    {
+      "id": "sea",
+      "name": "Signal Sea",
+      "blurb": "Busy days and smooth lines",
+      "art": "🌊",
+      "hue": "sky",
+      "nodes": [
+        {"id":"sea-volume","title":"Volume","art":"🔊","kind":"lesson","ref":"volume"},
+        {"id":"sea-busy","title":"Busy day?","art":"📣","kind":"game","ref":"busyDay"},
+        {"id":"sea-smooth","title":"The smooth line","art":"〰️","kind":"lesson","ref":"moving-average"},
+        {"id":"sea-smooth-game","title":"Smooth it out","art":"📈","kind":"game","ref":"smoothLine"},
+        {"id":"sea-jump","title":"Report-day jumps","art":"🎢","kind":"lesson","ref":"report-jump"},
+        {"id":"sea-practice","title":"Review stop","art":"🔁","kind":"practice"},
+        {"id":"sea-boss","title":"Chart Time Machine","art":"⏳","kind":"timeMachine","ref":"KO"}
+      ]
+    },
+    {
+      "id": "castle",
+      "name": "Report Card Castle",
+      "blurb": "Earnings day: beat or miss, and why",
+      "art": "🏰",
+      "hue": "berry",
+      "nodes": [
+        {"id":"castle-report","title":"Report cards","art":"📝","kind":"unit","ref":"report"},
+        {"id":"castle-guess","title":"Guess the Report Card","art":"🎯","kind":"guess"},
+        {"id":"castle-why","title":"Why did it move?","art":"🔍","kind":"unit","ref":"why"},
+        {"id":"castle-practice","title":"Review stop","art":"🔁","kind":"practice"},
+        {"id":"castle-boss","title":"Chart Time Machine","art":"⏳","kind":"timeMachine","ref":"MCD"}
+      ]
+    }
+  ],
+  "glyphs": [
+    "⏰",
+    "⏳",
+    "⚖️",
+    "⛄",
+    "⛰️",
+    "✅",
+    "✨",
+    "❓",
+    "➕",
+    "〰️",
+    "🃏",
+    "🌊",
+    "🌍",
+    "🌙",
+    "🌦️",
+    "🌱",
+    "🌳",
+    "🌻",
+    "🍋",
+    "🍎",
+    "🍕",
+    "🍭",
+    "🍰",
+    "🎂",
+    "🎒",
+    "🎓",
+    "🎢",
+    "🎭",
+    "🎮",
+    "🎯",
+    "🏟️",
+    "🏠",
+    "🏡",
+    "🏦",
+    "🏪",
+    "🏰",
+    "🏷️",
+    "🐄",
+    "🐢",
+    "🐷",
+    "👀",
+    "👍",
+    "👎",
+    "👑",
+    "👟",
+    "👥",
+    "💰",
+    "💵",
+    "💻",
+    "📅",
+    "📈",
+    "📉",
+    "📊",
+    "📋",
+    "📏",
+    "📝",
+    "📣",
+    "📦",
+    "🔁",
+    "🔊",
+    "🔍",
+    "🔔",
+    "🔤",
+    "🔧",
+    "🔭",
+    "🔮",
+    "🕯️",
+    "🕵️",
+    "🗓️",
+    "🗳️",
+    "😮",
+    "🙋",
+    "🚀",
+    "🚩",
+    "🛒",
+    "🛤️",
+    "🤔",
+    "🤝",
+    "🤞",
+    "🤷",
+    "🥚",
+    "🥤",
+    "🧑‍🍳",
+    "🧠",
+    "🧥",
+    "🧩",
+    "🧱",
+    "🧸",
+    "🧺",
+    "🧾",
+    "🪙",
+    "🪜",
+    "🫙"
+  ]
+}

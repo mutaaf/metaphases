@@ -677,3 +677,12 @@ html:has(.kids) { scroll-padding-top: 84px; scroll-padding-bottom: calc(110px + 
 /* Move progress to the app (grown-up corner) */
 .kids .k-move-code { width: 100%; min-width: 0; box-sizing: border-box; font: 500 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; word-break: break-all; resize: none; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--k-hair, rgba(0,0,0,.1)); background: rgba(255,255,255,.7); color: inherit; }
 
+
+/* "Why did it move?" clues card */
+.k-why-tabs { display: flex; gap: 8px; }
+.k-why-head { margin: 0; font-size: 18px; line-height: 1.4; }
+.k-why-clues { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.k-why-clue { display: grid; grid-template-columns: 32px 1fr; gap: 10px; align-items: start; padding: 12px 14px; border-radius: 16px; background: var(--k-card); border: 1px solid var(--k-line); font-size: 17px; line-height: 1.35; }
+.k-why-clue:first-child { border-width: 2px; }
+.k-why-clue > span:first-child { font-size: 24px; line-height: 1; }
+.k-why-honest { margin: 0; }

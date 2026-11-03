@@ -9,7 +9,10 @@ import type { CalendarResponse, EarningsEvent, MacroResponse, Session, TickerRes
 import { compassGrade, setupGrade, rsi, sma } from "../shared/grades";
 import { FOMC, HOLIDAYS } from "../shared/market";
 import { parseRecapQuery, recapImageKey } from "../shared/kidsWeek";
-import { KID_COMPANIES, LEVELS } from "../shared/kids";
+import { KID_COMPANIES, KID_BY_SYMBOL, LEVELS } from "../shared/kids";
+import { buildWhyInput, groupFor, whyMoved, type DailySeries, type WhyRange } from "../shared/kidsWhy";
+import channel from "../packs/channel.json" with { type: "json" };
+import guestNova from "../packs/guest-coach-nova/pack.json" with { type: "json" };
 import { storyKidsRecapSvg, storyKidsSvg, storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../shared/story";
 import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
@@ -442,7 +445,7 @@ const PAGES: Record<string, { title: string; desc: string; image?: string; kids?
   "/kids/start": { title: "Luna's Lemonade Stand — learn money by playing", desc: "Run a lemonade stand to learn what a company, a share, a price and a report card are. A free game for ages 8–12, with no ads.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/kids/app": { title: "Moon Club for iPhone & iPad — money, explained for kids", desc: "Luna's money club as a native iPhone and iPad app: quests, one-minute lessons and a pretend piggy bank. On-device AI, no ads, no accounts, no tracking.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/kids/privacy": { title: "Privacy · Metaphases Kids and Moon Club", desc: "Privacy policy for Moon Club and Metaphases Kids. No accounts, no ads, no tracking: what stays on the device, what leaves it and why.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
-  "/kids/school": { title: "Moon School — one-minute money lessons for kids", desc: "28 tiny lessons on money, companies, shares, saving, investing and dividends, with quick checks and sorting games. Read aloud, for ages 8–12.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
+  "/kids/school": { title: "Moon School — one-minute money lessons for kids", desc: "54 tiny lessons on money, companies, shares, saving, report cards, charts and why prices move, with quick checks and sorting games. Read aloud, for ages 6–11.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/about": { title: "Where Metaphases comes from · Metaphases", desc: "A calmer earnings calendar with a memory: the best ideas from Market Digest and Compass, free, explained, never advice. Data, lineage and how the agents keep it running." },
 };
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
@@ -537,6 +540,63 @@ async function kidsCandles(url: URL, ctx: ExecutionContext): Promise<Response> {
   }));
   const series = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
   return json({ asOf: new Date().toISOString(), series, warnings: syms.length > series.length ? ["Some charts are unavailable right now."] : [] }, 3600);
+}
+
+// ── /api/kids/why?s=SYM&range=1d|5d: "Why did it move?" clues for a kid-known company ─────────
+// Inputs come only from data we already use: Yahoo daily closes (the stock, SPY, its sector ETF, plus
+// dividend cut-off days) and Nasdaq's report-card history. No Finnhub call, so it can't eat the free
+// tier's 60/min budget. The explanation is computed by shared/kidsWhy.ts; it never invents news.
+async function kidsDaily(sym: string, ctx: ExecutionContext): Promise<DailySeries & { div: { date: string; amount: number }[] }> {
+  return cached(`ykw:${sym}`, 1800, ctx, async () => {
+    const d = await getJson<any>(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=3mo&interval=1d&events=div`, UA);
+    const r = d.chart.result[0], q = r.indicators.quote[0];
+    const out = { d: [] as string[], c: [] as number[], div: [] as { date: string; amount: number }[] };
+    r.timestamp.forEach((t: number, i: number) => { if (q.close[i] != null) { out.d.push(nyDate(t)); out.c.push(Math.round(q.close[i] * 100) / 100); } });
+    for (const v of Object.values<any>(r.events?.dividends ?? {})) if (v?.amount && v?.date) out.div.push({ date: nyDate(v.date), amount: v.amount });
+    return out;
+  });
+}
+async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const s = (url.searchParams.get("s") ?? "").toUpperCase();
+  const range: WhyRange = url.searchParams.get("range") === "5d" ? "5d" : "1d";
+  const co = KID_BY_SYMBOL[s];
+  if (!co) return json({ error: "Pick a company from Moon Club's list.", warnings: [] }, 0);
+  const warnings: string[] = [];
+  const settle = async <T>(label: string, p: Promise<T>): Promise<T | null> => { try { return await p; } catch { warnings.push(label); return null; } };
+  const g = groupFor(s);
+  const today = iso(todayNY());
+  const [stock, spy, sector, nq, fhCal] = await Promise.all([
+    settle("We couldn't get this company's prices right now.", kidsDaily(s, ctx)),
+    settle("We couldn't see the whole market right now.", kidsDaily("SPY", ctx)),
+    g ? settle("We couldn't see its group right now.", kidsDaily(g.etf, ctx)) : Promise.resolve(null),
+    settle("We couldn't see its report cards right now.", cached<any>(`nq:surprise:${s}`, 43200, ctx, () => getJson(`https://api.nasdaq.com/api/company/${s}/earnings-surprise`, UA))),
+    // One Finnhub call per company per day (cached 24 h): only for the report's session (before the open /
+    // after the close), so a report isn't credited with a move that came before it.
+    settle("We couldn't see when it reports.", cached<any>(`fh:why-hour:${s}:${today}`, 86400, ctx, () => getJson(`${FH}/calendar/earnings?symbol=${s}&from=${addDays(today, -40)}&to=${addDays(today, 120)}&token=${env.FINNHUB_API_KEY}`))),
+  ]);
+  const cal: any[] = fhCal?.earningsCalendar ?? [];
+  const habit = (cal.find((e) => e.hour)?.hour ?? "") as "bmo" | "amc" | "dmh" | "";
+  const num = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[$,]/g, "")); return Number.isFinite(n) ? n : null; };
+  const reports = ((nq?.data?.earningsSurpriseTable?.rows ?? []) as any[]).map((r) => {
+    const [mm, dd, yy] = String(r.dateReported).split("/");
+    const date = `${yy}-${(mm ?? "").padStart(2, "0")}-${(dd ?? "").padStart(2, "0")}`;
+    return { date, eA: num(r.eps), eE: num(r.consensusForecast), hour: ((cal.find((e) => e.date === date)?.hour ?? habit) || "") as "bmo" | "amc" | "dmh" | "" };
+  });
+  const input = buildWhyInput({ s, nick: co.nick, range, stock, spy, sector, reports, dividends: stock?.div ?? [] });
+  return json({ input, why: whyMoved(input, today), warnings }, 900);
+}
+
+// ── /api/kids/packs: the curated lesson-pack channel (signed, reviewed packs only) ─────────────
+// The app verifies each pack's Ed25519 signature against the public key it ships with, and a grown-up
+// turns a pack on behind the gate. Bodies are JSON.stringify of the committed pack — the exact bytes
+// scripts/sign-packs.ts signed (packs/channel.json holds the signatures).
+const CHANNEL_PACKS: Record<string, unknown> = { "guest-coach-nova": guestNova };
+function kidsPacks(p: string): Response {
+  if (p === "/api/kids/packs") return json({ format: 1, publicKey: channel.publicKey, packs: channel.packs.filter((x) => x.ready && CHANNEL_PACKS[x.id]) }, 3600);
+  const id = p.slice("/api/kids/packs/".length).replace(/\.json$/, "");
+  const entry = channel.packs.find((x) => x.id === id);
+  if (!entry || !entry.ready || !CHANNEL_PACKS[id]) return json({ error: "No such pack." }, 0);
+  return new Response(JSON.stringify(CHANNEL_PACKS[id]), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=3600", "x-pack-sig": entry.sig } });
 }
 
 // ── /api/ics: subscribe to a watchlist's report dates in any calendar app ──
@@ -668,6 +728,8 @@ export default {
       if (p === "/api/ics") return await ics(url, env, ctx);
       if (p === "/api/quotes") return await quotes(url, env, ctx);
       if (p === "/api/kids/candles") return await kidsCandles(url, ctx);
+      if (p === "/api/kids/why") return await kidsWhy(url, env, ctx);
+      if (p === "/api/kids/packs" || p.startsWith("/api/kids/packs/")) return kidsPacks(p);
       if (p === "/og/story/kids.png") return await storyCard("kids", req, env, ctx);
       // 0027: counts only; parseRecapQuery drops anything else, so nothing personal can be rendered.
       if (p === "/og/story/kids-recap.png") return await storyCard(`kids-recap:${recapImageKey(parseRecapQuery(url.searchParams))}`, req, env, ctx);

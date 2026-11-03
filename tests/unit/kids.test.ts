@@ -193,9 +193,10 @@ describe("kids share card", () => {
 });
 
 describe("Market World chart lessons (Moon Club map)", () => {
-  const chart = LESSONS.filter((l) => ["candles", "trends", "patterns", "signals"].includes(l.unit));
+  const ids = ["candle", "wicks", "tug-of-war", "trend", "sideways", "zoom-out", "floor-ceiling", "breakout", "clues", "volume", "moving-average", "report-jump"];
+  const chart = LESSONS.filter((l) => ids.includes(l.id));
   it("exist for candles, trends, floors and ceilings, and busy days", () => {
-    for (const id of ["candle", "wicks", "tug-of-war", "trend", "sideways", "zoom-out", "floor-ceiling", "breakout", "clues", "volume", "moving-average", "report-jump"]) expect(chart.some((l) => l.id === id), id).toBe(true);
+    for (const id of ids) expect(chart.some((l) => l.id === id), id).toBe(true);
   });
   it("teach patterns and trends as clues, never promises or buy signals", () => {
     const text = chart.flatMap((l) => l.steps.map((s) => (s.t === "say" ? s.text : s.t === "check" ? `${s.q} ${s.options[s.answer]} ${s.why}` : s.why))).join(" ");
