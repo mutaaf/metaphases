@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { decodeLeague, encodeLeague } from "../../shared/kidsWeek";
 import { LESSONS } from "../../shared/kidsContent";
+import { decodeTransfer } from "../../shared/kidsTransfer";
 
 const seed = (page: Page, state: object) =>
   page.addInitScript((s) => { try { localStorage.setItem("metaphases:kids:v1", JSON.stringify(s)); } catch {} }, state);
@@ -89,6 +90,22 @@ test.describe("Kids follow-ups", () => {
     await page.locator(".k-sheets button", { hasText: "Why do prices go up and down?" }).click();
     await expect(page).toHaveURL(/\/kids\/school\/prices\/print$/);
     await expect(page.locator(".k-sheet h1")).toContainText("Why do prices go up and down?");
+  });
+
+  test("Move my progress: the grown-up corner makes a checked MOONP1- code from this browser's progress, without any request", async ({ page }) => {
+    await seed(page, WEEK);
+    const calls: string[] = [];
+    await page.goto("./kids");
+    await page.getByRole("button", { name: "For grown-ups" }).click();
+    await passGate(page);
+    page.on("request", (r) => { if (!r.url().includes("/assets/")) calls.push(r.url()); });
+    await page.getByRole("button", { name: "Make my progress code" }).click();
+    const code = await page.getByRole("textbox", { name: "Progress code" }).inputValue();
+    const r = decodeTransfer(code);
+    expect(r.ok).toBe(true);
+    if (r.ok) { expect(r.payload.l).toEqual([["share", "2026-10-28"]]); expect(r.payload.g).toHaveLength(2); }
+    expect(calls, "making the code sends nothing").toEqual([]);
+    expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, innerWidth) - (screen.width < 500 ? 390 : innerWidth)), "code box overflows the phone").toBeLessThanOrEqual(1);
   });
 
   test("0028: export a code, import a sibling's code, compare on the Guess page — no network", async ({ page }) => {

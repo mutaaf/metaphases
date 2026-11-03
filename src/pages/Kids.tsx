@@ -19,7 +19,8 @@ import { streamAi } from "../lib/ai";
 import { useApi, useCalendar, useMacro, useTicker } from "../lib/api";
 import { addDays, todayISO } from "../lib/dates";
 import { useDialog } from "../lib/dialog";
-import { kids, useKids } from "../lib/kidsStore";
+import { kids, kidsState, useKids } from "../lib/kidsStore";
+import { encodeTransfer } from "../../shared/kidsTransfer";
 import { appPath, BASE, href, navigate, useLocation } from "../lib/router";
 import { actions } from "../lib/store";
 import { chaptersDone } from "../../shared/kidsQuestContent";
@@ -890,6 +891,32 @@ function ShareWithParent() {
   );
 }
 
+/** Grown-ups only: move this browser's progress into the Moon Club iPhone/iPad app by copy and paste. */
+function MoveToApp() {
+  const [code, setCode] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const copy = async () => {
+    if (!code) return;
+    try { await navigator.clipboard.writeText(code); setDone("Copied. In Moon Club, open For grown-ups → Move my progress and paste."); }
+    catch { setDone("Select the code and copy it by hand."); }
+  };
+  return (
+    <section className="k-section k-move" aria-label="Move progress to the app">
+      <div>
+        <h2>Move progress to the app</h2>
+        <p className="k-small">Lessons, quests, badges, guesses and the pretend piggy bank travel in one code. Copy it here and paste it in the Moon Club app. Nothing is uploaded, and pasting twice is fine.</p>
+      </div>
+      {!code
+        ? <button className="k-btn k-btn-primary" onClick={() => setCode(encodeTransfer(kidsState()))}>Make my progress code</button>
+        : <>
+            <textarea className="k-move-code" readOnly value={code} rows={3} aria-label="Progress code" onFocus={(e) => e.currentTarget.select()} />
+            <button className="k-btn k-btn-primary" onClick={copy}>Copy code</button>
+          </>}
+      {done && <p className="k-feedback" role="status">{done}</p>}
+    </section>
+  );
+}
+
 function GrownUps() {
   const [ok, setOk] = useState(gatePassed);
   if (!ok) return <ParentGate onPass={() => setOk(true)} onClose={() => navigate("/kids")} />;
@@ -898,6 +925,7 @@ function GrownUps() {
       <header className="k-hero"><Luna size={56} /><div><span className="k-eyebrow">Grown-up corner</span><h1>About <em>Metaphases Kids</em></h1></div></header>
       <ShareWithParent />
       <AppNudge />
+      <MoveToApp />
       <section className="k-section">
         <h2>What kids learn</h2>
         <ul className="k-list">

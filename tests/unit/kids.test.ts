@@ -191,3 +191,21 @@ describe("kids share card", () => {
     expect(svg).not.toMatch(/\$\d/);
   });
 });
+
+describe("Market World chart lessons (Moon Club map)", () => {
+  const chart = LESSONS.filter((l) => ["candles", "trends", "patterns", "signals"].includes(l.unit));
+  it("exist for candles, trends, floors and ceilings, and busy days", () => {
+    for (const id of ["candle", "wicks", "tug-of-war", "trend", "sideways", "zoom-out", "floor-ceiling", "breakout", "clues", "volume", "moving-average", "report-jump"]) expect(chart.some((l) => l.id === id), id).toBe(true);
+  });
+  it("teach patterns and trends as clues, never promises or buy signals", () => {
+    const text = chart.flatMap((l) => l.steps.map((s) => (s.t === "say" ? s.text : s.t === "check" ? `${s.q} ${s.options[s.answer]} ${s.why}` : s.why))).join(" ");
+    expect(text).toMatch(/clue, not a promise/i);
+    expect(text).toMatch(/nobody can know for sure/i);
+    expect(text).not.toMatch(/\byou should buy\b|\bbuy when\b|\bsell when\b/i);
+    for (const l of chart) for (const s of l.steps) if (s.t === "check") expect(s.options[s.answer], l.id).not.toMatch(/buy right now/i);
+  });
+  it("gives every chart word a tap-a-word card", async () => {
+    const { KID_TERMS } = await import("../../shared/kidsContent");
+    for (const k of ["candle", "wick", "trend", "support", "resistance", "breakout", "pattern", "volume", "average"]) expect(KID_TERMS, k).toHaveProperty(k);
+  });
+});

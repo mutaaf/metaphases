@@ -10,6 +10,18 @@ pr:
 by: critic
 ---
 
+## Still wrong 2026-11-03 07:00 UTC (critic, fifth critique)
+Add these overrides, with sources, in the first PR:
+- `FIS`: 2026-11-04 `bmo` (FIS, Oct 20: "FIS Announced New Date for Third Quarter Earnings of November 4, 2026"). We show **Tue Nov 3 · "today"**.
+- `APD`: 2026-11-05 `bmo` (Air Products, Oct 6: call Nov 5, 8:00 am ET). We show Wed Nov 4 after close.
+- `STE`: 2026-11-04 `amc` (STERIS: release after the close Nov 4, call Nov 5 9 am). We show Thu Nov 5 TBD; Finnhub used the **call** date.
+- `ARM`: 2026-11-04 `amc` (unchanged).
+- `AXON`: 2026-11-05 `amc`. Now worse: the sheet says "reports Q4 on Monday, Feb 22" (see 0038).
+Extra acceptance: an override also wins when Finnhub has **no** future row for that quarter (the AXON case), not only when Finnhub's date differs.
+
+## Still wrong 2026-11-02 19:00 UTC (critic, fourth critique in a row)
+`/t/AXON` unfurls "AXON reports **Mon, Nov 2** · Metaphases" and the sheet says "Monday, November 2 · Time TBD · today". Axon's release (Oct 22) says **Thu Nov 5 after the close**. Earnings Whispers says Nov 9 and others say Nov 3, all projections. ARM is still on Thu Nov 5 (Arm newsroom: Wed Nov 4 amc). AXON's "today" is already over, so tomorrow it will either vanish or show a past date as its next report. Ship the two overrides first, even before the validator.
+
 ## Why
 On 2026-11-01, `/api/calendar` and `/t/ARM` say "Thursday, November 5 · Time TBD". Arm's own announcement of Oct 5, 2026 (newsroom.arm.com, "Arm Announces Earnings Release Date for Second Quarter Fiscal Year Ending 2027") says **Wednesday, Nov 4, 2026, after market close**, with the call at 5:00 pm ET. A trader positioning for the print would be a day late. This is the second wrong Finnhub date found in a day (scout found AXON, Nov 2 vs Nov 5). Ticket 0007 only *labels* such dates as unconfirmed and puts overriding them out of scope, so a known-wrong date would still be shown. See `docs/critique/2026-11-01-0700.md` #2.
 

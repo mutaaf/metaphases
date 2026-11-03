@@ -9,7 +9,7 @@ import type { CalendarResponse, EarningsEvent, MacroResponse, Session, TickerRes
 import { compassGrade, setupGrade, rsi, sma } from "../shared/grades";
 import { FOMC, HOLIDAYS } from "../shared/market";
 import { parseRecapQuery, recapImageKey } from "../shared/kidsWeek";
-import { LEVELS } from "../shared/kids";
+import { KID_COMPANIES, LEVELS } from "../shared/kids";
 import { storyKidsRecapSvg, storyKidsSvg, storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../shared/story";
 import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
@@ -454,6 +454,26 @@ async function quotes(url: URL, env: Env, ctx: ExecutionContext): Promise<Respon
   return json({ quotes: out, asOf: new Date().toISOString(), warnings }, 120);
 }
 
+// ── /api/kids/candles: daily candles + volume for Moon Club's Market World (kid-known companies only) ──
+// Read-only public prices; the request carries nothing about the child. Shape matches MoonClubCore.CandleBundle.
+async function kidsCandles(url: URL, ctx: ExecutionContext): Promise<Response> {
+  const allowed = new Set(KID_COMPANIES.map((c) => c.s));
+  const syms = Array.from(new Set((url.searchParams.get("s") ?? "").toUpperCase().split(/[,\s]+/))).filter((s) => allowed.has(s)).slice(0, 8);
+  const results = await pool(syms, 3, (sym) => cached<any>(`ykc:${sym}`, 21600, ctx, async () => {
+    const d = await getJson<any>(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=1y&interval=1d`, UA);
+    const r = d.chart.result[0], q = r.indicators.quote[0];
+    const out = { s: sym, d: [] as string[], o: [] as number[], h: [] as number[], l: [] as number[], c: [] as number[], v: [] as number[] };
+    const r2 = (x: number) => Math.round(x * 100) / 100;
+    r.timestamp.forEach((t: number, i: number) => {
+      if (q.close[i] == null || q.open[i] == null) return;
+      out.d.push(nyDate(t)); out.o.push(r2(q.open[i])); out.h.push(r2(q.high[i])); out.l.push(r2(q.low[i])); out.c.push(r2(q.close[i])); out.v.push(q.volume[i] ?? 0);
+    });
+    return out;
+  }));
+  const series = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  return json({ asOf: new Date().toISOString(), series, warnings: syms.length > series.length ? ["Some charts are unavailable right now."] : [] }, 3600);
+}
+
 // ── /api/ics: subscribe to a watchlist's report dates in any calendar app ──
 async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
   const syms = Array.from(new Set((url.searchParams.get("s") ?? "").toUpperCase().split(/[,\s]+/).filter((x) => /^[A-Z.\-]{1,10}$/.test(x)))).slice(0, 50);
@@ -582,6 +602,7 @@ export default {
       if (p.startsWith("/api/ai/")) { const r = await handleAi(p, req, env); if (r) return r; }
       if (p === "/api/ics") return await ics(url, env, ctx);
       if (p === "/api/quotes") return await quotes(url, env, ctx);
+      if (p === "/api/kids/candles") return await kidsCandles(url, ctx);
       if (p === "/og/story/kids.png") return await storyCard("kids", req, env, ctx);
       // 0027: counts only; parseRecapQuery drops anything else, so nothing personal can be rendered.
       if (p === "/og/story/kids-recap.png") return await storyCard(`kids-recap:${recapImageKey(parseRecapQuery(url.searchParams))}`, req, env, ctx);

@@ -20,7 +20,8 @@ export function LensPicker() {
   const { prefs } = useStore();
   const ref = useRef<HTMLDivElement>(null);
   const choose = (lens: "everyday" | "trader" | "kids") => {
-    actions.setPref("lens", lens);
+    // "Learning with our kid" opens kids mode once; the home page stays the grown-up calendar (everyday lens).
+    actions.setPref("lens", lens === "kids" ? "everyday" : lens);
     if (lens === "kids") { navigate("/kids", true); return; }
     if (lens === "everyday" && matchMedia(PHONE).matches && appPath() === "/") navigate("/today", true);
   };
