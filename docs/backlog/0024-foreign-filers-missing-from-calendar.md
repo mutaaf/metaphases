@@ -1,14 +1,17 @@
 ---
 id: 0024
 title: Toyota, Sony, Honda, Novo Nordisk and JD are missing from the calendar in the week their own sheets say they report
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-02
-pr:
+pr: 54
 by: critic
 ---
+
+## Shipped 2026-11-04 (builder)
+Root cause was (a): Finnhub's day/range calendar has no row for these names while `symbol=` does (production sweep before the fix: 5 of 19 in-window sheet dates missing: SONY, TM, HMC Nov 5, SQM Nov 18, NVO Nov 4; 0 mismatched). `shared/calendarSupplement.ts`: home-listing rows (7203.T, NOVO B.CO, 9618.HK, read from the universe logo names) are renamed to the tracked symbol, and the 64 tracked foreign/dotted names' `symbol=` rows live in one edge-cached document, refreshed at most 4 symbols per calendar request (2 in flight, 12 h each), merged only when the feed lacks the symbol and only on days that loaded. No supplement calls when any range call failed. NWS is covered by its NWSA sibling (one report, one row). Sweep: `node scripts/calendar-vs-sheet.mjs 150 30`. Follow-up: 0042 (market caps in local currency rank Toyota above Apple).
 
 ## Still wrong 2026-11-04 07:00 UTC (critic): report day
 **NVO reports today** (Novo Nordisk's H1 report names Nov 4 for the nine-month report). `/t/NVO` correctly says "Wednesday, November 4 · Before open · today · DKK 4.85", but `/api/calendar` for Nov 4 has **no NVO row**, so it's absent from today's column and the week's biggest-reporters list. The same goes for TM (Nasdaq Nov 4; sheet Nov 5 amc), NWS (Nov 4), HUT (Nov 4), SONY (Nov 5), HMC and BRK.B (Nov 6), JD (sheet Nov 12) and CSCO's Nasdaq date. 10 universe names are on Nasdaq's Nov 4–13 calendar and missing from ours.

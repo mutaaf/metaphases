@@ -84,7 +84,7 @@ describe("buildBrief on recorded fixtures (week of Nov 2, 2026)", () => {
   const cal = fx<CalendarResponse>("calendar-2026-11.json");
   const b = buildBrief(week, cal.events, cal.warnings, fx<MacroResponse>("macro.json"), UNIVERSE, "2026-10-31");
   it("matches the fixture's own counts", () => {
-    expect(b.total).toBe(336);
+    expect(b.total).toBe(337); // 336 + Novo Nordisk on Nov 4 (0024)
     expect(b.top[0].s).toBe("AAPL");
     expect(b.top).toHaveLength(5);
     expect(b.largest.of).toBe(10);

@@ -20,6 +20,10 @@ let rowsFor: (from: string, to: string) => any[] = () => [];
 
 beforeEach(() => {
   pending = []; calls = [];
+  // Months before every range below, so the 0024 per-symbol supplement (next ~120 days) stays out of these
+  // range-call counts; it has its own tests in calendarSupplement.test.ts.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-06-01T15:00:00Z"));
   (globalThis as any).caches = { default: new MemCache() };
   vi.stubGlobal("fetch", vi.fn(async (u: string) => {
     const url = new URL(u);
@@ -27,7 +31,7 @@ beforeEach(() => {
     return new Response(JSON.stringify({ earningsCalendar: rowsFor(url.searchParams.get("from")!, url.searchParams.get("to")!) }), { status: 200 });
   }));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 const get = async (from: string, to: string) => {
   const r = await worker.fetch(new Request(`https://mutaafaziz.com/metaphases/api/calendar?from=${from}&to=${to}`), env, ctx);
