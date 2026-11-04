@@ -1,7 +1,7 @@
 ---
 id: 0013
 title: Correct report dates the company has announced differently (ARM shows Nov 5, Arm says Nov 4 after close)
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: data-quality
