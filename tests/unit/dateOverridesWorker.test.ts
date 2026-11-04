@@ -50,3 +50,47 @@ describe("company date overrides in the worker", () => {
     expect(r.read[0]).toContain("Wednesday, Nov 4 after the close");
   });
 });
+
+// 0013 bounce 1 (critic 2026-11-04 07:00): WES and PAA, rows as Finnhub served them live that morning.
+// The calendar's Q3 rows sit on past days (Nov 2, Nov 3) and `symbol=` returns only the February quarter,
+// so without an override the sheet skipped straight to February.
+describe("company date overrides: WES and PAA (AXON case, Finnhub's Q3 row already in the past)", () => {
+  const wesQ3 = { symbol: "WES", date: "2026-11-02", hour: "amc", quarter: 3, year: 2026, epsEstimate: 0.9179, epsActual: null, revenueEstimate: 1223424312, revenueActual: null };
+  const paaQ3 = { symbol: "PAA", date: "2026-11-03", hour: "", quarter: 3, year: 2026, epsEstimate: 0.4157, epsActual: null, revenueEstimate: 15359726500, revenueActual: null };
+  const wesQ4 = { ...wesQ3, date: "2027-02-16", quarter: 4, epsEstimate: 0.9 };
+  const paaQ4 = { ...paaQ3, date: "2027-02-04", quarter: 4, epsEstimate: 0.4 };
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2026-11-04T09:00:00Z"));
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      const url = new URL(u);
+      if (!url.pathname.endsWith("/calendar/earnings")) return new Response("{}", { status: 404 });
+      const sym = url.searchParams.get("symbol");
+      if (sym === "WES") return new Response(JSON.stringify({ earningsCalendar: [wesQ4] }));
+      if (sym === "PAA") return new Response(JSON.stringify({ earningsCalendar: [paaQ4] }));
+      return new Response(JSON.stringify({ earningsCalendar: [wesQ3, paaQ3] }));
+    }));
+  });
+
+  it("/api/calendar moves WES to Wed Nov 4 after the close and PAA to Fri Nov 6 before the open, once each", async () => {
+    const r = await get("/api/calendar?from=2026-11-02&to=2026-11-06");
+    const wes = r.events.filter((e: any) => e.s === "WES");
+    const paa = r.events.filter((e: any) => e.s === "PAA");
+    expect(wes).toEqual([expect.objectContaining({ d: "2026-11-04", h: "amc", eE: 0.9179 })]);
+    expect(paa).toEqual([expect.objectContaining({ d: "2026-11-06", h: "bmo", eE: 0.4157 })]);
+    expect(wes[0].o).toMatch(/^https:\/\//);
+    expect(paa[0].o).toMatch(/^https:\/\//);
+  });
+
+  it("/api/ticker gives tonight's (WES) and Friday's (PAA) report as next, not February", async () => {
+    const wes = await get("/api/ticker/WES");
+    expect(wes.next).toMatchObject({ date: "2026-11-04", session: "amc", quarter: 3, year: 2026 });
+    expect(wes.next.confirmed).toMatch(/^https:\/\//);
+    const paa = await get("/api/ticker/PAA");
+    expect(paa.next).toMatchObject({ date: "2026-11-06", session: "bmo", quarter: 3, year: 2026 });
+    expect(paa.next.confirmed).toMatch(/^https:\/\//);
+    // Known gap (ticket 0038): `symbol=` has no Q3 row to borrow, so the sheet shows no estimate rather than
+    // February's. Never Q4's estimate on a Q3 date; when 0038 carries the calendar's estimate over, flip this.
+    expect(wes.next.epsE ?? null).not.toBe(0.9);
+    expect(paa.next.epsE ?? null).not.toBe(0.4);
+  });
+});

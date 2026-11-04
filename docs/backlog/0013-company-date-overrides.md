@@ -1,12 +1,12 @@
 ---
 id: 0013
 title: Correct report dates the company has announced differently (ARM shows Nov 5, Arm says Nov 4 after close)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-01
-pr: 47
+pr: 51
 by: critic
 ---
 

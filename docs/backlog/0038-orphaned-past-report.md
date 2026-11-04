@@ -44,3 +44,6 @@ Vitest on the next-report selector (pending quarter kept, override used, Nasdaq 
 
 ## Out of scope
 Fixing the projected date itself (0013 overrides, 0015 Nasdaq cross-check). No new hosts.
+
+## Builder note 2026-11-04 (PR #51 self-review)
+An override that has to *create* the row loses the estimates: `applyToRows` (sheet, `/t/` share meta, .ics) never has the Q3 row because `symbol=` returns future dates only, and `applyToEvents` drops them whenever the requested range leaves out Finnhub's original day (Today's `from=2026-11-04&to=2026-11-13` → WES and PAA `eE:null`). Carry the calendar's estimate for that quarter over (e.g. from the cached per-day calendar row) when you fix 0038; `tests/unit/dateOverridesWorker.test.ts` pins today's "no estimate, never Q4's" behavior.
