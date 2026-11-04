@@ -78,12 +78,23 @@ export const rowToEvent = (e: any, sym: string): EarningsEvent => ({
   eE: e.epsEstimate ?? null, eA: e.epsActual ?? null, rE: e.revenueEstimate ?? null, rA: e.revenueActual ?? null, t: 1,
 });
 
-/** A `symbol=` answer for `sym`, kept to that symbol's own rows (a mis-keyed answer can't add other companies). */
-export function suppRows(sym: string, raw: any[]): EarningsEvent[] {
+/** Finnhub's own listing for a tracked symbol, from its logo file name (TM → 7203.T, NWS → NWSA). */
+export function homeListing(u: Universe, sym: string): string | undefined {
+  const m = /stock_logo\/([^/]+)\.png$/.exec(u[sym]?.logo ?? "");
+  return m?.[1] && m[1] !== sym ? m[1] : undefined;
+}
+
+/**
+ * A `symbol=` answer for `sym`, kept to that company's rows: labelled `sym`, its home listing (Finnhub answers
+ * an ADR query with the primary listing's label), or unlabelled. A row labelled as any other company is dropped.
+ */
+export function suppRows(sym: string, raw: any[], home?: string): EarningsEvent[] {
   const seen = new Set<string>();
   const out: EarningsEvent[] = [];
   for (const e of raw ?? []) {
-    if (e?.symbol !== sym || typeof e.date !== "string" || seen.has(e.date)) continue;
+    const label = e?.symbol;
+    if (label && label !== sym && label !== home) continue;
+    if (typeof e?.date !== "string" || seen.has(e.date)) continue;
     seen.add(e.date);
     out.push(rowToEvent(e, sym));
   }
