@@ -75,3 +75,16 @@ test("calendar days that didn't load say so instead of \"No earnings\"", async (
   // A day that did load and is empty still says so plainly.
   await expect(page.locator(".cell", { hasText: /Nov\s*13/i }).first()).toContainText("No earnings");
 });
+
+test("week and day views also say a failed day didn't load, and the notice counts days, not warnings", async ({ page }) => {
+  await page.goto("./?d=2026-11-30");
+  await expect(page.locator(".notice-warn").first()).toContainText(/\d+ days didn't load yet|didn't load yet/);
+  await expect(page.locator(".notice-warn").first()).not.toContainText(/3\d days/);
+  await page.getByRole("button", { name: "week view" }).click();
+  const col = page.locator(".wcol").first();
+  await expect(col.locator(".unknown-tag")).toContainText("Didn't load");
+  await expect(col.locator(".cell-count")).toHaveCount(0);
+  await page.getByRole("button", { name: "day view" }).click();
+  await expect(page.locator(".dayview")).toContainText("didn't load");
+  await expect(page.locator(".dayview")).not.toContainText("No earnings");
+});
