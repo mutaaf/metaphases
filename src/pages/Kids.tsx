@@ -31,7 +31,9 @@ import { GameNightLink, GardenLink, GrownUpPicks, LeagueLink, PackLink, SharedLi
 import { isLeagueLinkCode, isLinkId } from "../../shared/kidsLinks";
 import { PrivacyPage } from "./KidsPrivacy";
 import { WhyCard } from "./KidsWhy";
-import { guessReveal, piggyTip } from "../../shared/kidsCoach";
+import { guessLearn, guessReveal, piggyTip } from "../../shared/kidsCoach";
+import { growRows } from "../../shared/kidsPacks";
+import { groupFor } from "../../shared/kidsWhy";
 import { CORE_PACK } from "../../shared/kidsContent";
 import { canSpeak, markKidTyped, speakText, useVoiceSettings } from "../lib/voice";
 import "../styles/kids.css";
@@ -401,6 +403,7 @@ function Reveal({ g, e }: { g: { s: string; d: string; pick: Pick; price?: "up" 
             <span>{whyLine(co.nick, e)}</span>
             {g.price && (g.priceResult ? <span>The price went {move != null && move >= 0 ? "up" : "down"}{move != null ? ` ${Math.abs(move).toFixed(1)}%` : ""}: {g.priceResult === "right" ? "you were right! +5" : "not this time."}</span> : <span className="k-small">We'll know the price part soon.</span>)}
             {move != null && <span className="k-small">{guessReveal(CORE_PACK.guess!, { eA: e.eA, eE: e.eE, move })}</span>}
+            {move != null && (() => { const id = guessLearn(CORE_PACK.guess!, { eA: e.eA, eE: e.eE, move }); const l = id ? LESSONS.find((x) => x.id === id) : null; return l ? <button className="k-link" onClick={() => navigate(`/kids/school/${l.id}`)}>Learn why: {l.title} →</button> : null; })()}
             {g.result === "wrong" && <span className="k-small">{CORE_PACK.guess!.reveal.tryAgain}</span>}
             <WhyCard s={g.s} range="5d" title="Why did the price move?" />
           </div>
@@ -592,7 +595,7 @@ function PiggyView() {
       </ul>
       <section className="k-basket" aria-label="Eggs in baskets">
         <div className="k-baskets" aria-hidden>{piggy.holdings.map((h) => <span key={h.s} className="k-basket-i">🧺<i>{KID_BY_SYMBOL[h.s]?.emoji}</i></span>)}</div>
-        <p className="k-tip">{q.data ? piggyTip(CORE_PACK.piggy!, { holdings: piggy.holdings.length, started: piggy.started, today, value, start: START_COINS, peeks: 0 }).text : basketTip(piggy.holdings.length)}</p>
+        <p className="k-tip">{q.data ? piggyTip(CORE_PACK.piggy!, { holdings: piggy.holdings.length, started: piggy.started, today, value, start: START_COINS, peeks: 0, groups: groupCount(piggy.holdings.map((h) => h.s)) }).text : basketTip(piggy.holdings.length)}</p>
       </section>
       {mover && Math.abs(mover.change) >= 0.05 && <WhyCard s={mover.s} title={`Why did ${KID_BY_SYMBOL[mover.s]?.nick ?? mover.s} move?`} />}
       <div className="k-reset">
@@ -637,6 +640,9 @@ function Badges() {
   );
 }
 
+/** How many different groups (sectors) these companies are in; null when any is unknown. */
+const groupCount = (syms: string[]) => { const g = syms.map((x) => groupFor(x)?.etf); return g.some((x) => !x) ? null : new Set(g).size; };
+
 function SchoolPage() {
   const { lessons } = useKids();
   const next = LESSONS.find((l) => !lessons.includes(l.id));
@@ -671,7 +677,7 @@ function SchoolPage() {
                   <li key={l.id}>
                     <button className={`k-lesson${isDone ? " done" : ""}`} onClick={() => navigate(`/kids/school/${l.id}`)}>
                       <span className="k-lesson-emoji" aria-hidden>{l.emoji}</span>
-                      <span className="k-lesson-t"><b>{l.title}</b><span className="k-small">{l.steps.length} steps · 1 min</span></span>
+                      <span className="k-lesson-t"><b>{l.title}{l.since === CORE_PACK.version && <span className="k-new"> New</span>}{l.track === "challenge" && <span className="k-new k-challenge"> Challenge</span>}</b><span className="k-small">{l.steps.length} steps · 1 min</span></span>
                       <span className="k-lesson-done" aria-label={isDone ? "Finished" : "Not started"}>{isDone ? "🌕" : "🌑"}</span>
                     </button>
                   </li>
@@ -731,14 +737,68 @@ function SortStep({ step, picks, onPick }: { step: Extract<Step, { t: "sort" }>;
   );
 }
 
+/** A worked example: the setup, then each line of working revealed with a tap (worked examples first). */
+function ExampleStep({ step, shown, onMore }: { step: Extract<Step, { t: "example" }>; shown: number; onMore: () => void }) {
+  return (
+    <>
+      <span className="k-eyebrow">Let's work it out</span>
+      <span className="k-say-emoji k-say-emoji-sm" aria-hidden>{step.emoji}</span>
+      <p className="k-lesson-text">{step.text}</p>
+      <ol className="k-example">
+        {step.lines.map((x, i) => <li key={i} className={i < shown ? "on" : ""} aria-hidden={i >= shown}>{i < shown ? x : "…"}</li>)}
+      </ol>
+      <div className="k-card-actions">
+        {shown < step.lines.length && <button className="k-btn k-btn-primary" onClick={onMore}>{shown === 0 ? "Show the first step" : "Show the next step"}</button>}
+        <ReadAloud text={[step.text, ...step.lines.slice(0, Math.max(shown, 0))].join(". ")} />
+      </div>
+    </>
+  );
+}
+
+const GROW_ICON = { garden: "🌱", price: "🏷️", owe: "🧾" } as const;
+/** Year-by-year growth, one tap per year: a garden, a price tag or an IOU; the faint row is the comparison. */
+function GrowStep({ step, grown, onGrow }: { step: Extract<Step, { t: "grow" }>; grown: number; onGrow: () => void }) {
+  const { main, vs } = growRows(step);
+  const max = Math.max(...main, ...(vs ?? []));
+  const money = (v: number) => `$${v.toLocaleString("en-US")}`;
+  return (
+    <>
+      <span className="k-eyebrow">{GROW_ICON[step.show]} Pretend numbers · tap to grow</span>
+      <p className="k-lesson-text">{step.text}</p>
+      <div className={`k-grow k-grow-${step.show}`} role="img" aria-label={`${step.label}: ${money(main[0])} grows to ${money(main[grown])} after ${grown} year${grown === 1 ? "" : "s"}${vs ? `. ${step.vs!.label}: ${money(vs[grown])}` : ""}.`}>
+        {main.map((v, y) => (
+          <div key={y} className={`k-grow-col${y <= grown ? " on" : ""}`}>
+            <span className="k-grow-bars">
+              {vs && <i className="k-grow-vs" style={{ height: `${(vs[y] / max) * 100}%` }} />}
+              <i className="k-grow-main" style={{ height: `${(y <= grown ? v / max : 0.02) * 100}%` }} />
+            </span>
+            <small>{y === 0 ? "Now" : y}</small>
+          </div>
+        ))}
+      </div>
+      <p className="k-grow-key">
+        <span><i className="k-grow-main" /> {step.label}: <b>{money(main[grown])}</b></span>
+        {vs && <span><i className="k-grow-vs" /> {step.vs!.label}: <b>{money(vs[grown])}</b></span>}
+      </p>
+      <div className="k-card-actions">
+        {grown < step.years ? <button className="k-btn k-btn-primary" onClick={onGrow}>Grow a year ({grown + 1} of {step.years})</button> : <span className="k-small">All {step.years} years grown. Real growth can also shrink.</span>}
+        <ReadAloud text={step.text} />
+      </div>
+    </>
+  );
+}
+
 function LessonPage({ lesson }: { lesson: Lesson }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [sorts, setSorts] = useState<Record<number, Record<number, 0 | 1>>>({});
+  /** How far a worked example is revealed / a growth picture is grown, per step. */
+  const [shown, setShown] = useState<Record<number, number>>({});
   const total = lesson.steps.length;
   const done = step >= total;
   const cur = done ? null : lesson.steps[step];
-  const ready = !cur || cur.t === "say" || (cur.t === "check" && answers[step] != null) || (cur.t === "sort" && cur.items.every((_, i) => sorts[step]?.[i] != null));
+  const ready = !cur || cur.t === "say" || (cur.t === "check" && answers[step] != null) || (cur.t === "sort" && cur.items.every((_, i) => sorts[step]?.[i] != null))
+    || (cur.t === "example" && (shown[step] ?? 0) >= cur.lines.length) || (cur.t === "grow" && (shown[step] ?? 0) >= cur.years);
   const unit = lessonUnit(lesson);
   const idx = LESSONS.findIndex((l) => l.id === lesson.id);
   const nx = LESSONS[idx + 1];
@@ -761,6 +821,8 @@ function LessonPage({ lesson }: { lesson: Lesson }) {
         )}
         {cur?.t === "check" && <CheckStep step={cur} seed={step + lesson.id.length} picked={answers[step]} onPick={(i) => setAnswers({ ...answers, [step]: i })} />}
         {cur?.t === "sort" && <SortStep step={cur} picks={sorts[step] ?? {}} onPick={(i, b) => setSorts({ ...sorts, [step]: { ...(sorts[step] ?? {}), [i]: b } })} />}
+        {cur?.t === "example" && <ExampleStep step={cur} shown={shown[step] ?? 0} onMore={() => setShown({ ...shown, [step]: (shown[step] ?? 0) + 1 })} />}
+        {cur?.t === "grow" && <GrowStep step={cur} grown={shown[step] ?? 0} onGrow={() => setShown({ ...shown, [step]: (shown[step] ?? 0) + 1 })} />}
         {done && (
           <div className="k-celebrate" role="status">
             <MoonPhase phase={4} size={96} />
@@ -946,6 +1008,8 @@ function GrownUps() {
           <li>What an earnings "report card" is, and what "beat" and "miss" mean, using real companies they know.</li>
           <li>Why spreading money out is safer, practised with a pretend piggy bank that follows real prices.</li>
           <li>Patience, and the difference between hype and facts.</li>
+          <li>Earning, saving goals, smart spending, giving, borrowing and interest, prices over time, insurance, and spotting scams, mapped to the Jump$tart national standards.</li>
+          <li>Three tracks: Little Moons (6–8), Big Moons (9–11) and Full Moons, an optional challenge with percents and fees.</li>
         </ul>
       </section>
       <section className="k-section">
@@ -970,13 +1034,14 @@ function GrownUps() {
       <LeagueSetup />
       <GrownUpPicks />
       <section className="k-section">
-        <h2>Conversation starters</h2>
-        <ul className="k-list">
-          <li>"Which companies do we buy things from every week?"</li>
-          <li>"If you had $10, would you save it or invest it? Why?"</li>
-          <li>"Why do you think the price went down even though they beat?"</li>
-          <li>"How could we check if a video about a stock is true?"</li>
-        </ul>
+        <h2>Dinner table talk</h2>
+        <p className="k-small">A few questions for each Moon School unit. Talking about money at home matters more than any app.</p>
+        {UNITS.filter((u) => u.talk?.length).map((u) => (
+          <details key={u.id} className="k-talk">
+            <summary><span aria-hidden>{u.emoji}</span> {u.title}</summary>
+            <ul className="k-list">{u.talk!.map((t) => <li key={t}>"{t}"</li>)}</ul>
+          </details>
+        ))}
       </section>
       <div className="k-nav">
         <button className="k-btn" onClick={() => navigate("/kids")}>Back to kids</button>
@@ -1022,6 +1087,13 @@ function WorksheetPage({ lesson }: { lesson: Lesson }) {
             </div>
           ))}
         </section>
+        {lesson.steps.filter((x): x is Extract<Step, { t: "grow" }> => x.t === "grow").map((x) => { const { main, vs } = growRows(x); return (
+          <section key={x.text} className="k-sheet-sort">
+            <h2>Grow it</h2>
+            <b>{x.label}: {main.map((v, y) => `${y === 0 ? "now" : `year ${y}`} $${v}`).join(", ")}.</b>
+            {vs && <p>{x.vs!.label}: {vs.map((v) => `$${v}`).join(", ")}.</p>}
+          </section>
+        ); })}
         {lesson.steps.filter((x): x is Extract<Step, { t: "sort" }> => x.t === "sort").map((x) => (
           <section key={x.q} className="k-sheet-sort">
             <h2>Sort it</h2>

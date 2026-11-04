@@ -3,27 +3,37 @@
   "format": 1,
   "id": "core",
   "title": "Moon Club Core",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "kind": "core",
-  "requires": {"content":1,"app":"0.12.0"},
+  "requires": {"content":1,"app":"0.15.0"},
   "ages": {"min":6,"max":11},
   "tracks": [
-    {"id":"6-8","title":"Little Moons (ages 6–8)","blurb":"Money, choices, companies and saving. Lots of pictures and sorting."},
-    {"id":"9-11","title":"Big Moons (ages 9–11)","blurb":"Shares, report cards, charts and why prices move. Clues, never promises."}
+    {"id":"6-8","title":"Little Moons (ages 6–8)","blurb":"Money, earning, saving, spending, companies and staying safe. Lots of pictures and sorting."},
+    {
+      "id": "9-11",
+      "title": "Big Moons (ages 9–11)",
+      "blurb": "Shares, borrowing, prices over time, report cards, charts and why prices move. Clues, never promises."
+    },
+    {
+      "id": "challenge",
+      "title": "Full Moons (challenge)",
+      "blurb": "Extra challenge for any age: percents, fees, borrowing math and the Rule of 72. Always optional. Still clues, never promises.",
+      "optional": true
+    }
   ],
   "curators": [{"name":"Metaphases Kids","role":"author"}],
   "reviewers": [
     {
       "name": "Ms. Rivera",
       "role": "teacher",
-      "signedOff": "2026-11-03",
-      "note": "AI reviewer persona: veteran elementary teacher and reading specialist. Two rounds; see reviews/."
+      "signedOff": "2026-11-04",
+      "note": "AI reviewer persona: veteran elementary teacher and reading specialist. Round 4 (the 0.15 deepening) signed off 2026-11-04; see reviews/."
     },
     {
       "name": "Dr. Okafor",
       "role": "markets",
-      "signedOff": "2026-11-03",
-      "note": "AI reviewer persona: former equity analyst and finance educator. Two rounds; see reviews/."
+      "signedOff": "2026-11-04",
+      "note": "AI reviewer persona: former equity analyst and finance educator. Round 4 (the 0.15 deepening) signed off 2026-11-04; see reviews/."
     },
     {
       "name": "Grown-up sign-off",
@@ -35,10 +45,18 @@
   "creator": null,
   "objectives": [
     {"id":"money.why","text":"Explain why people use money instead of trading things.","standards":["Jump$tart: Saving","CEE Econ 11: Money"]},
-    {"id":"money.earn","text":"Say that most people earn money by working.","standards":["Jump$tart: Earning Income"]},
-    {"id":"money.needs","text":"Sort needs from wants.","standards":["Jump$tart: Saving","CFPB: Habits & norms"]},
-    {"id":"money.plan","text":"Describe a budget as a plan made before spending.","standards":["Jump$tart: Saving","CFPB: Executive function"]},
-    {"id":"money.tradeoff","text":"Name what you give up when you choose (a trade-off).","standards":["Jump$tart: Spending","CEE Econ 1: Scarcity"]},
+    {"id":"money.earn","text":"Say that most people earn money by working.","standards":["Jump$tart: Earning Income","CEE FinLit I.2"]},
+    {"id":"money.needs","text":"Sort needs from wants.","standards":["Jump$tart: Saving","CFPB: Habits & norms","J$ Spending 4-1"]},
+    {
+      "id": "money.plan",
+      "text": "Describe a budget as a plan made before spending.",
+      "standards": ["Jump$tart: Saving","CFPB: Executive function","CEE FinLit II.7"]
+    },
+    {
+      "id": "money.tradeoff",
+      "text": "Name what you give up when you choose (a trade-off).",
+      "standards": ["Jump$tart: Spending","CEE Econ 1: Scarcity","J$ Spending 4-3","J$ Spending 4-4","CEE Econ 1.5"]
+    },
     {"id":"co.what","text":"Describe a company as a team that sells goods or services.","standards":["CEE Econ 14: Entrepreneurship"]},
     {"id":"co.profit","text":"Work out profit as money in minus money out.","standards":["CEE Econ 14: Entrepreneurship"]},
     {"id":"co.grow","text":"Explain that companies can sell shares to raise money to grow.","standards":["Jump$tart: Investing"]},
@@ -54,15 +72,15 @@
     {
       "id": "gr.save-invest",
       "text": "Tell saving (stays the same) from investing (can grow or shrink).",
-      "standards": ["Jump$tart: Saving","Jump$tart: Investing"]
+      "standards": ["Jump$tart: Saving","Jump$tart: Investing","J$ Investing 4-2"]
     },
-    {"id":"gr.interest","text":"Describe interest as extra money a bank pays.","standards":["Jump$tart: Saving"]},
-    {"id":"gr.compound","text":"Explain why starting early helps growth pile up.","standards":["Jump$tart: Investing"]},
+    {"id":"gr.interest","text":"Describe interest as extra money a bank pays.","standards":["Jump$tart: Saving","J$ Saving 4-5"]},
+    {"id":"gr.compound","text":"Explain why starting early helps growth pile up.","standards":["Jump$tart: Investing","J$ Investing 8-7"]},
     {"id":"gr.risk","text":"Sort choices by low and high risk.","standards":["Jump$tart: Managing Risk","OECD: Risk & reward"]},
     {
       "id": "gr.when",
       "text": "Choose saving for soon and investing for a long time away.",
-      "standards": ["Jump$tart: Investing","OECD: Planning & managing finances"]
+      "standards": ["Jump$tart: Investing","OECD: Planning & managing finances","J$ Investing 4-1","J$ Investing 4-2"]
     },
     {"id":"dv.what","text":"Explain a dividend as profit shared with owners.","standards":["Jump$tart: Investing"]},
     {"id":"dv.why-not","text":"Explain why some companies keep profit to grow.","standards":["Jump$tart: Investing"]},
@@ -71,15 +89,15 @@
     {
       "id": "sm.spread",
       "text": "Explain why spreading money across many companies lowers the risk from any one company.",
-      "standards": ["Jump$tart: Managing Risk","OECD: Risk & reward"]
+      "standards": ["Jump$tart: Managing Risk","OECD: Risk & reward","J$ Investing 8-5"]
     },
-    {
-      "id": "sm.patience",
-      "text": "Explain why long-term investors don't react to one bad day.",
-      "standards": ["Jump$tart: Investing","CFPB: Executive function"]
-    },
+    {"id":"sm.patience","text":"Explain why long-term investors don't react to one bad day.","standards":["Jump$tart: Investing","CFPB: Executive function"]},
     {"id":"sm.hype","text":"Tell hype from facts and ask who is talking and why.","standards":["Jump$tart: Spending","OECD: Financial landscape"]},
-    {"id":"sm.scams","text":"Spot a too-good-to-be-true promise and ask a grown-up.","standards":["Jump$tart: Managing Risk","Jump$tart: Spending"]},
+    {
+      "id": "sm.scams",
+      "text": "Spot a too-good-to-be-true promise and ask a grown-up.",
+      "standards": ["Jump$tart: Managing Risk","Jump$tart: Spending","J$ Spending 12-8"]
+    },
     {"id":"rc.what","text":"Describe a company report card (earnings report) and how often it comes.","standards":["Jump$tart: Investing"]},
     {"id":"rc.estimate","text":"Explain that experts estimate profit per share before the report.","standards":["Jump$tart: Investing"]},
     {"id":"rc.beat","text":"Decide beat or miss by comparing the result with the estimate.","standards":["Jump$tart: Investing"]},
@@ -107,7 +125,125 @@
     {"id":"ch.clues","text":"Treat chart shapes as clues, never promises.","standards":["Jump$tart: Spending"]},
     {"id":"ch.volume","text":"Explain volume as how many shares were traded.","standards":["Jump$tart: Investing"]},
     {"id":"ch.average","text":"Explain a moving average as a smooth, backward-looking line.","standards":["Jump$tart: Investing"]},
-    {"id":"ch.reportday","text":"Explain why report day can bring big moves either way.","standards":["CEE Econ 7: Markets & prices"]}
+    {"id":"ch.reportday","text":"Explain why report day can bring big moves either way.","standards":["CEE Econ 7: Markets & prices"]},
+    {
+      "id": "earn.jobs",
+      "text": "List jobs and the skills they need, and how new skills can raise pay.",
+      "standards": ["J$ Earning Income 4-1","J$ Earning Income 4-2","CEE FinLit I.1","CEE Econ 1.10"]
+    },
+    {"id":"earn.paid","text":"Tell wages, salaries and tips apart, and work out pay for hours worked.","standards":["J$ Earning Income 4-3","CEE FinLit I.3"]},
+    {
+      "id": "earn.business",
+      "text": "Explain that an entrepreneur starts a business, takes a risk, and earns a profit only if money in is more than money out.",
+      "standards": ["J$ Earning Income 4-4","CEE FinLit I.6","CEE FinLit I.7","CEE Econ 14.1"]
+    },
+    {
+      "id": "earn.taxes",
+      "text": "Explain that taxes come out of income and pay for things a community shares.",
+      "standards": ["J$ Earning Income 4-7","J$ Spending 4-2","CEE FinLit I.9","CEE Econ 16.2"]
+    },
+    {
+      "id": "earn.gifts",
+      "text": "Name gifts and allowance as income that may need no work, and plan it too.",
+      "standards": ["J$ Earning Income 4-6","CEE FinLit I.8"]
+    },
+    {
+      "id": "goal.plan",
+      "text": "Make a savings plan: a goal, an amount each week, and how many weeks.",
+      "standards": ["J$ Saving 4-2","CEE FinLit III.4","CEE FinLit III.5","CFPB: Executive function"]
+    },
+    {
+      "id": "goal.wait",
+      "text": "Use simple tricks to wait for something better later (delay gratification).",
+      "standards": ["J$ Saving 4-1","CFPB: Executive function","CFPB: Habits & norms"]
+    },
+    {
+      "id": "goal.hard",
+      "text": "Explain why saving is often harder than spending, and how ads push spending now.",
+      "standards": ["J$ Saving 4-1","CEE FinLit III.2"]
+    },
+    {"id":"goal.rainy","text":"Explain an emergency (rainy day) fund.","standards":["J$ Saving 4-2","J$ Managing Risk 4-3","CEE FinLit VI.4"]},
+    {
+      "id": "goal.where",
+      "text": "Compare keeping savings at home with a bank or credit union (safe, tracked, may pay interest).",
+      "standards": ["J$ Saving 4-4","J$ Saving 4-5","CEE FinLit III.3","CEE FinLit III.6"]
+    },
+    {"id":"spend.compare","text":"Compare prices for the same thing before buying.","standards":["J$ Spending 4-5","CEE FinLit II.5","CFPB: Money as You Grow"]},
+    {"id":"spend.ads","text":"Spot how ads and friends push us to buy, and find reliable facts.","standards":["J$ Spending 4-5","CEE FinLit II.6"]},
+    {"id":"spend.pay","text":"Tell cash, debit cards and credit cards apart.","standards":["J$ Spending 4-6","CEE FinLit IV.2"]},
+    {
+      "id": "spend.games",
+      "text": "Know that game coins and gems are often bought with real money, and ask a grown-up first.",
+      "standards": ["J$ Spending 4-5","CFPB: Habits & norms"]
+    },
+    {"id":"spend.give","text":"Describe giving money, things or time to help others.","standards":["J$ Spending 4-2","J$ Spending 12-7"]},
+    {"id":"credit.borrow","text":"Explain that borrowed money or things must be paid back.","standards":["J$ Managing Credit 4-2","CEE FinLit IV.2"]},
+    {
+      "id": "credit.interest",
+      "text": "Explain interest as the price of borrowing, so a borrower pays back more.",
+      "standards": ["J$ Managing Credit 4-1","CEE FinLit IV.1","CFPB: Money as You Grow"]
+    },
+    {
+      "id": "credit.lender",
+      "text": "Explain why lenders lend (they earn interest) and why paying back on time builds trust.",
+      "standards": ["J$ Managing Credit 4-1","J$ Managing Credit 4-3","J$ Earning Income 4-5","CEE FinLit I.4","CEE FinLit IV.4"]
+    },
+    {
+      "id": "credit.card",
+      "text": "Explain that a credit card is a loan, and when it usually costs no interest.",
+      "standards": ["J$ Managing Credit 8-4","J$ Spending 4-6"]
+    },
+    {"id":"credit.grows","text":"Show how unpaid debt grows with interest on interest.","standards":["J$ Managing Credit 8-3","J$ Managing Credit 8-7"]},
+    {"id":"infl.what","text":"Define inflation as most prices going up over time.","standards":["CEE Econ 11.5"]},
+    {"id":"infl.buy","text":"Explain that money kept the same buys less when prices rise.","standards":["CEE Econ 11.3","J$ Saving 12-4"]},
+    {"id":"infl.beat","text":"Compare a savings rate with rising prices.","standards":["J$ Saving 12-4","J$ Investing 12-4"]},
+    {"id":"fund.what","text":"Describe a fund as a basket holding many companies.","standards":["J$ Investing 8-5"]},
+    {
+      "id": "fund.index",
+      "text": "Explain an index fund as buying every company on a list, often with low fees.",
+      "standards": ["J$ Investing 8-5","J$ Investing 12-7"]
+    },
+    {"id":"fund.fees","text":"Show how a yearly fee lowers what you end up with.","standards":["J$ Investing 12-7"]},
+    {
+      "id": "fund.groups",
+      "text": "Explain spreading across groups, since companies in one group often move together.",
+      "standards": ["J$ Investing 8-5","J$ Managing Risk 4-2"]
+    },
+    {
+      "id": "safe.risk",
+      "text": "Give examples of risk and ways to make it smaller.",
+      "standards": ["J$ Managing Risk 4-1","J$ Managing Risk 4-2","CEE FinLit VI.1","CEE FinLit VI.3"]
+    },
+    {
+      "id": "safe.insure",
+      "text": "Explain insurance as many people paying a little so one person isn't hurt a lot.",
+      "standards": ["J$ Managing Risk 4-4","J$ Managing Risk 8-2"]
+    },
+    {"id":"safe.private","text":"Keep passwords, codes and addresses private.","standards":["J$ Managing Risk 8-7","CFPB: Money as You Grow"]},
+    {
+      "id": "safe.scam",
+      "text": "Spot scam red flags (rushing, secrets, prizes you pay for) and tell a grown-up.",
+      "standards": ["J$ Spending 12-8","J$ Managing Risk 8-7"]
+    },
+    {"id":"gr.growth","text":"Compare growth on growth (compound) with the same extra each year (simple).","standards":["J$ Saving 8-5","J$ Investing 8-7"]},
+    {"id":"gr.double","text":"Use the Rule of 72 to guess how long growth takes to double.","standards":["J$ Saving 8-4"]},
+    {
+      "id": "rc.calendar",
+      "text": "Explain that report dates are set ahead, and when the price can react (before the open or after the close).",
+      "standards": ["CEE Econ 7.2","Enrichment: earnings reports"]
+    },
+    {"id":"rc.pershare","text":"Work out profit for each share (earnings per share).","standards":["CEE FinLit I.6","Enrichment: earnings reports"]},
+    {
+      "id": "rc.sales",
+      "text": "Tell sales (revenue) from profit, and why more sales can still mean less profit.",
+      "standards": ["CEE FinLit I.6","CEE Econ 14.1","Enrichment: earnings reports"]
+    },
+    {"id":"rc.surprise","text":"Judge the size of a beat or miss compared with the guess.","standards":["CEE Econ 7.1","Enrichment: earnings reports"]},
+    {
+      "id": "dv.yield",
+      "text": "Compare dividends as dollars paid for each $100 of share price, and know they can be cut.",
+      "standards": ["J$ Investing 8-5","Enrichment: dividends"]
+    }
   ],
   "units": [
     {
@@ -117,6 +253,7 @@
       "blurb": "What money is, and how to plan it.",
       "track": "6-8",
       "objectives": ["money.why","money.earn","money.needs","money.plan","money.tradeoff"],
+      "talk": ["What did you buy last? Was it a need or a want?","If you had $5, what would you give up to get the thing you picked?","Let's set up three jars at home: Spend, Save and Give. How much goes in each?"],
       "lessons": [
         {
           "id": "money",
@@ -222,12 +359,542 @@
       ]
     },
     {
+      "id": "earning",
+      "title": "Earning money",
+      "emoji": "🧑‍💼",
+      "blurb": "Jobs, skills, getting paid and taxes.",
+      "track": "6-8",
+      "objectives": ["earn.jobs","earn.paid","earn.business","earn.taxes","earn.gifts"],
+      "talk": ["What jobs do grown-ups in our family do? What skills does each job need, and how did they learn them?","If you started a small business, what would you sell? What would you need to buy first?","On the way to school, find one thing taxes paid for. Who uses it?"],
+      "lessons": [
+        {
+          "id": "jobs",
+          "title": "Jobs and skills",
+          "emoji": "🧑‍🍳",
+          "track": "6-8",
+          "objectives": ["earn.jobs"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🧑‍🍳","text":"People do lots of jobs. A cook makes food. A vet helps pets. A builder makes homes."},
+            {"t":"say","emoji":"🎓","text":"Each job needs skills. People get skills by learning and lots of practice."},
+            {"t":"say","emoji":"💵","text":"Jobs that need more training often pay more. Every job helps someone."},
+            {
+              "t": "check",
+              "q": "How can people earn more over time?",
+              "options": ["Learn new skills","Wait for the bank to pay them","Spend less at the store"],
+              "answer": 0,
+              "why": "New skills and practice can help people earn more."
+            }
+          ]
+        },
+        {
+          "id": "gifts",
+          "title": "Allowance and gifts",
+          "emoji": "🎁",
+          "track": "6-8",
+          "objectives": ["earn.gifts"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🎁","text":"Sometimes money comes as a gift, like a birthday card from Grandma."},
+            {"t":"say","emoji":"🫙","text":"Some kids get an allowance. That is money from family, often each week."},
+            {"t":"say","emoji":"📋","text":"Gift or allowance, it helps to make a plan before you spend it."},
+            {
+              "t": "check",
+              "q": "Your aunt gives you $10 for your birthday. What is it?",
+              "options": ["A gift","Pay for a job","Money you must give back"],
+              "answer": 0,
+              "why": "A gift is money you get without doing a job, and you keep it."
+            }
+          ]
+        },
+        {
+          "id": "boss",
+          "title": "Start a business",
+          "emoji": "🍋",
+          "track": "6-8",
+          "objectives": ["earn.business"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🍋","text":"Someone who starts a business is called an entrepreneur. A lemonade stand counts!"},
+            {"t":"say","emoji":"🧾","text":"First you pay for things like lemons and cups. Then you hope people buy."},
+            {
+              "t": "example",
+              "emoji": "🍋",
+              "text": "You spend $6 on lemons and cups. You sell 10 cups for $1 each.",
+              "lines": ["Money in: 10 cups at $1 = $10","Money out: $6","Money left over, called profit: $4"]
+            },
+            {"t":"say","emoji":"🎢","text":"It is a risk. If not enough people buy, you can lose money."},
+            {
+              "t": "check",
+              "q": "Why is starting a business a risk?",
+              "options": ["People might not buy enough","You have to be a grown-up","A business never pays for things"],
+              "answer": 0,
+              "why": "You pay first and hope people buy. If they don't, you can lose money."
+            }
+          ]
+        },
+        {
+          "id": "paid",
+          "title": "Ways to get paid",
+          "emoji": "⏰",
+          "track": "9-11",
+          "objectives": ["earn.paid"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"⏰","text":"Some workers get paid for each hour they work. That pay is called a wage."},
+            {"t":"say","emoji":"📅","text":"Some get the same pay each year, split into paychecks. That is a salary."},
+            {"t":"say","emoji":"🪙","text":"Some also get tips. A tip is extra money a customer gives for good help."},
+            {
+              "t": "example",
+              "emoji": "🧑‍🍳",
+              "text": "Ana helps at a bake sale for $5 an hour. She works 3 hours and gets a $2 tip.",
+              "lines": ["3 hours × $5 = $15","Tip: + $2","Ana earns $17"]
+            },
+            {
+              "t": "check",
+              "q": "Leo earns $10 an hour. He works 3 hours. What does he earn?",
+              "options": ["$30","$13","$10"],
+              "answer": 0,
+              "why": "3 hours × $10 an hour is $30."
+            }
+          ]
+        },
+        {
+          "id": "taxes",
+          "title": "Taxes pay for what we share",
+          "emoji": "🏫",
+          "track": "9-11",
+          "objectives": ["earn.taxes"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🏛️","text":"Part of the money people earn goes to the government. That part is called taxes."},
+            {"t":"say","emoji":"🛒","text":"Some things we buy have a little tax added too."},
+            {"t":"say","emoji":"🏫","text":"Taxes help pay for things we all share. Schools, roads, parks and fire trucks."},
+            {
+              "t": "sort",
+              "q": "Paid by taxes, or by one family?",
+              "buckets": ["Taxes","One family"],
+              "items": [
+                {"emoji":"🚒","text":"Fire trucks","b":0},
+                {"emoji":"🧸","text":"Your own toys","b":1},
+                {"emoji":"📚","text":"The town library","b":0},
+                {"emoji":"🎮","text":"A new video game","b":1},
+                {"emoji":"🛤️","text":"Roads","b":0}
+              ],
+              "why": "Taxes pay for things a whole town shares. Families pay for their own things."
+            },
+            {
+              "t": "check",
+              "q": "Ben earns $100. $10 goes to taxes. What does he take home?",
+              "options": ["$90","$110","$100"],
+              "answer": 0,
+              "why": "$100 take away $10 of taxes is $90."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "goals",
+      "title": "Saving goals",
+      "emoji": "⭐",
+      "blurb": "Plan ahead, wait for it, and keep it safe.",
+      "track": "6-8",
+      "objectives": ["goal.plan","goal.wait","goal.hard","goal.rainy","goal.where"],
+      "talk": ["What is one thing you'd like to save up for? Let's work out how many weeks it would take.","Tell about a time you waited for something. Was it worth the wait? What helped you wait?","Do people in our family feel the same way about saving? Why might people feel differently? Where do we keep our savings?"],
+      "lessons": [
+        {
+          "id": "goal",
+          "title": "Pick a saving goal",
+          "emoji": "🚲",
+          "track": "6-8",
+          "objectives": ["goal.plan"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🚲","text":"A saving goal is something you save up for. Like a new bike!"},
+            {"t":"say","emoji":"📋","text":"A savings plan says how much you will save, and how often."},
+            {
+              "t": "example",
+              "emoji": "🚲",
+              "text": "The bike costs $60. You save $10 each week.",
+              "lines": ["$10, $20, $30, $40, $50, $60","That is 6 weeks of saving","Week 6: bike time!"]
+            },
+            {
+              "t": "check",
+              "q": "Mia saves $2 a week for a $10 game. How many weeks?",
+              "options": ["5 weeks","2 weeks","10 weeks"],
+              "answer": 0,
+              "why": "$2 a week for 5 weeks is $10."
+            }
+          ]
+        },
+        {
+          "id": "wait",
+          "title": "Wait for it",
+          "emoji": "⏳",
+          "track": "6-8",
+          "objectives": ["goal.wait"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🍫","text":"Would you take one treat now, or two treats if you wait a bit?"},
+            {"t":"say","emoji":"⏳","text":"Waiting is hard! Saving means waiting now, so you can get something you want more later."},
+            {"t":"say","emoji":"🧠","text":"Tricks help. Put the money out of sight. Draw your goal. Count how close you are."},
+            {
+              "t": "sort",
+              "q": "Helps you wait, or makes it harder?",
+              "buckets": ["Helps me wait","Makes it hard"],
+              "items": [
+                {"emoji":"🫙","text":"Money in a jar on a high shelf","b":0},
+                {"emoji":"🛒","text":"Walking past the toy aisle","b":1},
+                {"emoji":"📋","text":"A picture of my goal","b":0},
+                {"emoji":"📣","text":"Lots of ads for new toys","b":1}
+              ],
+              "why": "Hiding the money and picturing your goal help. Ads and toy aisles make waiting harder."
+            }
+          ]
+        },
+        {
+          "id": "bank-safe",
+          "title": "Where to keep savings",
+          "emoji": "🏦",
+          "track": "6-8",
+          "objectives": ["goal.where"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🫙","text":"You can keep savings in a jar at home. But jars can get lost or spent."},
+            {"t":"say","emoji":"🏦","text":"A bank keeps money safe. It keeps track of every dollar."},
+            {"t":"say","emoji":"🛡️","text":"In the US, the government protects savings at most banks, up to a big limit."},
+            {"t":"say","emoji":"🪙","text":"Many banks pay a little extra, called interest. They lend savings to others, who pay the bank interest."},
+            {
+              "t": "check",
+              "q": "Why might a bank be better than a jar at home?",
+              "options": ["It keeps money safe","It doubles your money","It spends it for you"],
+              "answer": 0,
+              "why": "A bank keeps money safe, keeps track of it, and may pay a little interest."
+            }
+          ]
+        },
+        {
+          "id": "hard-save",
+          "title": "Why saving is hard",
+          "emoji": "🛒",
+          "track": "9-11",
+          "objectives": ["goal.hard"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🛒","text":"Spending feels good right now. Saving feels good later. That is why saving is hard."},
+            {"t":"say","emoji":"📣","text":"Ads are made to make you want things right now."},
+            {"t":"say","emoji":"🧠","text":"Before you spend, ask: Do I want this more than my goal?"},
+            {
+              "t": "check",
+              "q": "Why is saving often harder than spending?",
+              "options": ["The fun of spending comes right away","Saving is against the rules","Jar money disappears"],
+              "answer": 0,
+              "why": "Spending is fun now. The prize for saving comes later."
+            }
+          ]
+        },
+        {
+          "id": "rainy-day",
+          "title": "A rainy day fund",
+          "emoji": "☔",
+          "track": "9-11",
+          "objectives": ["goal.rainy"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🌧️","text":"Surprises can cost money. A bike tire pops. A window cracks."},
+            {"t":"say","emoji":"☔","text":"Money saved just for surprises is an emergency fund. Some call it a rainy day fund."},
+            {"t":"say","emoji":"🧠","text":"With money set aside, a surprise is a bump, not a big problem."},
+            {
+              "t": "check",
+              "q": "What is an emergency fund for?",
+              "options": ["Paying for surprises","Buying treats every day","Lending to anyone who asks"],
+              "answer": 0,
+              "why": "It is money kept ready for surprises, like a fix or a repair."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "spending",
+      "title": "Smart spending",
+      "emoji": "🛒",
+      "blurb": "Compare, spot ads, pay wisely and give.",
+      "track": "6-8",
+      "objectives": ["spend.compare","spend.games","spend.give","credit.borrow","spend.ads","spend.pay"],
+      "talk": ["Next time we shop, compare two prices together. Which is the better deal, and why?","What ad did you see lately? What did it want you to feel? What did it leave out?","Look at a receipt together. Was it paid with cash, debit or credit? Who would you like to help this month?"],
+      "lessons": [
+        {
+          "id": "compare",
+          "title": "Compare before you buy",
+          "emoji": "🏷️",
+          "track": "6-8",
+          "objectives": ["spend.compare"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🏷️","text":"The same thing can cost different amounts in different stores."},
+            {"t":"say","emoji":"🔍","text":"Smart shoppers compare. They look at the price before they pick."},
+            {"t":"example","emoji":"🧸","text":"The same teddy bear is in two stores.","lines":["Store A: $8","Store B: $5","Store B costs $3 less"]},
+            {
+              "t": "check",
+              "q": "The same ball costs $7 at one store and $4 at another. Which costs less?",
+              "options": ["The $4 store","The $7 store","They cost the same"],
+              "answer": 0,
+              "why": "$4 is less than $7, so that store costs less."
+            }
+          ]
+        },
+        {
+          "id": "in-game",
+          "title": "Game coins cost real money",
+          "emoji": "💎",
+          "track": "6-8",
+          "objectives": ["spend.games"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🎮","text":"Some games sell gems or coins. They look like pretend money."},
+            {"t":"say","emoji":"💳","text":"But they are often paid for with real money, from a grown-up's card."},
+            {"t":"say","emoji":"🙋","text":"Always ask a grown-up before you pay for anything in a game. Small buys add up."},
+            {
+              "t": "check",
+              "q": "A game says \"500 gems for $5!\" What do you do?",
+              "options": ["Ask a grown-up first","Tap it fast before it's gone","Use a grown-up's card alone"],
+              "answer": 0,
+              "why": "Gems can cost real money. Always ask a grown-up first."
+            }
+          ]
+        },
+        {
+          "id": "give",
+          "title": "Giving and sharing",
+          "emoji": "🎁",
+          "track": "6-8",
+          "objectives": ["spend.give"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🎁","text":"Giving means using money, things or time to help others."},
+            {"t":"say","emoji":"🫙","text":"Your Give jar can help a friend, a food bank or an animal shelter."},
+            {"t":"say","emoji":"🐶","text":"You can give time too. Like walking dogs at a shelter."},
+            {
+              "t": "sort",
+              "q": "Giving money, or giving time?",
+              "buckets": ["Money","Time"],
+              "items": [
+                {"emoji":"🫙","text":"Coins from the Give jar","b":0},
+                {"emoji":"🌳","text":"Helping clean a park","b":1},
+                {"emoji":"🐶","text":"Walking a shelter dog","b":1},
+                {"emoji":"💵","text":"$2 for a food drive","b":0}
+              ],
+              "why": "You can help with money from your Give jar, or with your time."
+            }
+          ]
+        },
+        {
+          "id": "borrow",
+          "title": "Borrowing means paying back",
+          "emoji": "📚",
+          "track": "6-8",
+          "objectives": ["credit.borrow"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🤝","text":"Borrowing means using something now and giving it back later."},
+            {"t":"say","emoji":"📚","text":"You borrow a library book. You bring it back by the due date."},
+            {"t":"say","emoji":"💵","text":"Borrowed money works the same way. You must pay it back, even after it is spent."},
+            {
+              "t": "check",
+              "q": "Sam borrows $5 from his sister. What must he do?",
+              "options": ["Pay her back","Keep it, it is his now","Ask the bank to pay her"],
+              "answer": 0,
+              "why": "Borrowed money must be paid back, even if it is already spent."
+            }
+          ]
+        },
+        {
+          "id": "ads",
+          "title": "Ads and friends",
+          "emoji": "📣",
+          "track": "9-11",
+          "objectives": ["spend.ads"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"📣","text":"A company makes an ad to get you to buy. Ads show the best parts only."},
+            {"t":"say","emoji":"👥","text":"Friends can make us want things too. That push is called peer pressure."},
+            {"t":"say","emoji":"🔍","text":"To learn the facts, check with a grown-up. Look at the price and what it really does."},
+            {
+              "t": "sort",
+              "q": "Ad trick or a fact you can check?",
+              "buckets": ["Ad trick","Fact"],
+              "items": [
+                {"emoji":"👥","text":"\"Everyone has one!\"","b":0},
+                {"emoji":"⏰","text":"\"Only today!\"","b":0},
+                {"emoji":"🏷️","text":"The price is $12","b":1},
+                {"emoji":"📏","text":"It is 10 inches tall","b":1}
+              ],
+              "why": "Tricks rush you or make you feel left out. Facts are things you can check."
+            }
+          ]
+        },
+        {
+          "id": "pay-ways",
+          "title": "Cash, debit and credit",
+          "emoji": "💳",
+          "track": "9-11",
+          "objectives": ["spend.pay"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"💵","text":"Cash is paper money and coins. When it is spent, it is gone."},
+            {"t":"say","emoji":"💳","text":"A debit card takes money from your own bank account right away."},
+            {"t":"say","emoji":"🧾","text":"A credit card borrows the money. You must pay it back later, sometimes with extra."},
+            {
+              "t": "sort",
+              "q": "Your own money, or borrowed?",
+              "buckets": ["My money","Borrowed"],
+              "items": [
+                {"emoji":"💵","text":"Cash","b":0},
+                {"emoji":"🏦","text":"Debit card","b":0},
+                {"emoji":"💳","text":"Credit card","b":1},
+                {"emoji":"🤝","text":"Money borrowed from a friend","b":1}
+              ],
+              "why": "Cash and debit use your own money. Credit and loans are borrowed and must be paid back."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "safety",
+      "title": "Staying safe with money",
+      "emoji": "🛡️",
+      "blurb": "Risk, insurance, private info and scams.",
+      "track": "6-8",
+      "objectives": ["safe.risk","safe.private","safe.scam","safe.insure"],
+      "talk": ["What is our family's rule for passwords and codes? Let's agree on one together.","Make up a pretend scam message. Can you spot every red flag in it?","What things do grown-ups buy insurance for, like a car or a home? What does it protect?"],
+      "lessons": [
+        {
+          "id": "risk-life",
+          "title": "Risk is everywhere",
+          "emoji": "🚲",
+          "track": "6-8",
+          "objectives": ["safe.risk"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🚲","text":"Risk is a chance that things don't go the way you hope. Like falling off a bike."},
+            {"t":"say","emoji":"⛑️","text":"We can make risk smaller. A helmet doesn't stop falls, but it helps keep you safe."},
+            {
+              "t": "sort",
+              "q": "Makes the risk smaller, or bigger?",
+              "buckets": ["Smaller","Bigger"],
+              "items": [
+                {"emoji":"⛑️","text":"Wearing a helmet","b":0},
+                {"emoji":"🌧️","text":"Riding fast on wet roads","b":1},
+                {"emoji":"🔒","text":"Locking your bike","b":0},
+                {"emoji":"💵","text":"Taking all your money everywhere","b":1}
+              ],
+              "why": "Helmets and locks make risk smaller. Rushing and carrying everything make it bigger."
+            }
+          ]
+        },
+        {
+          "id": "private",
+          "title": "Keep your info private",
+          "emoji": "🔒",
+          "track": "6-8",
+          "objectives": ["safe.private"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🔒","text":"Some things are private. Your password, your home address, and codes sent to a grown-up's phone."},
+            {"t":"say","emoji":"🕵️","text":"Tricksters may pretend to be a friend or a game helper to get them."},
+            {"t":"say","emoji":"🙋","text":"Never share private things online. If someone asks, tell a grown-up."},
+            {
+              "t": "sort",
+              "q": "Okay to share, or keep private?",
+              "buckets": ["Okay to share","Keep private"],
+              "items": [
+                {"emoji":"🎨","text":"Your favorite color","b":0},
+                {"emoji":"🔒","text":"Your password","b":1},
+                {"emoji":"🏠","text":"Your home address","b":1},
+                {"emoji":"🐶","text":"Your favorite animal","b":0}
+              ],
+              "why": "Fun facts are fine. Passwords and addresses stay private."
+            }
+          ]
+        },
+        {
+          "id": "free-gems",
+          "title": "Free gems? It's a trick",
+          "emoji": "💎",
+          "track": "6-8",
+          "objectives": ["safe.scam"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"💎","text":"A message says, \"Free gems! Just type your password.\""},
+            {"t":"say","emoji":"🚩","text":"That is a scam. A scam is a trick to take your money or your account."},
+            {"t":"say","emoji":"🙋","text":"Real games never ask for your password in a chat. Close it and tell a grown-up."},
+            {
+              "t": "check",
+              "q": "Someone online offers free coins for your password. What do you do?",
+              "options": ["Say no and tell a grown-up","Type it in fast","Share it with friends too"],
+              "answer": 0,
+              "why": "Nobody needs your password. Free prizes for it are a trick."
+            }
+          ]
+        },
+        {
+          "id": "scam-signs",
+          "title": "Scam red flags",
+          "emoji": "🚩",
+          "track": "9-11",
+          "objectives": ["safe.scam"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🚩","text":"Scams often have red flags. They rush you. They ask you to keep a secret."},
+            {"t":"say","emoji":"🎁","text":"They promise a big prize, but first you must pay or share something private."},
+            {
+              "t": "sort",
+              "q": "Red flag, or no red flag?",
+              "buckets": ["Red flag","No red flag"],
+              "items": [
+                {"emoji":"⏰","text":"\"Act in 5 minutes!\"","b":0},
+                {"emoji":"🤫","text":"\"Don't tell any grown-up.\"","b":0},
+                {"emoji":"🎁","text":"\"You won! Pay $5 to get it.\"","b":0},
+                {"emoji":"👥","text":"Grandma asks how school went","b":1},
+                {"emoji":"🏫","text":"Coach says practice is at 4","b":1}
+              ],
+              "why": "Rushing, secrets and paying for a prize are red flags. When unsure, ask a grown-up."
+            }
+          ]
+        },
+        {
+          "id": "insurance",
+          "title": "Insurance shares the risk",
+          "emoji": "🛡️",
+          "track": "9-11",
+          "objectives": ["safe.insure"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🚗","text":"A cracked phone or a dented car can cost a lot to fix. That is a risk."},
+            {"t":"say","emoji":"👥","text":"With insurance, many people each pay a small amount. That amount is called a premium."},
+            {"t":"say","emoji":"🛡️","text":"When something bad happens to one of them, the insurance company helps pay."},
+            {
+              "t": "check",
+              "q": "How does insurance help?",
+              "options": ["Many pay a little, so one won't pay a lot","It stops accidents from happening","It is free money for everyone"],
+              "answer": 0,
+              "why": "Everyone pays a little, so the few with bad luck get help."
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "companies",
       "title": "Companies",
       "emoji": "🏪",
       "blurb": "Who makes the things you love.",
       "track": "6-8",
       "objectives": ["co.what","co.profit","co.grow"],
+      "talk": ["Find three things at home and name the company that made each one.","If you ran a lemonade stand, what would your money out be?"],
       "lessons": [
         {
           "id": "company",
@@ -307,6 +974,7 @@
       "blurb": "Owning a tiny slice.",
       "track": "6-8",
       "objectives": ["sh.share","sh.owner","sh.market","sh.price","sh.ticker"],
+      "talk": ["If you owned a tiny slice of one company, which would you pick, and why?","Why might people want a company's shares more on some days than others?"],
       "lessons": [
         {
           "id": "share",
@@ -443,6 +1111,7 @@
       "blurb": "Practice with pretend coins, the smart way.",
       "track": "6-8",
       "objectives": ["pg.pretend","pg.spread","pg.updown","pg.peek","pg.time"],
+      "talk": ["Our pretend coins went down today. Is that a big move, or a normal wiggle?","How often should we check the Piggy Bank? Why not every minute?"],
       "lessons": [
         {
           "id": "piggy-start",
@@ -560,7 +1229,8 @@
       "emoji": "🌱",
       "blurb": "Keep it safe, or help it grow.",
       "track": "6-8",
-      "objectives": ["gr.save-invest","gr.interest","gr.risk","gr.compound","gr.when"],
+      "objectives": ["gr.save-invest","gr.interest","gr.risk","gr.compound","gr.when","gr.growth","gr.double"],
+      "talk": ["If you had $10, would you save it or invest it? What is it for, and when?","In the Moon Garden, what happens to points the longer they grow?"],
       "lessons": [
         {
           "id": "saving",
@@ -652,6 +1322,68 @@
           ]
         },
         {
+          "id": "compound",
+          "title": "Growth on growth",
+          "emoji": "🌱",
+          "track": "9-11",
+          "objectives": ["gr.growth"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🌱","text":"10% a year means $10 more for every $100. Like your Moon Garden, real money can grow."},
+            {
+              "t": "grow",
+              "show": "garden",
+              "text": "$100 grows 10% a year. Growth on growth vs the same $10 each year. Tap to grow.",
+              "start": 100,
+              "rate": 10,
+              "years": 5,
+              "label": "Growth on growth",
+              "vs": {"kind":"simple","label":"Same $10 a year"}
+            },
+            {"t":"say","emoji":"⛄","text":"Growth on growth is called compound growth. It is slow at first, then speeds up. Pretend numbers, no promises."},
+            {
+              "t": "check",
+              "q": "$100 grows 10% a year, growth on growth. After 2 years it is…",
+              "options": ["$121","$120","$110"],
+              "answer": 0,
+              "why": "Year 1: $110. Year 2: 10% of $110 is $11, so $121."
+            }
+          ]
+        },
+        {
+          "id": "double",
+          "title": "How long to double?",
+          "emoji": "⏳",
+          "track": "challenge",
+          "objectives": ["gr.double"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"⏳","text":"Grown-ups use a quick trick called the Rule of 72. Divide 72 by the yearly growth."},
+            {
+              "t": "example",
+              "emoji": "🌱",
+              "text": "Money grows 10% a year. About how long until it doubles?",
+              "lines": ["72 ÷ 10 = 7.2","A bit more than 7 years","$100 grows to about $200"]
+            },
+            {
+              "t": "grow",
+              "show": "garden",
+              "text": "Check the trick: $100 at 10% a year. Close to $200 at year 7, past it in year 8. A near guess!",
+              "start": 100,
+              "rate": 10,
+              "years": 8,
+              "label": "10% a year"
+            },
+            {
+              "t": "check",
+              "q": "Money grows 8% a year. About how long to double?",
+              "options": ["About 9 years","About 8 years","About 64 years"],
+              "answer": 0,
+              "why": "72 ÷ 8 = 9. So about 9 years. It is a rough guess, not a promise."
+            }
+          ]
+        },
+        {
           "id": "which",
           "title": "Save it or invest it?",
           "emoji": "🤔",
@@ -677,12 +1409,209 @@
       ]
     },
     {
+      "id": "inflation",
+      "title": "Prices over time",
+      "emoji": "🏷️",
+      "blurb": "Why things cost more later, and what that means.",
+      "track": "9-11",
+      "objectives": ["infl.what","infl.buy","infl.beat"],
+      "talk": ["Ask an older relative or neighbor what a movie ticket or a candy bar cost when they were your age.","Pick something we buy often. Write down its price, and check it again in six months.","Why might money in a jar buy less in a few years, even though it is still the same number?"],
+      "lessons": [
+        {
+          "id": "prices-rise",
+          "title": "Prices creep up",
+          "emoji": "🍫",
+          "track": "9-11",
+          "objectives": ["infl.what"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🍫","text":"When your grandparents were kids, a candy bar cost much less than it does now."},
+            {"t":"say","emoji":"🏷️","text":"When most prices go up over time, it is called inflation."},
+            {"t":"say","emoji":"🛒","text":"Say a cart of food costs $100. Prices go up 3% a year. 3% means $3 more for every $100."},
+            {"t":"grow","show":"price","text":"Tap to see the cart's price go up, year after year.","start":100,"rate":3,"years":10,"label":"Cart of food"},
+            {
+              "t": "check",
+              "q": "Inflation means…",
+              "options": ["Most prices go up over time","One toy goes on sale","Money grows by itself"],
+              "answer": 0,
+              "why": "Inflation is when most prices go up over time."
+            }
+          ]
+        },
+        {
+          "id": "buy-less",
+          "title": "What money can buy",
+          "emoji": "🧸",
+          "track": "9-11",
+          "objectives": ["infl.buy"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🫙","text":"Jar money stays the same number. But if prices go up, it buys a bit less."},
+            {
+              "t": "example",
+              "emoji": "🧸",
+              "text": "Say prices go up. A toy costs $10 today, and $11 next year.",
+              "lines": ["You keep $10 in a jar","Next year the toy costs $11","Your $10 is $1 short"]
+            },
+            {
+              "t": "check",
+              "q": "Prices go up, but your jar money stays the same. What happens?",
+              "options": ["It buys a little less","It buys more","Nothing at all changes"],
+              "answer": 0,
+              "why": "The number stays the same, but each thing costs more. So it buys less."
+            }
+          ]
+        },
+        {
+          "id": "beat-prices",
+          "title": "Can savings keep up?",
+          "emoji": "🌱",
+          "track": "challenge",
+          "objectives": ["infl.beat"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🏦","text":"Say a bank pays 1% a year. But prices go up 3% a year."},
+            {
+              "t": "grow",
+              "show": "price",
+              "text": "Watch a $100 cart of food and $100 of bank savings over 5 years.",
+              "start": 100,
+              "rate": 3,
+              "years": 5,
+              "label": "Cart of food",
+              "vs": {"kind":"rate","rate":1,"label":"Bank savings"}
+            },
+            {"t":"say","emoji":"🌳","text":"Bank savings are safe for money you need soon. Some grown-ups invest for the long run. It can grow or shrink."},
+            {
+              "t": "check",
+              "q": "Savings grow 1% a year. Prices grow 3%. Your savings buy…",
+              "options": ["A bit less each year","A bit more each year","Exactly the same"],
+              "answer": 0,
+              "why": "Prices grow faster than the savings, so the savings buy a bit less."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "borrowing",
+      "title": "Borrowing and interest",
+      "emoji": "🤝",
+      "blurb": "Borrow, pay back, and the price of borrowing.",
+      "track": "9-11",
+      "objectives": ["credit.interest","credit.lender","credit.card","credit.grows"],
+      "talk": ["Have you ever lent something to a friend? What made you trust them to give it back?","If you borrowed $10 and paid back $11, what is the extra $1 for?","Why do you think lenders want to know if someone paid back on time before?"],
+      "lessons": [
+        {
+          "id": "owe-interest",
+          "title": "Interest when you borrow",
+          "emoji": "🧾",
+          "track": "9-11",
+          "objectives": ["credit.interest"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🏦","text":"When you save in a bank, the bank often pays you a little interest."},
+            {"t":"say","emoji":"🔁","text":"When you borrow, it flips around. You pay interest to the lender."},
+            {
+              "t": "example",
+              "emoji": "🧾",
+              "text": "You borrow $100. The interest is $10 for one year.",
+              "lines": ["Borrowed: $100","Interest: + $10","Pay back: $110"]
+            },
+            {
+              "t": "check",
+              "q": "Why do borrowers pay back more than they borrowed?",
+              "options": ["It's the price of borrowing","The bank made a mistake","Money shrinks over time"],
+              "answer": 0,
+              "why": "Interest is what the borrower pays for using the lender's money."
+            }
+          ]
+        },
+        {
+          "id": "lender",
+          "title": "Why lenders lend",
+          "emoji": "🏦",
+          "track": "9-11",
+          "objectives": ["credit.lender"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🏦","text":"Banks lend money because borrowers pay them interest. Lending earns them money."},
+            {"t":"say","emoji":"🙋","text":"Lenders like to lend to people who pay back on time."},
+            {
+              "t": "check",
+              "q": "Who would you rather lend your bike to?",
+              "options": ["A friend who always gives things back","A friend who lost your last toy"],
+              "answer": 0,
+              "why": "You trust people who gave things back before. Lenders think the same way."
+            },
+            {
+              "t": "check",
+              "q": "How does a bank earn money from lending?",
+              "options": ["Borrowers pay it interest","It prints new money","Borrowers pay back less"],
+              "answer": 0,
+              "why": "Borrowers pay back more than they borrowed. The extra is interest."
+            }
+          ]
+        },
+        {
+          "id": "credit-card",
+          "title": "How credit cards work",
+          "emoji": "💳",
+          "track": "challenge",
+          "objectives": ["credit.card"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"💳","text":"A credit card is a loan you can use at stores."},
+            {"t":"say","emoji":"📅","text":"Each month a bill comes. Pay all of it by the due date, and you usually pay no interest."},
+            {"t":"say","emoji":"🎢","text":"Pay only part, and interest is added to the rest. Card interest is often high."},
+            {
+              "t": "check",
+              "q": "When does a credit card usually cost no interest?",
+              "options": ["When you pay the whole bill on time","When you pay only part","When you buy something small"],
+              "answer": 0,
+              "why": "Paying the whole bill by the due date usually means no interest."
+            }
+          ]
+        },
+        {
+          "id": "debt-snowball",
+          "title": "When owing grows",
+          "emoji": "⛄",
+          "track": "challenge",
+          "objectives": ["credit.grows"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"⛄","text":"Interest can make savings grow like a snowball. What you owe can grow the same way."},
+            {
+              "t": "grow",
+              "show": "owe",
+              "text": "Say Max owes $100 and pays nothing back. The interest is 20% a year. Tap to see what he owes.",
+              "start": 100,
+              "rate": 20,
+              "years": 4,
+              "label": "What Max owes",
+              "vs": {"kind":"jar","label":"What he borrowed"}
+            },
+            {"t":"say","emoji":"🙋","text":"Paying back on time, and in full, keeps what you owe small. Then interest has little to grow on."},
+            {
+              "t": "check",
+              "q": "Max owes $100 at 20% a year and pays nothing. After 2 years he owes…",
+              "options": ["$144","$120","$100"],
+              "answer": 0,
+              "why": "Year 1: $100 + $20 = $120. Year 2: 20% of $120 is $24, so $144."
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "dividends",
       "title": "Dividends",
       "emoji": "🍰",
       "blurb": "When your slice pays you.",
       "track": "9-11",
-      "objectives": ["dv.what","dv.why-not","dv.reinvest","dv.day"],
+      "objectives": ["dv.what","dv.why-not","dv.reinvest","dv.day","dv.yield"],
+      "talk": ["Why might a company keep all its profit instead of paying a dividend?","Would you spend a dividend or use it to buy more shares? Why?"],
       "lessons": [
         {
           "id": "dividend",
@@ -759,6 +1688,126 @@
               "why": "The price often drops by about the payout. $50 take away $1 is about $49."
             }
           ]
+        },
+        {
+          "id": "div-yield",
+          "title": "How big is the payout?",
+          "emoji": "🪙",
+          "track": "challenge",
+          "objectives": ["dv.yield"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🍰","text":"To compare dividends, grown-ups ask: how much is paid for each $100 of shares?"},
+            {"t":"example","emoji":"🪙","text":"A $50 share pays $2 a year.","lines":["$100 buys 2 shares","2 × $2 = $4 a year","$4 for each $100: that is 4%"]},
+            {"t":"say","emoji":"🤞","text":"A company can cut its dividend. A big payout is not a promise."},
+            {
+              "t": "check",
+              "q": "A $25 share pays $1 a year. For each $100, it pays…",
+              "options": ["$4, or 4%","$1, or 1%","$25"],
+              "answer": 0,
+              "why": "$100 buys 4 shares. 4 × $1 = $4 for each $100, or 4%."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "funds",
+      "title": "Baskets of companies",
+      "emoji": "🧺",
+      "blurb": "Funds, index funds, fees and spreading out.",
+      "track": "9-11",
+      "objectives": ["fund.groups","fund.what","fund.fees","fund.index"],
+      "talk": ["If you made a basket with one share of every company you know, which companies would be in it?","Do toy companies all have good and bad years at the same time? Why might they?","Why might a fund with a lower fee leave more money for its owners?"],
+      "lessons": [
+        {
+          "id": "spread-groups",
+          "title": "Spread across groups",
+          "emoji": "👥",
+          "track": "9-11",
+          "objectives": ["fund.groups"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"👥","text":"Companies in the same group often move together. Like toy makers, or food makers."},
+            {"t":"say","emoji":"🧸","text":"So three toy companies are not very spread out. One bad toy year can hurt them all."},
+            {"t":"say","emoji":"🧺","text":"Spreading across groups helps more. Food, games and shoes don't always move together."},
+            {
+              "t": "check",
+              "q": "Which is more spread out?",
+              "options": ["Food, game and shoe companies","Three toy companies"],
+              "answer": 0,
+              "why": "Different groups rarely all have a bad year at once. But in a big market drop, most fall together."
+            }
+          ]
+        },
+        {
+          "id": "fund",
+          "title": "A fund is a basket",
+          "emoji": "🧺",
+          "track": "9-11",
+          "objectives": ["fund.what"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🧺","text":"A fund is like a basket that holds shares of many companies."},
+            {"t":"say","emoji":"🍕","text":"One fund share is a tiny slice of the basket, so you own a bit of every company in it."},
+            {"t":"say","emoji":"🥚","text":"If one company has a bad year, it is only a small part of the basket. A fund can still go down."},
+            {
+              "t": "check",
+              "q": "One share of a fund gives you…",
+              "options": ["A tiny bit of many companies","One whole company","A promise it only goes up"],
+              "answer": 0,
+              "why": "A fund holds many companies, so one share is a tiny bit of each one."
+            }
+          ]
+        },
+        {
+          "id": "fees",
+          "title": "Fees nibble",
+          "emoji": "🌱",
+          "track": "challenge",
+          "objectives": ["fund.fees"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🏷️","text":"A fee is what you pay for a service. Funds take a small fee every year."},
+            {
+              "t": "grow",
+              "show": "garden",
+              "text": "Two funds hold the same companies, which grow 7% a year. Pretend: one fee is tiny, one is 1% a year.",
+              "start": 1000,
+              "rate": 6.9,
+              "years": 10,
+              "label": "Tiny fee",
+              "vs": {"kind":"rate","rate":6,"label":"1% fee"}
+            },
+            {"t":"say","emoji":"🧠","text":"A small fee each year adds up over many years. Grown-ups check fees before they pick a fund."},
+            {
+              "t": "check",
+              "q": "Two funds hold the same companies. Which usually leaves you more?",
+              "options": ["The one with the lower fee","The one with the higher fee","Fees never matter"],
+              "answer": 0,
+              "why": "Same companies, so the lower fee usually leaves more for the owners."
+            }
+          ]
+        },
+        {
+          "id": "index",
+          "title": "Index funds follow a list",
+          "emoji": "📋",
+          "track": "challenge",
+          "objectives": ["fund.index"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"📋","text":"An index is a list of companies. One famous list has about 500 big US companies."},
+            {"t":"say","emoji":"🧺","text":"An index fund buys the companies on its list. Nobody picks winners. If they fall, the fund falls too."},
+            {"t":"say","emoji":"🐢","text":"Since nobody picks, index funds are often cheap to run. Their fees are often low."},
+            {
+              "t": "check",
+              "q": "What does an index fund do?",
+              "options": ["Buys the companies on a list","Picks only the hottest stocks","Buys just one company"],
+              "answer": 0,
+              "why": "It buys every company on its list, instead of trying to pick winners."
+            }
+          ]
         }
       ]
     },
@@ -769,6 +1818,7 @@
       "blurb": "Spread out, be patient, check facts.",
       "track": "6-8",
       "objectives": ["sm.spread","sm.patience","sm.hype","sm.scams","ch.clues"],
+      "talk": ["How could we check if a video about a stock is true? Who made it, and why?","What is a red flag that something is too good to be true?"],
       "lessons": [
         {
           "id": "baskets",
@@ -903,7 +1953,8 @@
       "emoji": "📝",
       "blurb": "Guesses, beats, misses and what comes next.",
       "track": "6-8",
-      "objectives": ["rc.what","rc.estimate","rc.beat","rc.expect","rc.guidance","rc.jump"],
+      "objectives": ["rc.what","rc.estimate","rc.beat","rc.expect","rc.guidance","rc.jump","rc.calendar","rc.pershare","rc.sales","rc.surprise"],
+      "talk": ["Pick a company we know and look at when its next report card is. What do you guess?","Why do you think a price went down even though the company beat the guess?"],
       "lessons": [
         {
           "id": "report-card",
@@ -929,6 +1980,27 @@
               "options": ["An earnings report","A gift card","A birthday card"],
               "answer": 0,
               "why": "It is called an earnings report."
+            }
+          ]
+        },
+        {
+          "id": "calendar",
+          "title": "The report card calendar",
+          "emoji": "📅",
+          "track": "6-8",
+          "objectives": ["rc.calendar"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"📅","text":"Companies say ahead of time which day their report card comes out. Moon Club's moon counts down to it."},
+            {"t":"say","emoji":"🌙","text":"Some share it before the market opens. Some share it after it closes."},
+            {"t":"say","emoji":"🔔","text":"Either way, the big price move usually shows up the next time the market is open."},
+            {"t":"say","emoji":"🌙","text":"Some grown-ups trade after hours, so the price can start moving that night."},
+            {
+              "t": "check",
+              "q": "A company reports after the market closes on Tuesday. When does the big move usually show?",
+              "options": ["When trading opens Wednesday","Tuesday at lunch","It can't move at all"],
+              "answer": 0,
+              "why": "After the close, most people can trade again the next morning, Wednesday."
             }
           ]
         },
@@ -1003,6 +2075,57 @@
           ]
         },
         {
+          "id": "per-share",
+          "title": "Profit for each share",
+          "emoji": "🍕",
+          "track": "9-11",
+          "objectives": ["rc.pershare"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🍕","text":"A company is cut into many shares. Its profit can be split the same way."},
+            {
+              "t": "example",
+              "emoji": "🍋",
+              "text": "A lemonade company makes $1,000 profit. It has 100 shares.",
+              "lines": ["$1,000 ÷ 100 shares","= $10 for each share","Grown-ups say: earnings per share"]
+            },
+            {"t":"say","emoji":"🔮","text":"That is the number experts guess before report day: the profit for each share."},
+            {
+              "t": "check",
+              "q": "Profit is $600. There are 200 shares. Profit for each share?",
+              "options": ["$3","$800","$200"],
+              "answer": 0,
+              "why": "$600 split into 200 shares is $3 for each share."
+            }
+          ]
+        },
+        {
+          "id": "sales-profit",
+          "title": "Sales vs profit",
+          "emoji": "💵",
+          "track": "9-11",
+          "objectives": ["rc.sales"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"💵","text":"A report card shows two big numbers. Sales are the money customers paid for what the company sold."},
+            {"t":"say","emoji":"🧾","text":"Profit is what is left after paying all the costs."},
+            {
+              "t": "example",
+              "emoji": "🍋",
+              "text": "Last year: sales $50, costs $30.",
+              "lines": ["Profit then: $50 − $30 = $20","This year: sales $60, costs $45","Profit now: $15. Sold more, kept less!"]
+            },
+            {"t":"say","emoji":"🎢","text":"A company can sell more and still make less profit, if its costs grew even more."},
+            {
+              "t": "check",
+              "q": "Sales went up $10. Costs went up $15. Profit…",
+              "options": ["Went down $5","Went up $25","Stayed the same"],
+              "answer": 0,
+              "why": "Costs grew $5 more than sales, so profit went down $5."
+            }
+          ]
+        },
+        {
           "id": "expectations",
           "title": "Why a beat can still drop",
           "emoji": "🎂",
@@ -1054,6 +2177,31 @@
               "why": "Guidance is the company's own guess about what comes next."
             }
           ]
+        },
+        {
+          "id": "surprise",
+          "title": "How big was the surprise?",
+          "emoji": "🎯",
+          "track": "challenge",
+          "objectives": ["rc.surprise"],
+          "since": "3.0.0",
+          "steps": [
+            {"t":"say","emoji":"🎯","text":"A beat can be tiny or big. How big the surprise is matters too."},
+            {
+              "t": "example",
+              "emoji": "🔮",
+              "text": "Experts guessed $2.00 for each share. The company made $2.50.",
+              "lines": ["$2.50 − $2.00 = 50¢","50¢ is one fourth of $2, or 25% more","A big surprise!"]
+            },
+            {"t":"say","emoji":"🤷","text":"Even a big beat can drop, if the company says next time looks slow."},
+            {
+              "t": "check",
+              "q": "Guess: $1.00 a share. Result: $1.01. How big is the surprise?",
+              "options": ["Tiny","Huge"],
+              "answer": 0,
+              "why": "One cent more on a $1 guess is a very small beat."
+            }
+          ]
         }
       ]
     },
@@ -1064,6 +2212,7 @@
       "blurb": "Clues for why a price went up or down.",
       "track": "9-11",
       "objectives": ["why.wiggle","why.market","why.group","why.unsure"],
+      "talk": ["When a price jumps, what clues could we check before we guess why?","Is \"we're not sure\" an okay answer? When have you said it?"],
       "lessons": [
         {
           "id": "why-wiggle",
@@ -1150,6 +2299,7 @@
       "blurb": "A whole day of a price in one tiny picture.",
       "track": "9-11",
       "objectives": ["ch.candle","ch.wick","ch.tug"],
+      "talk": ["Draw a candle for a day when the price started at $10, went up to $12 and ended at $11."],
       "lessons": [
         {
           "id": "candle",
@@ -1230,6 +2380,7 @@
       "blurb": "Up, down or sideways over many days.",
       "track": "9-11",
       "objectives": ["ch.trend","ch.sideways","ch.zoom"],
+      "talk": ["Look at a chart together. Is the trend up, down or sideways? What happens if we zoom out?"],
       "lessons": [
         {
           "id": "trend",
@@ -1305,6 +2456,7 @@
       "blurb": "Spots a price keeps bouncing off.",
       "track": "9-11",
       "objectives": ["ch.support","ch.breakout","ch.hindsight"],
+      "talk": ["Why do you think chart shapes look so clear only after they happen?"],
       "lessons": [
         {
           "id": "floor-ceiling",
@@ -1380,6 +2532,7 @@
       "blurb": "Volume, averages and report-day jumps.",
       "track": "9-11",
       "objectives": ["ch.volume","ch.average","ch.reportday"],
+      "talk": ["Why might more people trade a company's shares on its report card day?"],
       "lessons": [
         {
           "id": "volume",
@@ -1625,6 +2778,68 @@
       "emoji": "〰️",
       "means": "The small ups and downs a price makes every day, even with no news.",
       "example": "Up a little, down a little. That is a wiggle."
+    },
+    "wage": {"word":"wage","emoji":"⏰","means":"Pay for each hour of work.","example":"Leo's wage is $10 an hour. Three hours pay $30."},
+    "tax": {
+      "word": "taxes",
+      "emoji": "🏫",
+      "means": "Money people pay the government for things we share.",
+      "example": "Taxes help pay for schools, roads and fire trucks."
+    },
+    "entrepreneur": {
+      "word": "entrepreneur",
+      "emoji": "🍋",
+      "means": "A person who starts a business and takes a risk.",
+      "example": "A kid who starts a lemonade stand is an entrepreneur."
+    },
+    "goal": {"word":"saving goal","emoji":"🚲","means":"Something you save up for.","example":"Save $10 a week for 6 weeks to buy a $60 bike."},
+    "emergency": {
+      "word": "emergency fund",
+      "emoji": "☔",
+      "means": "Money saved just for surprises.",
+      "example": "When the bike tire popped, the rainy day fund paid for it."
+    },
+    "loan": {"word":"loan","emoji":"🤝","means":"Money you borrow and must pay back.","example":"Borrow $100, and pay back $110 with interest."},
+    "credit": {
+      "word": "credit card",
+      "emoji": "💳",
+      "means": "A card that lets you borrow money you must pay back.",
+      "example": "Pay the whole bill on time, and there is usually no interest."
+    },
+    "inflation": {
+      "word": "inflation",
+      "emoji": "🏷️",
+      "means": "When most prices go up over time.",
+      "example": "If most prices go up 3%, a $100 cart of food costs about $103 next year."
+    },
+    "index": {
+      "word": "index fund",
+      "emoji": "📋",
+      "means": "A fund that buys all the companies on one list.",
+      "example": "One list has about 500 big US companies in it."
+    },
+    "fee": {"word":"fee","emoji":"🌱","means":"Money you pay for a service.","example":"A fund takes a small fee every year."},
+    "insurance": {
+      "word": "insurance",
+      "emoji": "🛡️",
+      "means": "Many people pay a little, so one with bad luck gets help.",
+      "example": "Car insurance helps pay to fix a dented car."
+    },
+    "premium": {"word":"premium","emoji":"🛡️","means":"The small amount each person pays for insurance.","example":"Lots of people pay a premium each month."},
+    "debit": {
+      "word": "debit card",
+      "emoji": "🏦",
+      "means": "A card that pays with money from your own bank account.",
+      "example": "Pay $5 with a debit card, and $5 leaves your account."
+    },
+    "salary": {"word":"salary","emoji":"📅","means":"The same pay each year, split into paychecks.","example":"A teacher gets a salary, paid every two weeks."},
+    "tip": {"word":"tip","emoji":"🪙","means":"Extra money a customer gives for good help.","example":"Mom left a $2 tip for the server."},
+    "scam": {"word":"scam","emoji":"🚩","means":"A trick to take your money or your account.","example":"\"Free gems for your password\" is a scam."},
+    "sales": {
+      "word": "sales",
+      "emoji": "💵",
+      "means": "All the money a company gets from selling.",
+      "example": "Sales are money in. Profit is what is left after costs."
     }
   },
   "words": [
@@ -1665,14 +2880,18 @@
   ],
   "guess": {
     "unit": "report",
-    "ladder": ["report-card","guess","beat","after","expectations","guidance"],
+    "ladder": ["report-card","calendar","guess","beat","after","per-share","sales-profit","expectations","guidance","surprise"],
     "tips": {
       "report-card": "Big US companies share how they did four times a year. That is their report card.",
       "guess": "Before report day, experts guess the profit for each share. Their average is the number to beat.",
       "beat": "Made more than the guess? It beat. Made less? It missed.",
       "expectations": "A beat can still make the price drop if people hoped for even more.",
       "guidance": "Listen for what comes next. A company's guess about next time can move the price.",
-      "after": "Report day can be bumpy. New facts arrive all at once."
+      "after": "Report day can be bumpy. New facts arrive all at once.",
+      "calendar": "Report day is set ahead of time. After the close, the big move usually shows up the next morning.",
+      "per-share": "Experts guess the profit for each share. That is the company's profit split across all its shares.",
+      "sales-profit": "Sales are money from customers. Profit is what's left after costs. More sales can still mean less profit.",
+      "surprise": "A beat can be tiny or big. A tiny beat may not mean much, and other news can still move the price a lot."
     },
     "reveal": {
       "beatUp": "It beat the guess, and the price went up. People may have liked the news.",
@@ -1682,11 +2901,13 @@
       "unknown": "We don't know the price move yet. Check back soon!",
       "inLine": "It matched the guess exactly. Then hopes and what comes next matter most.",
       "tryAgain": "Good thinking! Even experts guess wrong a lot. That is how we learn."
-    }
+    },
+    "learn": {"beatUp":"after","beatDown":"expectations","missDown":"after","missUp":"expectations","inLine":"guidance","unknown":"calendar"}
   },
   "piggy": {
     "unit": "piggy",
-    "ladder": ["piggy-start","piggy-spread","piggy-updown","piggy-peek","piggy-time"],
+    "ladder": ["piggy-start","piggy-spread","piggy-updown","piggy-peek","piggy-time","spread-groups"],
+    "garden": ["snowball","compound","patience","fund","fees","double"],
     "peekLimit": 3,
     "tips": {
       "oneBasket": "All your coins are in one basket. If that company has a bad day, all your pretend coins feel it.",
@@ -1696,17 +2917,25 @@
       "longTime": "Your Piggy Bank is {days} days old. Look at the whole line, not just today.",
       "bigDrop": "Your pretend coins are down {pct}% since you started. Big drops happen to everyone. It is not your fault.",
       "bigRise": "Your pretend coins are up {pct}% since you started. Prices can fall again too. Spreading out is still a good habit.",
-      "peekMany": "You've looked {n} times today. Curious is great! Prices wiggle all day, so once a day is plenty."
+      "peekMany": "You've looked {n} times today. Curious is great! Prices wiggle all day, so once a day is plenty.",
+      "oneGroup": "Your {n} companies are all in the same group. Groups often move together, so they may all have a bad day at once."
     }
   },
   "review": {"intervals":[0,1,3,7],"retireAt":4,"perStop":5,"pass":0.8},
   "assessments": [
     {"id":"money-check","unit":"money","title":"Money basics check","pass":0.8},
+    {"id":"earning-check","unit":"earning","title":"Earning money check","pass":0.8},
+    {"id":"goals-check","unit":"goals","title":"Saving goals check","pass":0.8},
+    {"id":"spending-check","unit":"spending","title":"Smart spending check","pass":0.8},
+    {"id":"safety-check","unit":"safety","title":"Staying safe with money check","pass":0.8},
     {"id":"companies-check","unit":"companies","title":"Companies check","pass":0.8},
     {"id":"shares-check","unit":"shares","title":"Shares and the market check","pass":0.8},
     {"id":"piggy-check","unit":"piggy","title":"Piggy Bank school check","pass":0.8},
     {"id":"growing-check","unit":"growing","title":"Saving and investing check","pass":0.8},
+    {"id":"inflation-check","unit":"inflation","title":"Prices over time check","pass":0.8},
+    {"id":"borrowing-check","unit":"borrowing","title":"Borrowing and interest check","pass":0.8},
     {"id":"dividends-check","unit":"dividends","title":"Dividends check","pass":0.8},
+    {"id":"funds-check","unit":"funds","title":"Baskets of companies check","pass":0.8},
     {"id":"smart-check","unit":"smart","title":"Money-smart check","pass":0.8},
     {"id":"report-check","unit":"report","title":"Report cards check","pass":0.8},
     {"id":"why-check","unit":"why","title":"Why did it move? check","pass":0.8},
@@ -1719,12 +2948,16 @@
     {
       "id": "coast",
       "name": "Lemonade Coast",
-      "blurb": "Companies, shares and prices",
+      "blurb": "Money, earning, spending, companies and shares",
       "art": "🍋",
       "hue": "lemon",
       "nodes": [
         {"id":"coast-quest","title":"Luna's Lemonade Stand","art":"🍋","kind":"quest","ref":"lemonade"},
         {"id":"coast-money","title":"Money basics","art":"💰","kind":"unit","ref":"money"},
+        {"id":"coast-earning","title":"Earning money","art":"🧑‍💼","kind":"unit","ref":"earning"},
+        {"id":"coast-goals","title":"Saving goals","art":"⭐","kind":"unit","ref":"goals"},
+        {"id":"coast-spending","title":"Smart spending","art":"🛒","kind":"unit","ref":"spending"},
+        {"id":"coast-safety","title":"Staying safe","art":"🛡️","kind":"unit","ref":"safety"},
         {"id":"coast-companies","title":"Companies","art":"🏪","kind":"unit","ref":"companies"},
         {"id":"coast-shares","title":"Shares and the market","art":"🍕","kind":"unit","ref":"shares"},
         {"id":"coast-piggy","title":"Piggy Bank school","art":"🐷","kind":"unit","ref":"piggy"},
@@ -1735,14 +2968,17 @@
     {
       "id": "isle",
       "name": "Saver's Isle",
-      "blurb": "Saving, investing and dividends",
+      "blurb": "Saving, borrowing, prices, baskets and staying safe",
       "art": "🌳",
       "hue": "mint",
       "nodes": [
         {"id":"isle-growing","title":"Saving and investing","art":"🌱","kind":"unit","ref":"growing"},
         {"id":"isle-save","title":"Save or Grow?","art":"🌳","kind":"quest","ref":"save"},
+        {"id":"isle-inflation","title":"Prices over time","art":"🏷️","kind":"unit","ref":"inflation"},
+        {"id":"isle-borrowing","title":"Borrowing and interest","art":"🤝","kind":"unit","ref":"borrowing"},
         {"id":"isle-dividends","title":"Dividends","art":"🍰","kind":"unit","ref":"dividends"},
         {"id":"isle-slice","title":"Your Slice Pays You","art":"🪙","kind":"quest","ref":"dividends"},
+        {"id":"isle-funds","title":"Baskets of companies","art":"🧺","kind":"unit","ref":"funds"},
         {"id":"isle-smart","title":"Money-smart","art":"🧠","kind":"unit","ref":"smart"},
         {"id":"isle-practice","title":"Review stop","art":"🔁","kind":"practice"},
         {"id":"isle-boss","title":"Island Quiz","art":"👑","kind":"review","ref":"isle"}
@@ -1831,43 +3067,53 @@
   "glyphs": [
     "⏰",
     "⏳",
+    "☔",
     "⚖️",
     "⛄",
+    "⛑️",
     "⛰️",
     "✅",
     "✨",
     "❓",
     "➕",
+    "⭐",
     "〰️",
     "🃏",
     "🌊",
     "🌍",
     "🌙",
     "🌦️",
+    "🌧️",
     "🌱",
     "🌳",
     "🌻",
     "🍋",
     "🍎",
     "🍕",
+    "🍫",
     "🍭",
     "🍰",
+    "🎁",
     "🎂",
     "🎒",
     "🎓",
     "🎢",
+    "🎨",
     "🎭",
     "🎮",
     "🎯",
+    "🏛️",
     "🏟️",
     "🏠",
     "🏡",
     "🏦",
     "🏪",
+    "🏫",
     "🏰",
     "🏷️",
     "🐄",
     "🐢",
+    "🐶",
     "🐷",
     "👀",
     "👍",
@@ -1875,7 +3121,9 @@
     "👑",
     "👟",
     "👥",
+    "💎",
     "💰",
+    "💳",
     "💵",
     "💻",
     "📅",
@@ -1884,12 +3132,14 @@
     "📊",
     "📋",
     "📏",
+    "📚",
     "📝",
     "📣",
     "📦",
     "🔁",
     "🔊",
     "🔍",
+    "🔒",
     "🔔",
     "🔤",
     "🔧",
@@ -1902,16 +3152,22 @@
     "😮",
     "🙋",
     "🚀",
+    "🚒",
+    "🚗",
     "🚩",
+    "🚲",
     "🛒",
+    "🛡️",
     "🛤️",
     "🤔",
     "🤝",
     "🤞",
+    "🤫",
     "🤷",
     "🥚",
     "🥤",
     "🧑‍🍳",
+    "🧑‍💼",
     "🧠",
     "🧥",
     "🧩",

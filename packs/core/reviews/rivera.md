@@ -42,3 +42,32 @@ The reading-level gate forced three small edits after sign-off. All three were c
 - the new 9-11 lesson `hindsight` ("Looking back is easy"), which restores the patterns unit to 3 lessons;
 - simpler `mood` and `report` glossary cards.
 - Distractor "Yes, the shape was a promise" (applied).
+
+## Round 4 (Core 3.0.0, the 0.15 deepening): Approved with changes → Approved
+
+39 new lessons, 7 new units (Earning money, Saving goals, Smart spending, Staying safe, Prices over time, Borrowing and interest, Baskets of companies), two new step types (worked examples and growth pictures) and a third, optional track.
+
+**Must-fix (all applied)**
+- **Percent before it was taught.** `compound` and `prices-rise` (Big Moons) used "%" cold. Each now says what it means first ("10% a year means $10 more for every $100").
+- **`borrow` was out of reach.** A Little Moons lesson sat in a Big Moons unit, after `pay-ways` already said a credit card "borrows". It moved into Smart spending, before `pay-ways`.
+- **Math beyond 6–8.** `goal` used ÷ and `boss` used ×. `goal` now counts by tens ($10, $20 … $60), and `boss` says "10 cups at $1" and defines profit in place, since Earning now comes before Companies.
+- **`debt-snowball` ended on fear, about "you".** It is now about Max, and adds what helps: "Paying back on time, and in full, keeps what you owe small."
+- **`sales-profit` jumped to an abstract check.** It now has a worked example first (sales $50, costs $30, then sales $60, costs $45: "Sold more, kept less!").
+- **"A quarter" (`surprise`)** read as the 25¢ coin. It is now "one fourth of $2, or 25% more".
+- **Fire (`insurance`).** It could frighten 6–9 year olds. It is now a cracked phone or a dented car, and the glossary example matches.
+- **`scam-signs` taught trust by sender.** "The library" and "your teacher" were "Okay", but scammers copy trusted senders. The bucket is now "No red flag" with Grandma and Coach, and "Don't tell your parents" became "Don't tell any grown-up".
+- **Giveaway answer.** `bank-safe`'s right answer was much longer than the others; all three are now the same length.
+
+**Also applied**
+- Risk is "things don't go the way you hope", not only "something bad".
+- `beat-prices` no longer reads as "bank savings are bad".
+- The Baskets order is now spread-groups → fund → fees → index, so "fees" is taught before it's used.
+- `double` is honest about year 7 vs year 8 ("A near guess!"), and its distractors are real mistakes.
+- `div-yield` is now "How big is the payout?" ("slice" already means a share), with a check that isn't a copy of the example.
+- `paid` uses an hourly bake-sale wage (a dog walk paid per walk is not a wage), and `lender` dropped the renting card (one idea per lesson).
+- "Credit union" is kept out of the 6–8 card. "You save $3" became "costs $3 less" ("save" means set aside).
+- Joke distractors were replaced with real mistakes, long right answers were shortened, and a card that tied pay to worth now says "Every job helps someone".
+- Staying safe now comes right after Smart spending, so Little Moons meet passwords and scams early.
+- Talk prompts don't assume grandparents, parents or insurance at home.
+
+**The third track.** Approved as "Full Moons (challenge)", with no ages in the title. Percent, the Rule of 72 and yield are grade-6 math, so calling them a challenge is honest. Challenge lessons come last in each unit and never gate stars, mastery or a land's boss quiz (app: `KidsContent.optionalTracks`).

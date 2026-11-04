@@ -18,21 +18,35 @@ export const CONTENT_VERSION = 1;
 
 export interface Quiz { q: string; options: string[]; answer: number; why: string }
 export interface SortItem { emoji: string; text: string; b: 0 | 1 }
+/** What a `grow` step draws: a Moon Garden plant (savings), a price tag (prices rising) or an IOU (money owed). */
+export type GrowShow = "garden" | "price" | "owe";
+/** The faint comparison row of a `grow` step: a jar (never grows), simple growth (the same extra each year) or another yearly rate. */
+export interface GrowVs { kind: "jar" | "simple" | "rate"; rate?: number; label: string }
 export type Step =
   | { t: "say"; emoji: string; text: string }
   | { t: "check"; q: string; options: string[]; answer: number; why: string }
-  | { t: "sort"; q: string; buckets: [string, string]; items: SortItem[]; why: string };
+  | { t: "sort"; q: string; buckets: [string, string]; items: SortItem[]; why: string }
+  /** A worked example: the setup, then 2–4 lines of working the kid reveals one at a time (worked examples first). */
+  | { t: "example"; emoji: string; text: string; lines: string[] }
+  /** Year-by-year growth the kid grows one tap at a time (concrete → pictures → numbers). Whole numbers, pretend. */
+  | { t: "grow"; show: GrowShow; text: string; start: number; rate: number; years: number; label: string; vs?: GrowVs };
 export type TrackId = string; // "6-8" | "9-11" in Core; "all" means both
-export interface PackLesson { id: string; title: string; emoji: string; track?: TrackId; objectives?: string[]; steps: Step[] }
-export interface PackUnit { id: string; title: string; emoji: string; blurb: string; track?: TrackId; objectives?: string[]; lessons: PackLesson[] }
+/** `since`: the pack version that added the lesson. Lessons added to a unit later are a bonus for map stars, and show as "New". */
+export interface PackLesson { id: string; title: string; emoji: string; track?: TrackId; objectives?: string[]; since?: string; steps: Step[] }
+/** `talk`: 1–3 "dinner table talk" prompts for the grown-up (shown only in the grown-up corner). */
+export interface PackUnit { id: string; title: string; emoji: string; blurb: string; track?: TrackId; objectives?: string[]; talk?: string[]; lessons: PackLesson[] }
 export interface PackTerm { word: string; emoji: string; means: string; example: string; play?: string }
 export interface PackWord { word: string; means: string; example: string }
 export type NodeKindName = "unit" | "lesson" | "quest" | "game" | "guess" | "review" | "timeMachine" | "practice";
 export interface PackNode { id: string; title: string; art: string; kind: NodeKindName; ref?: string }
 export interface PackRegion { id: string; name: string; blurb: string; art: string; hue: string; nodes: PackNode[] }
 export interface Person { name: string; role: "author" | "teacher" | "markets" | "human" | "creator"; signedOff?: string | null; note?: string }
-export interface GuessCourse { unit: string; ladder: string[]; tips: Record<string, string>; reveal: { beatUp: string; beatDown: string; missDown: string; missUp: string; unknown: string; inLine: string; tryAgain: string } }
-export interface PiggyCourse { unit: string; ladder: string[]; peekLimit: number; tips: Record<"oneBasket" | "fewBaskets" | "manyBaskets" | "newBank" | "longTime" | "bigDrop" | "bigRise" | "peekMany", string> }
+export type RevealKey = "beatUp" | "beatDown" | "missDown" | "missUp" | "unknown" | "inLine" | "tryAgain";
+/** `learn`: after a reveal, the lesson that explains it (e.g. beatDown → "Why a beat can still drop"). */
+export interface GuessCourse { unit: string; ladder: string[]; tips: Record<string, string>; reveal: Record<RevealKey, string>; learn?: Partial<Record<RevealKey, string>> }
+export type PiggyTipName = "oneBasket" | "fewBaskets" | "manyBaskets" | "newBank" | "longTime" | "bigDrop" | "bigRise" | "peekMany";
+/** `garden`: the Moon Garden side's own ladder (growth, baskets, fees). `tips.oneGroup`: every company in one group. */
+export interface PiggyCourse { unit: string; ladder: string[]; garden?: string[]; peekLimit: number; tips: Record<PiggyTipName, string> & { oneGroup?: string } }
 export interface ReviewConfig { intervals: number[]; retireAt: number; perStop: number; pass: number }
 export interface Assessment { id: string; unit: string; title: string; pass: number; items?: string[] }
 export interface LessonPack {
@@ -44,7 +58,8 @@ export interface LessonPack {
   kind: "core" | "extend" | "replace";
   requires: { content: number; app?: string; core?: string };
   ages: { min: number; max: number };
-  tracks: { id: string; title: string; blurb: string }[];
+  /** `optional`: a challenge track. Its lessons never gate map stars, unit mastery or boss quizzes. */
+  tracks: { id: string; title: string; blurb: string; optional?: boolean }[];
   curators: Person[];
   reviewers: Person[];
   creator: { name: string; fictional: boolean; bio: string; voice: string } | null;
@@ -79,7 +94,25 @@ export const BANNED_PHRASES = [
 ];
 
 /** Card fit limits (characters), the same numbers the app's CardFitTests lay out at iPhone SE size. */
-export const FIT = { title: 40, say: 110, q: 90, option: 42, why: 100, sortQ: 60 };
+export const FIT = { title: 40, say: 110, q: 90, option: 42, why: 100, sortQ: 60, bucket: 14, label: 20, talk: 160 };
+/** Bounds for a `grow` step, so every picture fits one card and every number stays kid-sized. */
+export const GROW = { minYears: 2, maxYears: 10, maxRate: 30, maxStart: 100000 };
+
+/**
+ * The numbers a `grow` step shows, year 0…years, rounded to whole numbers (each year from the exact value,
+ * never from a rounded one). compound: growth on growth; simple: the same extra every year; jar: no growth.
+ * Mirrored in Swift (MoonClubCore Growth.series) and pinned by the `grow` vectors.
+ */
+export function growSeries(start: number, rate: number, years: number, kind: "compound" | "simple" | "jar" = "compound"): number[] {
+  const r = rate / 100;
+  return Array.from({ length: years + 1 }, (_, y) => Math.round(kind === "jar" ? start : kind === "simple" ? start * (1 + r * y) : start * Math.pow(1 + r, y)));
+}
+/** The main and comparison rows of a grow step. */
+export function growRows(s: Extract<Step, { t: "grow" }>): { main: number[]; vs: number[] | null } {
+  const main = growSeries(s.start, s.rate, s.years);
+  const vs = !s.vs ? null : s.vs.kind === "rate" ? growSeries(s.start, s.vs.rate ?? 0, s.years) : growSeries(s.start, s.rate, s.years, s.vs.kind);
+  return { main, vs };
+}
 
 export interface PackIssue { code: string; at: string; msg: string }
 
@@ -97,6 +130,7 @@ export function packTexts(p: LessonPack): { at: string; text: string; distractor
   for (const t of p.tracks ?? []) { add(`tracks.${t.id}`, t.title); add(`tracks.${t.id}`, t.blurb); }
   for (const u of p.units ?? []) {
     add(`units.${u.id}`, u.title); add(`units.${u.id}`, u.blurb);
+    (u.talk ?? []).forEach((t, i) => add(`units.${u.id}.talk.${i}`, t));
     for (const l of u.lessons ?? []) {
       add(`lessons.${l.id}`, l.title);
       (l.steps ?? []).forEach((s, i) => {
@@ -104,6 +138,8 @@ export function packTexts(p: LessonPack): { at: string; text: string; distractor
         if (s.t === "say") add(at, s.text);
         else if (s.t === "check") { add(at, s.q); add(at, s.why); s.options.forEach((o, k) => add(at, o, k !== s.answer)); }
         else if (s.t === "sort") { add(at, s.q); add(at, s.why); s.buckets.forEach((b) => add(at, b)); s.items.forEach((x) => add(at, x.text)); }
+        else if (s.t === "example") { add(at, s.text); s.lines.forEach((x) => add(at, x)); }
+        else if (s.t === "grow") { add(at, s.text); add(at, s.label); add(at, s.vs?.label); }
       });
     }
   }
@@ -122,7 +158,7 @@ export function packGlyphs(p: LessonPack): string[] {
     g.add(u.emoji);
     for (const l of u.lessons ?? []) {
       g.add(l.emoji);
-      for (const s of l.steps ?? []) { if (s.t === "say") g.add(s.emoji); if (s.t === "sort") s.items.forEach((i) => g.add(i.emoji)); }
+      for (const s of l.steps ?? []) { if (s.t === "say" || s.t === "example") g.add(s.emoji); if (s.t === "sort") s.items.forEach((i) => g.add(i.emoji)); }
     }
   }
   for (const t of Object.values(p.glossary ?? {})) g.add(t.emoji);
@@ -130,10 +166,12 @@ export function packGlyphs(p: LessonPack): string[] {
   return [...g].sort();
 }
 
+/** The prose a step reads out (worked-example lines are working, not prose, so they count only in `all`). */
+const prose = (s: Step): string | null => (s.t === "say" || s.t === "example" || s.t === "grow" ? s.text : null);
 /** The readability gate for one lesson: say cards ≤ grade 5, the whole lesson (with questions) ≤ 5.5. */
 export function lessonGrade(l: PackLesson): { say: number; all: number } {
-  const say = l.steps.flatMap((s) => (s.t === "say" ? [s.text] : [])).join(" ");
-  const all = l.steps.map((s) => (s.t === "say" ? s.text : `${s.q} ${s.why}`)).join(" ");
+  const say = l.steps.flatMap((s) => { const t = prose(s); return t ? [t] : []; }).join(" ");
+  const all = l.steps.map((s) => (s.t === "check" || s.t === "sort" ? `${s.q} ${s.why}` : s.t === "example" ? `${s.text} ${s.lines.join(" ")}` : s.text)).join(" ");
   return { say: say ? fkGrade(say) : 0, all: fkGrade(all) };
 }
 
@@ -166,6 +204,7 @@ export function validatePack(p: LessonPack, base?: LessonPack): PackIssue[] {
     seenU.add(u.id);
     if (u.track && !trackIds.has(u.track)) bad("track", `units.${u.id}`, `unknown track ${u.track}`);
     if (!(u.lessons ?? []).length) bad("unit.empty", `units.${u.id}`, "unit has no lessons");
+    if (u.talk && (u.talk.length < 1 || u.talk.length > 3 || u.talk.some((t) => !t.trim() || t.length > FIT.talk))) bad("talk", `units.${u.id}`, `1–3 dinner-table prompts, each at most ${FIT.talk} characters`);
     for (const l of u.lessons ?? []) {
       const at = `lessons.${l.id}`;
       if (seenL.has(l.id)) bad("lesson.dup", at, "duplicate lesson id");
@@ -173,17 +212,20 @@ export function validatePack(p: LessonPack, base?: LessonPack): PackIssue[] {
       seenL.add(l.id);
       if (l.track && !trackIds.has(l.track)) bad("track", at, `unknown track ${l.track}`);
       for (const o of l.objectives ?? []) if (!objIds.has(o)) bad("objective.ref", at, `unknown objective ${o}`);
+      if (l.since != null && !/^\d+\.\d+\.\d+$/.test(l.since)) bad("since", at, "since must be a pack version x.y.z");
       const steps = l.steps ?? [];
       // Fit: the Moon Club app shows every step on one card with no scrolling (iPhone SE at large text).
       if (l.title.length > FIT.title) bad("fit", at, `title longer than ${FIT.title} characters`);
       steps.forEach((s, i) => {
         const long = s.t === "say" ? s.text.length > FIT.say
           : s.t === "check" ? s.q.length > FIT.q || s.options.length > 3 || s.options.some((o) => o.length > FIT.option) || s.why.length > FIT.why
-          : s.q.length > FIT.sortQ || s.items.length > 6 || s.items.some((x) => x.text.length > FIT.option);
+          : s.t === "example" ? s.text.length > FIT.say || s.lines.length > 4 || s.lines.some((x) => x.length > FIT.option)
+          : s.t === "grow" ? s.text.length > FIT.say || s.label.length > FIT.label || (s.vs?.label.length ?? 0) > FIT.label
+          : s.t === "sort" ? s.q.length > FIT.sortQ || s.items.length > 6 || s.items.some((x) => x.text.length > FIT.option) || s.buckets.some((b) => b.length > FIT.bucket) : false;
         if (long) bad("fit", `${at}.${i}`, "too long to fit one card");
       });
       if (steps.length < 3 || steps.length > 7) bad("lesson.steps", at, "a lesson has 3–7 steps");
-      if (!steps.some((s) => s.t !== "say")) bad("lesson.steps", at, "a lesson needs a check or a sort");
+      if (!steps.some((s) => s.t === "check" || s.t === "sort")) bad("lesson.steps", at, "a lesson needs a check or a sort");
       steps.forEach((s, i) => {
         const sat = `${at}.${i}`;
         if (s.t === "say") { if (words(s.text) > 22) bad("say.long", sat, "a say card is at most 22 words"); }
@@ -194,6 +236,18 @@ export function validatePack(p: LessonPack, base?: LessonPack): PackIssue[] {
         } else if (s.t === "sort") {
           if (s.buckets.length !== 2) bad("sort.buckets", sat, "a sort has 2 buckets");
           if (s.items.length < 4 || new Set(s.items.map((x) => x.b)).size !== 2 || s.items.some((x) => x.b !== 0 && x.b !== 1)) bad("sort.items", sat, "4+ items across both buckets");
+        } else if (s.t === "example") {
+          if (words(s.text) > 22) bad("say.long", sat, "an example's setup is at most 22 words");
+          if (!Array.isArray(s.lines) || s.lines.length < 2 || s.lines.length > 4 || s.lines.some((x) => !x.trim())) bad("example.lines", sat, "a worked example has 2–4 lines");
+        } else if (s.t === "grow") {
+          if (words(s.text) > 22) bad("say.long", sat, "a grow card is at most 22 words");
+          const okNum = (v: unknown, lo: number, hi: number) => typeof v === "number" && Number.isFinite(v) && v > lo && v <= hi;
+          if (!["garden", "price", "owe"].includes(s.show)) bad("grow", sat, `unknown picture ${s.show}`);
+          if (!(Number.isInteger(s.years) && s.years >= GROW.minYears && s.years <= GROW.maxYears)) bad("grow", sat, `years must be ${GROW.minYears}–${GROW.maxYears}`);
+          if (!okNum(s.rate, 0, GROW.maxRate)) bad("grow", sat, `rate must be above 0 and at most ${GROW.maxRate}`);
+          if (!(Number.isInteger(s.start) && s.start >= 1 && s.start <= GROW.maxStart)) bad("grow", sat, "start must be a whole number 1–100000");
+          if (!s.label?.trim()) bad("grow", sat, "a grow step names its row");
+          if (s.vs && (!["jar", "simple", "rate"].includes(s.vs.kind) || !s.vs.label?.trim() || (s.vs.kind === "rate" && (!okNum(s.vs.rate, 0, GROW.maxRate) || s.vs.rate === s.rate)))) bad("grow", sat, "the comparison row is a jar, simple growth or a different rate, with a label");
         } else bad("step.type", sat, `unknown step type ${(s as { t: string }).t}`);
       });
       if (steps.length) {
@@ -222,6 +276,8 @@ export function validatePack(p: LessonPack, base?: LessonPack): PackIssue[] {
     for (const id of c.ladder) if (!allLessons.has(id)) bad("course", `${name}.ladder`, `unknown lesson ${id}`);
   }
   if (p.guess) for (const id of p.guess.ladder) if (!p.guess.tips[id]) bad("course", "guess.tips", `no tip for ${id}`);
+  if (p.guess?.learn) for (const [k, id] of Object.entries(p.guess.learn)) if (!allLessons.has(id ?? "")) bad("course", `guess.learn.${k}`, `unknown lesson ${id}`);
+  if (p.piggy?.garden) for (const id of p.piggy.garden) if (!allLessons.has(id)) bad("course", "piggy.garden", `unknown lesson ${id}`);
   if (p.review && (p.review.perStop < 1 || p.review.retireAt !== p.review.intervals.length || p.review.pass <= 0 || p.review.pass > 1)) bad("course", "review", "review: intervals one per box, retireAt = intervals.length, pass in (0,1]");
   for (const a of p.assessments ?? []) if (!allUnits.has(a.unit)) bad("assessment", `assessments.${a.id}`, `unknown unit ${a.unit}`);
 

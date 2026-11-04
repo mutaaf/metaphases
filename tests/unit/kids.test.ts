@@ -138,8 +138,9 @@ describe("Moon School content", () => {
   });
   it("every lesson reads at grade 5 or below, and no single card is grown-up prose", () => {
     for (const l of LESSONS) {
-      const texts = l.steps.map((x) => (x.t === "say" ? x.text : `${x.q} ${x.why}`));
-      expect(fkGrade(l.steps.flatMap((x) => (x.t === "say" ? [x.text] : [])).join(" ")), l.id).toBeLessThanOrEqual(5);
+      // Worked examples and growth pictures read like say cards; their lines of working count with the questions.
+      const texts = l.steps.map((x) => (x.t === "say" || x.t === "grow" ? x.text : x.t === "example" ? `${x.text} ${x.lines.join(" ")}` : `${x.q} ${x.why}`));
+      expect(fkGrade(l.steps.flatMap((x) => (x.t === "say" || x.t === "grow" || x.t === "example" ? [x.text] : [])).join(" ")), l.id).toBeLessThanOrEqual(5);
       expect(fkGrade(texts.join(" ")), l.id).toBeLessThanOrEqual(5.5);
       for (const t of texts) if (t.split(/\s+/).length > 5) expect(fkGrade(t), `${l.id}: ${t}`).toBeLessThanOrEqual(9);
     }
