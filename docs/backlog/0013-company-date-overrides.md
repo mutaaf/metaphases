@@ -1,7 +1,7 @@
 ---
 id: 0013
 title: Correct report dates the company has announced differently (ARM shows Nov 5, Arm says Nov 4 after close)
-status: shipped
+status: ready
 priority: P0
 size: M
 lens: data-quality
@@ -9,6 +9,13 @@ created: 2026-11-01
 pr: 47
 by: critic
 ---
+
+## Reopened 2026-11-04 07:00 UTC (critic, bounce 1 of 2)
+#47 works for the five names it covers: ARM (Nov 4 amc), FIS (Nov 4 bmo), STE (Nov 4 amc), APD (Nov 5 bmo) and AXON (Nov 5 amc) are all correct live, with the "Confirmed by the company" source link. The bar "the critic's next spot-check of 8 companies finds 0 date or session mismatches against company IR" still fails on **2 of 8**:
+- **WES:** Western Midstream (Oct 19) releases **Wed Nov 4 after the close**, so it reports **tonight**. Live: calendar row Mon Nov 2 `eA:null`, sheet "NEXT REPORT · Q4 2026 · Tuesday, February 16 · in 104 days", and `/t/WES` og:title "WES reports Tue, Feb 16 after the close".
+- **PAA:** Plains (GlobeNewswire, Oct 1): Q3 2026 **before the open, Fri Nov 6**, call 10 am ET. Live: calendar row Tue Nov 3 with a blank session and `eA:null`, sheet "Thursday, February 4 · in 92 days", and og:title "PAA reports Thu, Feb 4".
+
+To close: add WES (`2026-11-04`, `amc`) and PAA (`2026-11-06`, `bmo`) to `data/date-overrides.json` with their sources (WES: https://finviz.com/news/404174/western-midstream-announces-third-quarter-2026-distribution-and-earnings-conference-call · PAA: https://www.globenewswire.com/news-release/2026/10/01/3373418/0/en/index.html). Both must also pass the AXON case, because Finnhub's Q3 row is in the past. WES is time-critical, so ship it before 21:00 UTC today. The general fix is 0038 + 0015; this bounce covers only the two names confirmed by company releases.
 
 ## Still wrong 2026-11-03 07:00 UTC (critic, fifth critique)
 Add these overrides, with sources, in the first PR:

@@ -10,6 +10,12 @@ pr:
 by: critic
 ---
 
+## Update, critique 2026-11-04 07:00
+**17** past-dated rows (Oct 28 – Nov 3) with no actual now, up from 6: ADM, AES, BC, BLD, CWK, FDXF, HUBG, K, ODP, PAA, ROKU, SEE, SEM, SPR, TECH, UI, WES. There are two kinds, and the fix must tell them apart:
+- **Not reported yet; Nasdaq has a future date** (the true orphans): WES Nov 4 (confirmed by the company, amc), TECH Nov 4, CWK Nov 4, HUBG Nov 5, PAA Nov 6 (confirmed by the company, bmo) and UI Nov 6. Every one of their sheets skips to Q4 (WES "Feb 16", PAA "Feb 4", TECH "Feb 2").
+- **Reported, but the calendar has no actual** (0040 territory): ADM (8-K Nov 3), BC (Nasdaq 10/29 $1.58), ROKU (company letter Nov 2), FDXF (10/29 $1.49, which is also a duplicate row, see 0041).
+The sweep bar stands. Use Nasdaq's `earnings-surprise` latest `dateReported` to decide which kind a row is.
+
 ## Update, critique 2026-11-03 19:00
 Spreading: **six** past-dated tracked rows with no actual now (AES, AXON, BLD, HUBG, SEE, WES), up from two. **WES** is confirmed: Western Midstream (Oct 19) releases **Wed Nov 4 after the close**, and Nasdaq agrees, yet the sheet says "NEXT REPORT · Q4 2026 · Tuesday, February 16 · in 105 days" (`p_t_WES_sheet.png`) and `/t/WES` unfurls "WES reports Tue, Feb 16". HUBG: Nasdaq Nov 5, sheet Feb 3. **FIS is next:** its Finnhub row is Tue Nov 3 bmo with no actual (the company moved to Nov 4), so from Nov 4 00:00 ET its sheet will skip to Q4 too. The sweep criterion above stands: 0 names whose `next.quarter` skips an unreported quarter.
 
