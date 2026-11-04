@@ -12,6 +12,9 @@ describe("missingDays (0026)", () => {
     ];
     expect(missingDays(w, "2026-09-19", "2026-10-31")).toEqual(["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-27"]);
   });
+  it("skips NYSE holidays (Thanksgiving) inside a failed range", () => {
+    expect(missingDays(["Couldn't load 2026-11-26 — showing the rest.", "Couldn't load 2026-11-27 — showing the rest."], "2026-11-02", "2026-12-04")).toEqual(["2026-11-27"]);
+  });
   it("is empty for a clean window", () => {
     expect(missingDays([], "2026-09-19", "2026-10-31")).toEqual([]);
   });
