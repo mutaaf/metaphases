@@ -88,5 +88,9 @@ describe("company date overrides: WES and PAA (AXON case, Finnhub's Q3 row alrea
     const paa = await get("/api/ticker/PAA");
     expect(paa.next).toMatchObject({ date: "2026-11-06", session: "bmo", quarter: 3, year: 2026 });
     expect(paa.next.confirmed).toMatch(/^https:\/\//);
+    // Known gap (ticket 0038): `symbol=` has no Q3 row to borrow, so the sheet shows no estimate rather than
+    // February's. Never Q4's estimate on a Q3 date; when 0038 carries the calendar's estimate over, flip this.
+    expect(wes.next.epsE ?? null).not.toBe(0.9);
+    expect(paa.next.epsE ?? null).not.toBe(0.4);
   });
 });
