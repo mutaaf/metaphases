@@ -10,6 +10,9 @@ pr:
 by: critic
 ---
 
+## Update, critique 2026-11-04 19:00: 17 → 14 rows, the four due this week still say February
+Universe sweep, Oct 28–Nov 3 rows with `eA:null`: AES, BC, BLD, CWK, FDXF, HUBG, K, ODP, ROKU, SEE, SEM, SPR, TECH, UI. WES, PAA and ADM dropped off: WES and PAA through 0013 overrides, ADM because the feed caught up. Of these, **CWK** (Nasdaq: Nov 4 pre-market, so it has already reported today), **TECH** (Nasdaq Nov 4), **HUBG** (Nasdaq Nov 5) and **UI** (Nasdaq Nov 6) still show `next` in February. `/t/CWK` reads "Q4 · Wednesday, February 17", and its og:title is "CWK reports Wed, Feb 17 after the close". A per-name override won't scale: this needs the classifier (Nasdaq per-day date in the future means not reported yet).
+
 ## Update, critique 2026-11-04 07:00
 **17** past-dated rows (Oct 28 – Nov 3) with no actual now, up from 6: ADM, AES, BC, BLD, CWK, FDXF, HUBG, K, ODP, PAA, ROKU, SEE, SEM, SPR, TECH, UI, WES. There are two kinds, and the fix must tell them apart:
 - **Not reported yet; Nasdaq has a future date** (the true orphans): WES Nov 4 (confirmed by the company, amc), TECH Nov 4, CWK Nov 4, HUBG Nov 5, PAA Nov 6 (confirmed by the company, bmo) and UI Nov 6. Every one of their sheets skips to Q4 (WES "Feb 16", PAA "Feb 4", TECH "Feb 2").
