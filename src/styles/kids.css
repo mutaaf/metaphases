@@ -686,3 +686,9 @@ html:has(.kids) { scroll-padding-top: 84px; scroll-padding-bottom: calc(110px + 
 .k-why-clue:first-child { border-width: 2px; }
 .k-why-clue > span:first-child { font-size: 24px; line-height: 1; }
 .k-why-honest { margin: 0; }
+
+/* Deep-link pages (src/pages/KidsLinks.tsx) */
+.kids .k-shared-nudge { margin: 24px auto 0; max-width: 640px; }
+.kids .k-linkpage .k-app-lede p + p { margin-top: .6em; }
+.kids .k-linkpage .k-app-nudge { margin: 8px 0 16px; }
+.kids .k-picks a { color: var(--k-ink); text-decoration: underline; text-underline-offset: 3px; }

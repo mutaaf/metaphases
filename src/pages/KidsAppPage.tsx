@@ -2,6 +2,7 @@
 import { useState, type ComponentType } from "react";
 import { BASE, navigate, href } from "../lib/router";
 import { appLink } from "../../shared/kidsApp";
+import { refFrom } from "../../shared/kidsLinks";
 
 const SHOTS = [
   { src: "app/iphone-story.jpg", alt: "Today's Market Story on iPhone: the market's mood as weather, with a report card coming up" },
@@ -11,8 +12,11 @@ const SHOTS = [
 
 /** Small card that points kids' grown-ups to the app. Used on the Story page and in the grown-up corner. */
 export function AppNudge() {
+  // A shared link's ?ref= rides along to /kids/app, where it becomes the App Store campaign token.
+  const ref = refFrom(location.search);
+  const to = `/kids/app${ref ? `?ref=${ref}` : ""}`;
   return (
-    <a className="k-app-nudge" href={href("/kids/app")} onClick={(e) => { e.preventDefault(); navigate("/kids/app"); }}>
+    <a className="k-app-nudge" href={href(to)} onClick={(e) => { e.preventDefault(); navigate(to); }}>
       <img src={`${BASE}/kids-icon-512.png`} alt="" width={44} height={44} />
       <span><b>Moon Club is on iPhone &amp; iPad</b><small>Same Luna, smoother play, works offline.</small></span>
       <span className="k-app-nudge-go" aria-hidden>›</span>
@@ -23,7 +27,7 @@ export function AppNudge() {
 export function AppPage({ Gate }: { Gate: ComponentType<{ onPass: () => void; onClose: () => void }> }) {
   const [gate, setGate] = useState(false);
   const [open, setOpen] = useState(false);
-  const link = appLink();
+  const link = appLink(refFrom(location.search));
   return (
     <div className="k-page k-app">
       <header className="k-app-hero">
