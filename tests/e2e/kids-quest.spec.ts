@@ -76,8 +76,8 @@ test.describe("Kids: micro-lessons", () => {
 
   test("Moon School is grouped into units with an Up next lesson", async ({ page }) => {
     await page.goto("./kids/school");
-    for (const u of ["Money basics", "Companies", "Shares and the market", "Report cards", "Saving and investing", "Dividends", "Money-smart"]) {
-      await expect(page.getByRole("region", { name: u })).toBeVisible();
+    for (const u of ["Money basics", "Earning money", "Saving goals", "Smart spending", "Staying safe with money", "Companies", "Shares and the market", "Report cards", "Saving and investing", "Prices over time", "Borrowing and interest", "Dividends", "Baskets of companies", "Money-smart"]) {
+      await expect(page.getByRole("region", { name: u, exact: true })).toBeVisible();
     }
     await expect(page.locator(".k-upnext")).toContainText("What is money?");
   });
@@ -96,5 +96,22 @@ test.describe("Kids: micro-lessons", () => {
     await expect(page.locator(".k-feedback")).toContainText("5 of 6 right");
     await next.click();
     await expect(page.locator(".k-celebrate")).toContainText("Lesson done!");
+  });
+
+  test("a worked example reveals its lines one tap at a time, and a growth picture grows a year per tap", async ({ page }) => {
+    await page.goto("./kids/school/boss");
+    for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "Next →" }).click();
+    await expect(page.locator(".k-example li.on")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Next →" })).toBeDisabled();
+    for (let i = 0; i < 3; i++) await page.getByRole("button", { name: /Show the/ }).click();
+    await expect(page.locator(".k-example li.on")).toHaveCount(3);
+    await expect(page.locator(".k-example")).toContainText("profit: $4");
+    await expect(page.getByRole("button", { name: "Next →" })).toBeEnabled();
+    await page.goto("./kids/school/compound");
+    await page.getByRole("button", { name: "Next →" }).click();
+    await expect(page.locator(".k-grow-col.on")).toHaveCount(1);
+    for (let i = 0; i < 2; i++) await page.getByRole("button", { name: /Grow a year/ }).click();
+    await expect(page.locator(".k-grow-key")).toContainText("$121");
+    await expect(page.locator(".k-grow-key")).toContainText("$120");
   });
 });
