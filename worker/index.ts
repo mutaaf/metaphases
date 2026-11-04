@@ -21,7 +21,7 @@ import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } fro
 import { periodKey, pickConsensus } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { applyToEvents, applyToRows, type DateOverrides } from "../shared/dateOverrides";
-import { aliasMap, mergeSupplement, staleSymbols, supplementSymbols, suppRows, type SuppDoc, type Universe } from "../shared/calendarSupplement";
+import { aliasMap, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -110,6 +110,7 @@ function toEvents(rows: any[]): EarningsEvent[] {
 
 // ── 0024: the per-symbol supplement ─────────────────────────────────────
 const SUPP_KEY = CAL("cal:supp:v1");
+const SUPP_LOCK = CAL("cal:supp:lock:v1");
 /** `symbol=` only returns upcoming dates, so the supplement covers ranges that touch the next ~4 months. */
 const SUPP_BACK = 7, SUPP_AHEAD = 120;
 
@@ -118,18 +119,25 @@ async function readSupp(): Promise<SuppDoc> {
 }
 
 /**
- * The supplement document, refreshing at most a few stale symbols (pooled, 2 at a time). A failed symbol
- * keeps its last good rows. `refresh: false` (a failed range call this request, or the share-card path)
- * only reads the cache: a rate limit must never turn into more calls.
+ * The supplement document, refreshing at most a few stale symbols (pooled, 2 at a time), and at most once a
+ * minute per colo (a short-lived lock in the cache, taken before any call). A failed symbol keeps its last
+ * good rows. `refresh: false` (a failed range call this request, or the share-card path) only reads the
+ * cache: a rate limit must never turn into more calls.
  */
 async function supplement(env: Env, ctx: ExecutionContext, today: string, refresh: boolean): Promise<SuppDoc> {
   const doc = await readSupp();
-  const due = refresh ? staleSymbols(doc, SUPP_SYMBOLS, Date.now()) : [];
+  let due = refresh ? staleSymbols(doc, SUPP_SYMBOLS, Date.now()) : [];
+  if (due.length) {
+    try {
+      if (await caches.default.match(SUPP_LOCK)) due = [];
+      else await caches.default.put(SUPP_LOCK, new Response("1", { headers: { "Cache-Control": `public, max-age=${SUPP_LOCK_S}` } }));
+    } catch { due = []; }
+  }
   if (!due.length) return doc;
   const from = addDays(today, -SUPP_BACK), to = addDays(today, SUPP_AHEAD);
   const got = await pool(due, 2, async (s) => suppRows(s, (await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?symbol=${encodeURIComponent(s)}&from=${from}&to=${to}&token=${env.FINNHUB_API_KEY}`)).earningsCalendar));
   let changed = false;
-  got.forEach((r, i) => { if (r.status === "fulfilled") { doc[due[i]] = { at: Date.now(), rows: r.value }; changed = true; } });
+  got.forEach((r, i) => { if (r.status === "fulfilled") { doc[due[i]] = refreshEntry(doc[due[i]], r.value, today, Date.now()); changed = true; } });
   if (changed) ctx.waitUntil(caches.default.put(SUPP_KEY, new Response(JSON.stringify(doc), { headers: { "Cache-Control": "public, max-age=604800", "Content-Type": "application/json" } })));
   return doc;
 }
@@ -238,6 +246,9 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     // even one a stale copy covered (0024: a rate limit must not become more calls).
     const doc = await supplement(env, ctx, today, !health.failed && warnings.length === 0);
     events = mergeSupplement(events, doc, from, to, (d) => loaded.has(d));
+    // Not fetched yet here (a cold cache): say so, never let an absent row read as "doesn't report".
+    const cold = unfetched(doc, SUPP_SYMBOLS);
+    if (cold) warnings.push(`Still checking ${cold} overseas companies' report dates — some may be missing for now.`);
   }
   const fixed = applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U);
   const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings };

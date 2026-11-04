@@ -16,12 +16,14 @@ const env = { FINNHUB_API_KEY: "k", FRED_API_KEY: "k", ASSETS: { fetch: async ()
 const ctx = { waitUntil: (p: Promise<unknown>) => { pending.push(p); }, passThroughOnException() {} } as any;
 let pending: Promise<unknown>[] = [];
 let calls: string[] = [];
-// Range/day calls only: the 0024 supplement's per-symbol calls (symbol=) are tested in calendarSupplement.test.ts.
-const rangeCalls = () => calls.filter((c) => !c.includes("symbol=")).length;
 let rowsFor: (from: string, to: string) => any[] = () => [];
 
 beforeEach(() => {
   pending = []; calls = [];
+  // Months before every range below, so the 0024 per-symbol supplement (next ~120 days) stays out of these
+  // range-call counts; it has its own tests in calendarSupplement.test.ts.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-06-01T15:00:00Z"));
   (globalThis as any).caches = { default: new MemCache() };
   vi.stubGlobal("fetch", vi.fn(async (u: string) => {
     const url = new URL(u);
@@ -29,7 +31,7 @@ beforeEach(() => {
     return new Response(JSON.stringify({ earningsCalendar: rowsFor(url.searchParams.get("from")!, url.searchParams.get("to")!) }), { status: 200 });
   }));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 const get = async (from: string, to: string) => {
   const r = await worker.fetch(new Request(`https://mutaafaziz.com/metaphases/api/calendar?from=${from}&to=${to}`), env, ctx);
@@ -50,16 +52,16 @@ describe("calendar fetching", () => {
   it("serves cached days without calling upstream again", async () => {
     rowsFor = (from) => [row("AAPL", from)];
     await get("2027-03-01", "2027-03-31");
-    const first = rangeCalls();
+    const first = calls.length;
     const again = await get("2027-03-01", "2027-03-31");
-    expect(rangeCalls()).toBe(first);
+    expect(calls.length).toBe(first);
     expect(again.events.length).toBeGreaterThan(0);
   });
 
   it("falls back to per-day calls when a range looks truncated", async () => {
     rowsFor = (from, to) => (from === to ? [row("AAPL", from)] : Array.from({ length: 1500 }, (_, i) => row(`X${i}`, from)));
     const r = await get("2027-02-01", "2027-02-05");
-    expect(rangeCalls()).toBe(1 + 5);
+    expect(calls.length).toBe(1 + 5);
     expect(new Set(r.events.map((e) => e.d)).size).toBe(5);
   });
 

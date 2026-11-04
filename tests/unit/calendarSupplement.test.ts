@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../../worker/index";
 import universe from "../../data/universe.json" with { type: "json" };
-import { aliasMap, mergeSupplement, staleSymbols, supplementSymbols, suppRows, SUPP_PER_REQUEST, SUPP_TTL_MS, type Universe } from "../../shared/calendarSupplement";
+import { aliasMap, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, SUPP_PER_REQUEST, SUPP_TTL_MS, type Universe } from "../../shared/calendarSupplement";
 
 // 0024: Finnhub's day/range calendar has no Toyota, Sony, Honda, Novo Nordisk or JD rows while each of their
 // `symbol=` answers (what the sheet reads) does. The calendar now merges those rows in, once, and renames
@@ -19,6 +19,10 @@ describe("calendar supplement (pure)", () => {
     expect(a["9618.HK"]).toBe("JD");
     expect(a["FB"]).toBeUndefined(); // META's old ticker
     expect(a["NWSA"]).toBeUndefined(); // tracked in its own right
+    // Only names whose estimates are known to be non-USD, so an aliased row's figures are labelled right.
+    expect(a["FERG.L"]).toBeUndefined();
+    expect(a["EFR.TO"]).toBeUndefined();
+    for (const sym of Object.values(a)) expect(U[sym].ec && U[sym].ec !== "USD").toBeTruthy();
   });
 
   it("covers the foreign filers and dotted share classes, and not US names", () => {
@@ -33,6 +37,16 @@ describe("calendar supplement (pure)", () => {
     const doc = { A: { at: now - SUPP_TTL_MS - 5, rows: [] }, B: { at: now - 1, rows: [] }, C: { at: now - SUPP_TTL_MS - 9, rows: [] } };
     expect(staleSymbols(doc, ["A", "B", "C", "D"], now, 3)).toEqual(["D", "C", "A"]);
     expect(staleSymbols(doc, ["A", "B", "C", "D", "E", "F", "G"], now).length).toBe(SUPP_PER_REQUEST);
+  });
+
+  it("a refresh after the report keeps the reported row (symbol= returns future dates only), spread over the hour", () => {
+    const prev = { at: 0, rows: [ev("NVO", "2026-11-04"), ev("NVO", "2026-09-01")] };
+    const next = refreshEntry(prev, [ev("NVO", "2027-02-04")], "2026-11-05", 10_000_000, 0.5);
+    expect(next.rows.map((r) => r.d)).toEqual(["2026-11-04", "2027-02-04"]); // >40 days old dropped
+    expect(next.at).toBe(10_000_000 - 1_800_000);
+    // A fresh answer that has the day (now with results) replaces the kept copy.
+    const withActual = { ...ev("NVO", "2026-11-04"), eA: 5.1 };
+    expect(refreshEntry(prev, [withActual], "2026-11-05", 1, 0).rows.filter((r) => r.d === "2026-11-04")).toEqual([withActual]);
   });
 
   it("keeps only the asked symbol's rows, once per date", () => {
@@ -83,6 +97,8 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+const LOCK = "cal%3Asupp%3Alock%3Av1";
+const minutePasses = () => { const st = (globalThis as any).caches.default.store as Map<string, string>; for (const k of [...st.keys()]) if (k.includes(LOCK)) st.delete(k); };
 const get = async (from: string, to: string) => {
   const r = await worker.fetch(new Request(`https://mutaafaziz.com/metaphases/api/calendar?from=${from}&to=${to}`), env, ctx);
   await Promise.all(pending); pending = [];
@@ -102,12 +118,28 @@ describe("calendar supplement in the worker", () => {
 
   it("fills in the rest over later requests and stops calling once everything is fresh", async () => {
     const n = supplementSymbols(U).length;
-    for (let i = 0; i < Math.ceil(n / SUPP_PER_REQUEST) + 2; i++) await get("2026-11-02", "2026-11-06");
+    for (let i = 0; i < Math.ceil(n / SUPP_PER_REQUEST) + 2; i++) { await get("2026-11-02", "2026-11-06"); minutePasses(); }
     expect(new Set(symCalls).size).toBe(n);
     expect(symCalls.length).toBe(n); // each symbol once within its 12 h
     const r = await get("2026-11-02", "2026-11-06");
     for (const s of ["TM", "SONY", "HMC"]) expect(r.events.filter((e) => e.s === s)).toHaveLength(1);
     expect(symCalls.length).toBe(n);
+    expect(r.warnings).toEqual([]); // everything fetched: no "still checking" note
+  });
+
+  it("refreshes at most once a minute per colo, however many visitors arrive at once", async () => {
+    await Promise.all([get("2026-11-02", "2026-11-06"), get("2026-11-02", "2026-11-06"), get("2026-11-05", "2026-11-05")]);
+    await get("2026-11-02", "2026-11-06");
+    expect(symCalls.length).toBeLessThanOrEqual(SUPP_PER_REQUEST * 3); // concurrent first requests may race; later ones wait
+    const before = symCalls.length;
+    await get("2026-11-02", "2026-11-06");
+    expect(symCalls.length).toBe(before);
+  });
+
+  it("says when overseas names haven't been checked yet, so a missing row never reads as 'doesn't report'", async () => {
+    const r = await get("2026-11-05", "2026-11-05");
+    expect(r.warnings.some((w) => /Still checking \d+ overseas companies/.test(w))).toBe(true);
+    expect(r.warnings.some((w) => /^Couldn't load/.test(w))).toBe(false); // not a failed day
   });
 
   it("keeps the feed's own row when it has one, and renames a home-listing row", async () => {
@@ -123,7 +155,7 @@ describe("calendar supplement in the worker", () => {
     const r = await get("2026-11-05", "2026-11-05");
     expect(symCalls).toEqual([]);
     expect(r.events.filter((e) => ["TM", "SONY", "HMC"].includes(e.s))).toEqual([]);
-    expect(r.warnings.length).toBe(1);
+    expect(r.warnings.filter((w) => /^Couldn't load/.test(w)).length).toBe(1);
   });
 
   it("a failed range call covered by a stale copy still makes no supplement calls", async () => {
@@ -131,8 +163,9 @@ describe("calendar supplement in the worker", () => {
     const store = (globalThis as any).caches.default.store as Map<string, string>;
     for (const k of [...store.keys()]) if (!k.includes("stale")) store.delete(k);
     symCalls = []; rangeStatus = 500;
+    minutePasses();
     const r = await get("2026-11-05", "2026-11-05");
-    expect(r.warnings).toEqual([]);
+    expect(r.warnings.filter((w) => /^Couldn't load/.test(w))).toEqual([]);
     expect(symCalls).toEqual([]);
   });
 
