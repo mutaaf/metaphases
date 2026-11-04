@@ -63,3 +63,46 @@ All round-1 items were verified. Polish was applied:
 The reading-level gate forced three small edits after sign-off. All three were confirmed:
 - the new 9-11 lesson `hindsight` ("Looking back is easy"), which restores the patterns unit to 3 lessons;
 - simpler `mood` and `report` glossary cards.
+
+## Round 4 (Core 3.0.0, the 0.15 deepening): Approved with changes → Approved
+
+**Arithmetic.** I recomputed every number and all are correct:
+- Debt at 20%: 100 → 120 → 144 → 173 → 207.
+- The cart at 3%: $134 by year 10, vs $105 for savings at 1% (year 5: 116 vs 105).
+- 10% compound vs simple: 161 vs 150 at year 5.
+- Fees: $1,000 at 6.9% vs 6% over 10 years is $1,949 vs $1,791.
+- Rule of 72 at 8% gives 9 (exact: 9.006).
+- Yield examples: 4% and 3%.
+- Earnings per share, sales vs profit, wages, taxes and the savings-plan weeks.
+
+`grow` values are rounded each year from the exact value; `growSeries` is pinned on web and app by the `grow` vectors.
+
+**Must-fix (all applied)**
+- **`spread-groups`.** The answer was too absolute: groups can all fall together, as in 2008. Now: "Different groups rarely all have a bad year at once. But in a big market drop, most fall together."
+- **`double`.** "About 7 years" clashed with the picture ($195 at year 7). Now "A bit more than 7 years".
+- **`sales-profit`.** "All the money that came in" is not revenue (loans also bring money in). Now "the money customers paid for what the company sold"; the Guess tip matches.
+- **Glossary `inflation`.** One toy going up is not inflation. Now: "If most prices go up 3%, a $100 cart of food costs about $103 next year."
+
+**Also applied**
+- **`bank-safe`.** Banks pay interest because they lend savings out. Deposit insurance gets one card, with no dollar figure: "In the US, the government protects savings at most banks, up to a big limit."
+- **`index`.** Now says "If they fall, the fund falls too." About 500 is accurate (the S&P 500 holds about 503 stocks).
+- **`calendar`.** Now mentions after-hours trading. The check stays hedged ("usually").
+- **`fees`.** The setup now says the funds hold the same companies, which grow 7% a year before fees.
+- **`fund`.** Owning a fund share is indirect: "a tiny slice of the basket".
+- **`buy-less`.** Starts "Say prices go up", so the toy stands for general inflation.
+- **`taxes`.** Mentions sales tax.
+- **Guess tip `surprise`.** No longer claims a tiny beat barely moves the price.
+- **Objectives.** Codes were tightened. Topics with no standard before grade 8 are tagged "Enrichment".
+
+**Checked and accurate:**
+- the credit card grace period ("usually no interest if you pay the whole bill by the due date");
+- debit vs credit;
+- wage and salary;
+- insurance and premium;
+- the scam red flags;
+- earnings per share;
+- the dividend yield and cut caveat;
+- the Guess `learn` links (a beat that dropped and a miss that rose both go to `expectations`);
+- the Piggy `oneGroup` tip, which fires only with 2+ companies, so one company stays "one basket".
+
+**"Why did it move?"** Each clue now names the lesson that teaches it (`learn`). Report day picks `expectations` when the price "disagreed" with the result, `guidance` when it was in line, and `after` otherwise. The engine's words and weights are unchanged.

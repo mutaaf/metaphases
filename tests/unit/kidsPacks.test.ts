@@ -75,15 +75,31 @@ describe("kids rules on every pack", () => {
 
 describe("Core curriculum", () => {
   const lessons = CORE.units.flatMap((u) => u.lessons);
-  it("covers the overhaul scope with two tracks", () => {
+  it("covers the overhaul scope with three tracks", () => {
     for (const id of ["money", "choose", "company", "share", "prices", "piggy-spread", "piggy-peek", "saving", "risk", "snowball", "dividend", "div-day", "baskets", "patience", "report-card", "guess", "beat", "expectations", "guidance", "why-market", "why-group", "why-wiggle", "why-unsure", "candle", "trend", "floor-ceiling", "breakout", "volume", "moving-average", "clues"]) expect(lessons.some((l) => l.id === id), id).toBe(true);
-    expect(new Set(lessons.map((l) => l.track))).toEqual(new Set(["6-8", "9-11"]));
+    expect(new Set(lessons.map((l) => l.track))).toEqual(new Set(["6-8", "9-11", "challenge"]));
     for (const l of lessons) expect(l.objectives?.length, l.id).toBeGreaterThan(0);
   });
   it("Guess and Piggy courses walk through real lessons in order", () => {
-    expect(CORE.guess!.ladder).toEqual(["report-card", "guess", "beat", "after", "expectations", "guidance"]);
+    expect(CORE.guess!.ladder).toEqual(["report-card", "calendar", "guess", "beat", "after", "per-share", "sales-profit", "expectations", "guidance", "surprise"]);
     expect(CORE.piggy!.ladder[0]).toBe("piggy-start");
-    for (const id of [...CORE.guess!.ladder, ...CORE.piggy!.ladder]) expect(lessons.some((l) => l.id === id), id).toBe(true);
+    for (const id of [...CORE.guess!.ladder, ...CORE.piggy!.ladder, ...(CORE.piggy!.garden ?? []), ...Object.values(CORE.guess!.learn ?? {})]) expect(lessons.some((l) => l.id === id), id).toBe(true);
+    // A ladder runs in the order the lessons appear in School (no "next" lesson that comes before one already offered).
+    const order = (id: string) => lessons.findIndex((l) => l.id === id);
+    for (const ladder of [CORE.guess!.ladder, CORE.piggy!.ladder]) expect([...ladder].sort((a, b) => order(a) - order(b))).toEqual(ladder);
+  });
+  it("fills the gaps against the grade-4 standards (Jump$tart 2021, CEE 2013) and adds the challenge track", () => {
+    const cited = new Set(CORE.objectives.flatMap((o) => o.standards));
+    // Every grade-4 Jump$tart topic is cited by at least one objective that a lesson teaches.
+    const taught = new Set(lessons.flatMap((l) => l.objectives ?? []));
+    const topics = ["Earning Income", "Spending", "Saving", "Investing", "Managing Credit", "Managing Risk"];
+    for (const t of topics) expect(CORE.objectives.some((o) => taught.has(o.id) && o.standards.some((s) => s.startsWith(`J$ ${t} 4-`) || s === `Jump$tart: ${t}`)), t).toBe(true);
+    for (const s of ["J$ Managing Credit 4-1", "J$ Managing Risk 4-4", "J$ Earning Income 4-7", "J$ Saving 4-2", "J$ Spending 4-6", "CEE Econ 11.5"]) expect(cited.has(s), s).toBe(true);
+    // Worked examples and growth pictures exist, and every unit has dinner-table talk for grown-ups.
+    const steps = lessons.flatMap((l) => l.steps);
+    expect(steps.filter((s) => s.t === "example").length).toBeGreaterThanOrEqual(10);
+    expect(steps.filter((s) => s.t === "grow").length).toBeGreaterThanOrEqual(5);
+    for (const u of CORE.units) expect(u.talk?.length, u.id).toBeGreaterThan(0);
   });
   it("every region has a review stop before its boss", () => {
     for (const r of CORE.regions) {

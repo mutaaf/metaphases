@@ -62,6 +62,11 @@
         "reveal": {
           "type": "object", "required": ["beatUp", "beatDown", "missDown", "missUp", "unknown", "inLine", "tryAgain"], "additionalProperties": false,
           "properties": { "beatUp": { "type": "string" }, "beatDown": { "type": "string" }, "missDown": { "type": "string" }, "missUp": { "type": "string" }, "unknown": { "type": "string" }, "inLine": { "type": "string" }, "tryAgain": { "type": "string" } }
+        },
+        "learn": {
+          "description": "After a reveal, the lesson id that explains it.",
+          "type": "object", "additionalProperties": false,
+          "properties": { "beatUp": { "type": "string" }, "beatDown": { "type": "string" }, "missDown": { "type": "string" }, "missUp": { "type": "string" }, "unknown": { "type": "string" }, "inLine": { "type": "string" } }
         }
       }
     },
@@ -70,12 +75,14 @@
       "properties": {
         "unit": { "type": "string" },
         "ladder": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "garden": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "The Moon Garden side's ladder (growth, baskets, fees)." },
         "peekLimit": { "type": "integer", "minimum": 1 },
         "tips": {
           "type": "object", "required": ["oneBasket", "fewBaskets", "manyBaskets", "newBank", "longTime", "bigDrop", "bigRise", "peekMany"], "additionalProperties": false,
           "properties": {
             "oneBasket": { "type": "string" }, "fewBaskets": { "type": "string" }, "manyBaskets": { "type": "string" }, "newBank": { "type": "string" },
-            "longTime": { "type": "string" }, "bigDrop": { "type": "string" }, "bigRise": { "type": "string" }, "peekMany": { "type": "string" }
+            "longTime": { "type": "string" }, "bigDrop": { "type": "string" }, "bigRise": { "type": "string" }, "peekMany": { "type": "string" },
+            "oneGroup": { "type": "string", "description": "Every company is in the same group (sector)." }
           }
         }
       }
@@ -102,7 +109,7 @@
   "$defs": {
     "track": {
       "type": "object", "required": ["id", "title", "blurb"], "additionalProperties": false,
-      "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "blurb": { "type": "string" } }
+      "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "blurb": { "type": "string" }, "optional": { "type": "boolean", "description": "A challenge track: its lessons never gate map stars, mastery or boss quizzes." } }
     },
     "person": {
       "type": "object", "required": ["name", "role"], "additionalProperties": false,
@@ -118,6 +125,7 @@
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9-]+$" }, "title": { "type": "string" }, "emoji": { "type": "string" }, "blurb": { "type": "string" },
         "track": { "type": "string" }, "objectives": { "type": "array", "items": { "type": "string" } },
+        "talk": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "type": "string", "minLength": 1, "maxLength": 160 }, "description": "Dinner-table talk: prompts for the grown-up, shown only in the grown-up corner." },
         "lessons": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/lesson" } }
       }
     },
@@ -126,6 +134,7 @@
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9-]+$" }, "title": { "type": "string" }, "emoji": { "type": "string" },
         "track": { "type": "string" }, "objectives": { "type": "array", "items": { "type": "string" } },
+        "since": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$", "description": "The pack version that added this lesson." },
         "steps": { "type": "array", "minItems": 3, "maxItems": 7, "items": { "$ref": "#/$defs/step" } }
       }
     },
@@ -142,6 +151,24 @@
             "t": { "const": "sort" }, "q": { "type": "string" }, "why": { "type": "string" },
             "buckets": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
             "items": { "type": "array", "minItems": 4, "items": { "type": "object", "required": ["emoji", "text", "b"], "additionalProperties": false, "properties": { "emoji": { "type": "string" }, "text": { "type": "string" }, "b": { "enum": [0, 1] } } } }
+          }
+        },
+        {
+          "description": "A worked example: the setup, then 2–4 lines of working the child reveals one at a time.",
+          "type": "object", "required": ["t", "emoji", "text", "lines"], "additionalProperties": false,
+          "properties": { "t": { "const": "example" }, "emoji": { "type": "string" }, "text": { "type": "string", "minLength": 1 }, "lines": { "type": "array", "minItems": 2, "maxItems": 4, "items": { "type": "string", "minLength": 1 } } }
+        },
+        {
+          "description": "Year-by-year growth the child grows one tap at a time: a Moon Garden plant (savings), a price tag (prices rising) or an IOU (money owed). Whole numbers; pretend.",
+          "type": "object", "required": ["t", "show", "text", "start", "rate", "years", "label"], "additionalProperties": false,
+          "properties": {
+            "t": { "const": "grow" }, "show": { "enum": ["garden", "price", "owe"] }, "text": { "type": "string", "minLength": 1 },
+            "start": { "type": "integer", "minimum": 1, "maximum": 100000 }, "rate": { "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
+            "years": { "type": "integer", "minimum": 2, "maximum": 10 }, "label": { "type": "string", "minLength": 1, "maxLength": 20 },
+            "vs": {
+              "type": "object", "required": ["kind", "label"], "additionalProperties": false,
+              "properties": { "kind": { "enum": ["jar", "simple", "rate"] }, "rate": { "type": "number", "exclusiveMinimum": 0, "maximum": 30 }, "label": { "type": "string", "minLength": 1, "maxLength": 20 } }
+            }
           }
         }
       ]

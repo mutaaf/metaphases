@@ -11,14 +11,15 @@
 import core from "../packs/core/pack.json" with { type: "json" };
 import type { LessonPack, Quiz, SortItem, Step } from "./kidsPacks";
 export type { Quiz, SortItem, Step };
-export interface Unit { id: string; title: string; emoji: string; blurb: string; track?: string }
-export interface Lesson { id: string; unit: string; title: string; emoji: string; track?: string; objectives?: string[]; steps: Step[]; screens: string[]; quiz: Quiz[] }
+export interface Unit { id: string; title: string; emoji: string; blurb: string; track?: string; talk?: string[] }
+export interface Lesson { id: string; unit: string; title: string; emoji: string; track?: string; objectives?: string[]; since?: string; steps: Step[]; screens: string[]; quiz: Quiz[] }
 
 export const CORE_PACK = core as unknown as LessonPack;
-export const UNITS: Unit[] = CORE_PACK.units.map(({ id, title, emoji, blurb, track }) => ({ id, title, emoji, blurb, track }));
+export const UNITS: Unit[] = CORE_PACK.units.map(({ id, title, emoji, blurb, track, talk }) => ({ id, title, emoji, blurb, track, talk }));
 export const LESSONS: Lesson[] = CORE_PACK.units.flatMap((u) => u.lessons.map((l) => ({
-  id: l.id, unit: u.id, title: l.title, emoji: l.emoji, track: l.track, objectives: l.objectives, steps: l.steps,
-  screens: l.steps.flatMap((x) => (x.t === "say" ? [x.text] : [])),
+  id: l.id, unit: u.id, title: l.title, emoji: l.emoji, track: l.track, objectives: l.objectives, since: l.since, steps: l.steps,
+  // What a worksheet reads out: say cards, a worked example's setup and working, a growth picture's setup.
+  screens: l.steps.flatMap((x) => (x.t === "say" || x.t === "grow" ? [x.text] : x.t === "example" ? [x.text, ...x.lines] : [])),
   quiz: l.steps.flatMap((x) => (x.t === "check" ? [{ q: x.q, options: x.options, answer: x.answer, why: x.why }] : [])),
 })));
 export const lessonUnit = (l: Lesson) => UNITS.find((u) => u.id === l.unit)!;

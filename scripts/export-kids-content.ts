@@ -15,14 +15,14 @@ import * as CO from "../shared/kidsCoach";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { createPublicKey, verify } from "node:crypto";
 
-type Step = { t: "say"; emoji: string; text: string } | { t: "check"; q: string; options: string[]; answer: number; why: string } | { t: "sort"; q: string; buckets: [string, string]; items: { emoji: string; text: string; b: 0 | 1 }[]; why: string };
+type Step = P.Step;
 
 async function main() {
   const out = process.argv[2] ?? "kids-content.json";
   const anyC = C as any;
   // Lessons: step-based when available (micro-lessons), else screens + quiz turned into steps.
   const lessons = (C.LESSONS as any[]).map((l) => ({
-    id: l.id, unit: l.unit ?? "school", title: l.title, emoji: l.emoji, track: l.track, objectives: l.objectives,
+    id: l.id, unit: l.unit ?? "school", title: l.title, emoji: l.emoji, track: l.track, objectives: l.objectives, since: l.since,
     steps: (l.steps as Step[] | undefined) ?? [
       ...l.screens.map((text: string) => ({ t: "say", emoji: l.emoji, text })),
       ...l.quiz.map((q: any) => ({ t: "check", ...q })),
@@ -120,6 +120,7 @@ async function main() {
   const channel = JSON.parse(readFileSync("packs/channel.json", "utf8"));
   // Bad packs (one mutation each) and the codes BOTH validators must report.
   const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+  const firstStep = (p: any, t: string) => p.units.flatMap((u: any) => u.lessons).flatMap((l: any) => l.steps).find((s: any) => s.t === t);
   const guest = extra[0];
   const mut = (name: string, base: P.LessonPack, f: (p: any) => void, withCore = true) => { const p = clone(base); f(p); return { name, pack: p, withCore, codes: [...new Set(P.validatePack(p, withCore && p.kind !== "core" ? core : undefined).map((i) => i.code))].sort() }; };
   const packVectors = guest ? [
@@ -145,6 +146,15 @@ async function main() {
     mut("emoji in words", guest, (p) => { p.units[0].lessons[0].steps[0].text = "Hi there 🚀 friends."; }),
     mut("sort with one bucket", core, (p) => { const l = p.units[0].lessons[2]; l.steps[2].items.forEach((i: any) => (i.b = 0)); }, false),
     mut("core without courses", core, (p) => { delete p.guess; }, false),
+    // 0.15 step types and fields: a worked example needs 2–4 lines; a grow step stays inside its bounds; talk is short; since is a version.
+    mut("example with one line", core, (p) => { firstStep(p, "example").lines = ["$1 + $1 = $2"]; }, false),
+    mut("example line too long", core, (p) => { firstStep(p, "example").lines[0] = "This line of working is far too long to fit on one card"; }, false),
+    mut("grow for 40 years", core, (p) => { firstStep(p, "grow").years = 40; }, false),
+    mut("grow against the same rate", core, (p) => { const g = firstStep(p, "grow"); g.vs = { kind: "rate", rate: g.rate, label: "Same" }; }, false),
+    mut("grow with a made-up picture", core, (p) => { firstStep(p, "grow").show = "rocket"; }, false),
+    mut("too much talk", core, (p) => { p.units[0].talk = ["a", "b", "c", "d"]; }, false),
+    mut("bad since", core, (p) => { p.units[0].lessons[0].since = "soon"; }, false),
+    mut("ladder to nowhere", core, (p) => { p.piggy.garden = ["nope"]; }, false),
   ] : [];
   // A real Ed25519 signature over a pack's served bytes, so the app's verifier is tested against Node's.
   const sigEntry = guest ? channel.packs.find((x: any) => x.id === guest.id) : null;
@@ -196,7 +206,7 @@ async function main() {
   ];
   const coachCases = {
     next: [[], ["report-card"], ["report-card", "guess", "beat", "after", "expectations", "guidance"]].map((done) => ({ done, out: CO.courseNext(core.guess!.ladder, done) })),
-    reveal: [{ eA: 1.2, eE: 1, move: 3 }, { eA: 1.2, eE: 1, move: -2 }, { eA: 0.8, eE: 1, move: -2 }, { eA: 0.8, eE: 1, move: 1 }, { eA: 1, eE: 1.004, move: 1 }, { eA: null, eE: 1, move: 1 }, { eA: 1.2, eE: 1, move: null }].map((r) => ({ r, out: CO.guessReveal(core.guess!, r) })),
+    reveal: [{ eA: 1.2, eE: 1, move: 3 }, { eA: 1.2, eE: 1, move: -2 }, { eA: 0.8, eE: 1, move: -2 }, { eA: 0.8, eE: 1, move: 1 }, { eA: 1, eE: 1.004, move: 1 }, { eA: null, eE: 1, move: 1 }, { eA: 1.2, eE: 1, move: null }].map((r) => ({ r, out: CO.guessReveal(core.guess!, r), key: CO.guessRevealKey(r), learn: CO.guessLearn(core.guess!, r) })),
     piggy: [
       { holdings: 3, started: "2026-10-01", today: "2026-10-31", value: 1010, start: 1000, peeks: 9 },
       { holdings: 3, started: "2026-10-01", today: "2026-10-31", value: 850, start: 1000, peeks: 1 },
@@ -206,6 +216,11 @@ async function main() {
       { holdings: 3, started: "2026-09-01", today: "2026-10-31", value: 1000, start: 1000, peeks: 0 },
       { holdings: 5, started: "2026-10-10", today: "2026-10-31", value: 1000, start: 1000, peeks: 0 },
       { holdings: 3, started: "2026-10-10", today: "2026-10-31", value: 1000, start: 1000, peeks: 3 },
+      // 0.15: every company in one group (sector) gets its own tip; one company is still "one basket".
+      { holdings: 3, started: "2026-10-10", today: "2026-10-31", value: 1000, start: 1000, peeks: 0, groups: 1 },
+      { holdings: 3, started: "2026-10-10", today: "2026-10-31", value: 1000, start: 1000, peeks: 0, groups: 2 },
+      { holdings: 1, started: "2026-10-10", today: "2026-10-31", value: 1000, start: 1000, peeks: 0, groups: 1 },
+      { holdings: 4, started: "2026-10-10", today: "2026-10-31", value: 850, start: 1000, peeks: 0, groups: 1 },
     ].map((x) => ({ x, out: CO.piggyTip(core.piggy!, x) })),
   };
   Object.assign(vectors, {
@@ -216,6 +231,12 @@ async function main() {
     whyBuild: buildCases.map((a) => { const input = Y.buildWhyInput(a); return { args: a, input }; }),
     reportResult: [[1, 1], [1.004, 1], [1.02, 1], [0.98, 1], [-0.1, -0.1], [0.003, 0], [-0.2, -0.25]].map(([eA, eE]) => ({ eA, eE, out: Y.reportResult(eA, eE) })),
     coach: coachCases,
+    // Grow steps: the numbers both platforms draw, for hand-picked cases and every grow step in Core.
+    grow: [
+      ...[[100, 10, 5], [100, 20, 4], [100, 3, 10], [1000, 6.9, 10], [1000, 6, 10], [100, 10, 8], [250, 2.5, 6], [1, 30, 10]].flatMap(([start, rate, years]) =>
+        (["compound", "simple", "jar"] as const).map((kind) => ({ start, rate, years, kind, out: P.growSeries(start, rate, years, kind) }))),
+    ],
+    growSteps: core.units.flatMap((u) => u.lessons.flatMap((l) => l.steps.flatMap((s, i) => (s.t === "grow" ? [{ at: `${l.id}#${i}`, rows: P.growRows(s) }] : [])))),
   });
 
   const doc = {

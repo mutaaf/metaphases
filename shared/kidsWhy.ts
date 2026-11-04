@@ -26,7 +26,8 @@ export interface WhyInput {
   asOf?: string;
 }
 export type WhyCauseId = "report" | "market" | "company" | "sector" | "dividend" | "wiggle" | "unknown";
-export interface WhyCause { id: WhyCauseId; title: string; line: string; weight: number }
+/** `learn`: the Moon School lesson that teaches this clue (the app and web link to it when the lesson exists). */
+export interface WhyCause { id: WhyCauseId; title: string; line: string; weight: number; learn: string }
 export interface WhyResult {
   dir: "up" | "down" | "flat" | "none";
   headline: string;
@@ -59,6 +60,10 @@ export const groupFor = (s: string) => (KID_SECTOR[s] ? KID_GROUPS[KID_SECTOR[s]
 export const DEFAULT_NORMAL: Record<WhyRange, number> = { "1d": 1.5, "5d": 3.5 };
 /** A market or group move smaller than this is just noise, not a clue (about half of SPY's usual move). */
 export const MIN_CLUE: Record<WhyRange, number> = { "1d": 0.4, "5d": 0.8 };
+/** Each clue → the Core lesson that teaches it ("report" depends on the result; see whyMoved). */
+export const WHY_LEARN: Record<WhyCauseId, string> = {
+  report: "after", market: "why-market", company: "prices", sector: "why-group", dividend: "div-day", wiggle: "why-wiggle", unknown: "why-unsure",
+};
 export const WHY_HONEST = "These are clues from the numbers, not the whole story. Nobody knows for sure what comes next.";
 /** Beat / in line / miss, with a small tolerance (an exact match is not a beat). */
 export function reportResult(eA: number, eE: number): "beat" | "inline" | "miss" {
@@ -80,7 +85,7 @@ export function whyWhen(range: WhyRange, asOf: string | undefined, today: string
 
 export function whyMoved(x: WhyInput, today?: string): WhyResult {
   const when = whyWhen(x.range, x.asOf, today);
-  const unknown: WhyCause = { id: "unknown", title: "We're not sure", line: "Sometimes prices move for reasons we can't see yet.", weight: 0.5 };
+  const unknown: WhyCause = { id: "unknown", title: "We're not sure", line: "Sometimes prices move for reasons we can't see yet.", weight: 0.5, learn: WHY_LEARN.unknown };
   if (x.move == null) {
     return { dir: "none", headline: `We don't have ${x.nick}'s price yet.`, size: "unknown", sizeLine: "", causes: [unknown], honest: WHY_HONEST };
   }
@@ -115,7 +120,9 @@ export function whyMoved(x: WhyInput, today?: string): WhyResult {
       res === "beat" ? "It beat what grown-ups guessed, but people may have hoped for even more." :
       dir === "down" ? "It missed what grown-ups guessed, and people may have been let down." :
       "It missed what grown-ups guessed, but people may have feared even worse.";
-    causes.push({ id: "report", title: "Report card day", line, weight: size === "big" || size === "huge" ? 0.9 : 0.6 });
+    // The lesson that explains this kind of report day: a surprise the price "disagreed" with is about expectations.
+    const learn = res == null ? "report-card" : dir === "flat" ? "after" : res === "inline" ? "guidance" : (res === "beat") === (dir === "up") ? "after" : "expectations";
+    causes.push({ id: "report", title: "Report card day", line, weight: size === "big" || size === "huge" ? 0.9 : 0.6, learn });
   }
   // 2. The whole market: moved the same way (a clue, sized honestly), or the other way (so it was about the company).
   if (sameWay(x.market)) {
@@ -125,10 +132,10 @@ export function whyMoved(x: WhyInput, today?: string): WhyResult {
       line: share < 0.5
         ? `The whole market went ${dir} a little ${when} too, but not nearly this much.`
         : `The whole market went ${dir} ${when} too. On days like that, most companies move the same way.`,
-      weight: r2(0.3 + 0.6 * Math.min(1, share)),
+      weight: r2(0.3 + 0.6 * Math.min(1, share)), learn: WHY_LEARN.market,
     });
   } else if (otherWay(x.market)) {
-    causes.push({ id: "company", title: "Not the whole market", line: `The whole market went ${opp} ${when}. So this move was probably about ${x.nick} itself.`, weight: 0.5 });
+    causes.push({ id: "company", title: "Not the whole market", line: `The whole market went ${opp} ${when}. So this move was probably about ${x.nick} itself.`, weight: 0.5, learn: WHY_LEARN.company });
   }
   // 3. Its group moved together, more than the whole market did.
   if (x.sector && sameWay(x.sector.move)) {
@@ -136,7 +143,7 @@ export function whyMoved(x: WhyInput, today?: string): WhyResult {
     if (excess >= 0.3) causes.push({
       id: "sector", title: "Its group moved together",
       line: `Its group went ${dir} ${when} too. That group is ${x.sector.name}.`,
-      weight: r2(0.25 + 0.6 * Math.min(1, excess / am)),
+      weight: r2(0.25 + 0.6 * Math.min(1, excess / am)), learn: WHY_LEARN.sector,
     });
   }
   // 4. A dividend cut-off day: the price drops by about the payout. Only on down moves, sized by the payout.
@@ -146,12 +153,12 @@ export function whyMoved(x: WhyInput, today?: string): WhyResult {
     causes.push({
       id: "dividend", title: "Dividend cut-off day",
       line: `Its dividend cut-off day was ${day}. The price often drops by about the payout${x.dividend.pct != null ? `, here about ${x.dividend.pct.toFixed(1)}% of the price` : ""}.`,
-      weight: r2(0.3 + 0.6 * share),
+      weight: r2(0.3 + 0.6 * share), learn: WHY_LEARN.dividend,
     });
   }
   // 5. A normal wiggle (only when nothing big happened).
   if ((size === "tiny" || size === "normal") && !causes.some((c) => c.id === "report")) {
-    causes.push({ id: "wiggle", title: "A normal wiggle", line: "Prices move a little every day, even with no news.", weight: size === "tiny" ? 0.8 : 0.5 });
+    causes.push({ id: "wiggle", title: "A normal wiggle", line: "Prices move a little every day, even with no news.", weight: size === "tiny" ? 0.8 : 0.5, learn: WHY_LEARN.wiggle });
   }
   // 6. Honest uncertainty: a big move our clues don't explain.
   const best = causes.reduce((a, c) => Math.max(a, c.weight), 0);

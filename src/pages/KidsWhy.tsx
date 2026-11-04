@@ -9,6 +9,8 @@ import { useApi } from "../lib/api";
 import { BASE } from "../lib/router";
 import { todayISO } from "../lib/dates";
 import { W } from "./KidsQuest";
+import { LESSONS } from "../../shared/kidsContent";
+import { navigate } from "../lib/router";
 
 export interface WhyResponse { input: WhyInput; why: WhyResult; warnings: string[] }
 const ICON: Record<string, string> = { report: "📝", market: "🌍", company: "🏪", sector: "👥", dividend: "🍰", wiggle: "〰️", unknown: "🤷" };
@@ -36,7 +38,7 @@ export function WhyCard({ s, range = "1d", title = "Why did it move?" }: { s: st
             {why.causes.map((c, i) => (
               <li key={c.id} className={`k-why-clue k-why-${c.id}`}>
                 <span aria-hidden>{ICON[c.id]}</span>
-                <span><b>{i === 0 && c.id !== "unknown" ? "Biggest clue: " : ""}{c.title}.</b> {c.line}</span>
+                <span><b>{i === 0 && c.id !== "unknown" ? "Biggest clue: " : ""}{c.title}.</b> {c.line}{(() => { const l = LESSONS.find((x) => x.id === c.learn); return l ? <> <button className="k-link" onClick={() => navigate(`/kids/school/${l.id}`)}>Learn it: {l.title}</button></> : null; })()}</span>
               </li>
             ))}
           </ol>

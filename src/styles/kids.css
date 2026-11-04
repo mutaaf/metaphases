@@ -692,3 +692,25 @@ html:has(.kids) { scroll-padding-top: 84px; scroll-padding-bottom: calc(110px + 
 .kids .k-linkpage .k-app-lede p + p { margin-top: .6em; }
 .kids .k-linkpage .k-app-nudge { margin: 8px 0 16px; }
 .kids .k-picks a { color: var(--k-ink); text-decoration: underline; text-underline-offset: 3px; }
+/* 0.15 curriculum: worked examples, growth pictures, "New"/"Challenge" pills, dinner-table talk */
+.k-say-emoji-sm { font-size: 56px; padding: 6px 0 0; }
+.k-example { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; counter-reset: k-ex; }
+.k-example li { counter-increment: k-ex; padding: 10px 14px; border-radius: 14px; background: var(--k-bg); color: var(--k-muted); font: 600 19px/1.35 var(--display); }
+.k-example li::before { content: counter(k-ex) ". "; color: var(--k-muted); }
+.k-example li.on { background: var(--k-mint); color: var(--k-ink); animation: k-pop .35s cubic-bezier(.2,.9,.3,1.5); }
+.k-grow { display: flex; align-items: flex-end; gap: 4px; height: 150px; margin: 14px 0 6px; padding: 8px; border-radius: 16px; background: var(--k-bg); }
+.k-grow-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; opacity: .35; transition: opacity .3s; }
+.k-grow-col.on { opacity: 1; }
+.k-grow-col small { font-size: 11px; color: var(--k-muted); }
+.k-grow-bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.k-grow-bars i { display: block; width: 45%; border-radius: 6px 6px 2px 2px; transition: height .45s cubic-bezier(.2,.9,.3,1.2); }
+i.k-grow-main { background: linear-gradient(#3db97f, #1f7a4d); }
+.k-grow-price i.k-grow-main { background: linear-gradient(#f0893e, #b4472f); }
+.k-grow-owe i.k-grow-main { background: linear-gradient(#d2508f, #7e62ee); }
+i.k-grow-vs { background: color-mix(in srgb, var(--k-muted) 35%, transparent); }
+.k-grow-key { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; font-size: 15px; }
+.k-grow-key i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; }
+.k-new { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--k-moon); color: var(--k-ink); font-size: 12px; font-weight: 700; vertical-align: 2px; }
+.k-challenge { background: var(--k-lav); }
+.k-talk { padding: 8px 0; border-top: 1px solid var(--k-line); }
+.k-talk summary { cursor: pointer; font-weight: 700; }
