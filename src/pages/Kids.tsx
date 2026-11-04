@@ -27,6 +27,8 @@ import { chaptersDone } from "../../shared/kidsQuestContent";
 import { QuestPage, StartHere, W, WordChips } from "./KidsQuest";
 import { VoiceCorner } from "./KidsVoice";
 import { AppNudge, AppPage } from "./KidsAppPage";
+import { GameNightLink, GardenLink, GrownUpPicks, LeagueLink, PackLink, SharedLinkNudge } from "./KidsLinks";
+import { isLeagueLinkCode, isLinkId } from "../../shared/kidsLinks";
 import { PrivacyPage } from "./KidsPrivacy";
 import { WhyCard } from "./KidsWhy";
 import { guessReveal, piggyTip } from "../../shared/kidsCoach";
@@ -884,7 +886,7 @@ function ParentGate({ onPass, onClose }: { onPass: () => void; onClose: () => vo
 /** Grown-ups only: send Moon Club to another parent (native share sheet, or copy the link). */
 function ShareWithParent() {
   const [done, setDone] = useState<string | null>(null);
-  const url = `${location.origin}${BASE}/kids`;
+  const url = `${location.origin}${BASE}/kids?ref=parent`;
   const text = "Moon Club teaches kids how money works: one-minute lessons, a lemonade-stand game and a pretend piggy bank on real prices. Ages 8–12, no ads, no sign-up.";
   const share = async () => {
     try {
@@ -966,6 +968,7 @@ function GrownUps() {
       </section>
       <VoiceCorner />
       <LeagueSetup />
+      <GrownUpPicks />
       <section className="k-section">
         <h2>Conversation starters</h2>
         <ul className="k-list">
@@ -1046,9 +1049,9 @@ function WorksheetPage({ lesson }: { lesson: Lesson }) {
 }
 
 // ── Family League (0028) ────────────────────────────────────────────────────────────────────
-function LeagueSetup() {
+function LeagueSetup({ initial = "" }: { initial?: string }) {
   const st = useKids();
-  const [paste, setPaste] = useState("");
+  const [paste, setPaste] = useState(initial.slice(0, 140));
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const code = st.me != null ? encodeLeague({ emoji: st.me, guesses: st.guesses }) : "";
@@ -1200,6 +1203,9 @@ export default function KidsApp() {
   const lessonId = path.match(/^\/kids\/school\/([a-z-]+)(\/print)?$/);
   const lesson = lessonId ? LESSONS.find((l) => l.id === lessonId[1]) : undefined;
   if (lesson && lessonId?.[2]) return <WorksheetPage lesson={lesson} />;
+  // Deep links (shared/kidsLinks.ts): the same URLs open Moon Club when it's installed.
+  const leagueCode = path.match(/^\/kids\/league\/([^/]+)$/)?.[1];
+  const packId = path.match(/^\/kids\/pack\/([^/]+)$/)?.[1];
   const body =
     path === "/kids/guess" ? <GuessPage /> :
     path === "/kids/piggy" ? <PiggyPage /> :
@@ -1210,7 +1216,12 @@ export default function KidsApp() {
     path === "/kids/grownups" ? <GrownUps /> :
     path === "/kids/app" ? <AppPage Gate={ParentGate} /> :
     path === "/kids/privacy" ? <PrivacyPage /> :
+    path === "/kids/gamenight" ? <GameNightLink /> :
+    path === "/kids/garden" ? <GardenLink /> :
+    leagueCode && isLeagueLinkCode(leagueCode) ? <LeagueLink code={leagueCode} Gate={ParentGate} Setup={LeagueSetup} /> :
+    packId && isLinkId(packId) ? <PackLink id={packId} /> :
     <StoryPage />;
+  const shared = ["/kids/guess", "/kids/piggy", "/kids/school", "/kids/ask"].includes(path) || !!lesson;
   const tabOn = (t: string) => (t === "/kids" ? path === "/kids" : path.startsWith(t));
   return (
     <div className="kids">
@@ -1225,7 +1236,7 @@ export default function KidsApp() {
         </div>
         <button className="k-grown" aria-label="For grown-ups" onClick={() => setGate(true)}><span className="k-grown-for">For </span>grown-ups</button>
       </header>
-      <main id="k-main" tabIndex={-1} className="k-main">{body}</main>
+      <main id="k-main" tabIndex={-1} className="k-main">{body}{shared && <SharedLinkNudge />}</main>
       <NewBadgeToast />
       <nav className="k-tabbar" aria-label="Kids sections">
         {KTABS.map((t) => (

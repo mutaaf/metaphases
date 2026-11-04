@@ -451,6 +451,12 @@ const PAGES: Record<string, { title: string; desc: string; image?: string; kids?
   "/kids/app": { title: "Moon Club for iPhone & iPad — money, explained for kids", desc: "Luna's money club as a native iPhone and iPad app: quests, one-minute lessons and a pretend piggy bank. On-device AI, no ads, no accounts, no tracking.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/kids/privacy": { title: "Privacy · Metaphases Kids and Moon Club", desc: "Privacy policy for Moon Club and Metaphases Kids. No accounts, no ads, no tracking: what stays on the device, what leaves it and why.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/kids/school": { title: "Moon School — one-minute money lessons for kids", desc: "54 tiny lessons on money, companies, shares, saving, report cards, charts and why prices move, with quick checks and sorting games. Read aloud, for ages 6–11.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
+  "/kids/guess": { title: "Guess the Report Card — a kids' game with real companies", desc: "Will a company kids know beat or miss its report card? Guess, then see why. Pretend money only, for ages 6–11, no ads.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
+  "/kids/piggy": { title: "The Pretend Piggy Bank — practise with real prices", desc: "$1,000 of pretend coins across up to five companies kids know, following real prices. Learn why spreading out is safer. No real money.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
+  "/kids/gamenight": { title: "Moon Club Game Night — two players, one phone", desc: "Guess the same report cards head to head and let Luna keep score. In the Moon Club app for iPhone and iPad. Pretend money, no ads.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
+  "/kids/garden": { title: "The Moon Garden — plant points, watch them grow", desc: "Kids plant the Moon points they earned in companies they know and watch real daily prices move them. Points only, never money. In the Moon Club app.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
+  "/kids/league": { title: "You're invited to a Moon Club family league", desc: "Compare guesses on companies' report cards with family. The code holds only companies, dates and guesses, and a grown-up adds it.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
+  "/kids/pack": { title: "A Moon Club lesson pack", desc: "New one-minute money lessons and a new island on the Moon Club map, checked by a teacher and a markets expert. A grown-up turns it on.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/about": { title: "Where Metaphases comes from · Metaphases", desc: "A calmer earnings calendar with a memory: the best ideas from Market Digest and Compass, free, explained, never advice. Data, lineage and how the agents keep it running." },
 };
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
@@ -484,7 +490,10 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
       return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };
     } catch { return { title: `Earnings on ${label} · Metaphases`, desc: PAGES["/"].desc }; }
   }
-  if (path.startsWith("/kids/")) return PAGES[path] ?? (path.startsWith("/kids/school/") ? PAGES["/kids/school"] : PAGES["/kids"]);
+  if (path.startsWith("/kids/")) {
+    const pre = ["/kids/school/", "/kids/league/", "/kids/pack/"].find((x) => path.startsWith(x));
+    return PAGES[path] ?? (pre ? PAGES[pre.slice(0, -1)] : PAGES["/kids"]);
+  }
   return PAGES[path] ?? null;
 }
 
