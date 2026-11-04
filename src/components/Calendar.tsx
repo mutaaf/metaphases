@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { EarningsEvent, MacroEvent } from "../../shared/types";
 import { EARLY_CLOSE, HOLIDAYS } from "../../shared/market";
 import { useCalendar, useMacro, prefetchTicker } from "../lib/api";
+import { missingDays } from "../lib/partial";
 import { co, curOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
 import { revenueVerdict } from "../../shared/compare";
 import { addDays, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
@@ -77,7 +78,7 @@ function TileButton({ e, size = 44 }: { e: EarningsEvent; size?: number }) {
   );
 }
 
-function DayCell({ day, events, inMonth, today, next, macro, onOpen }: { day: string; events: EarningsEvent[]; inMonth: boolean; today: string; next: string; macro: MacroEvent[]; onOpen: () => void }) {
+function DayCell({ day, events, inMonth, today, next, macro, onOpen, unknown }: { day: string; events: EarningsEvent[]; inMonth: boolean; today: string; next: string; macro: MacroEvent[]; onOpen: () => void; unknown?: "loading" | "failed" }) {
   const d = parse(day);
   const holiday = HOLIDAY[day];
   const isNext = day === next;
@@ -99,7 +100,10 @@ function DayCell({ day, events, inMonth, today, next, macro, onOpen }: { day: st
       {holiday ? (
         <span className="empty-tag">Market closed · {holiday}</span>
       ) : events.length === 0 ? (
-        inMonth ? <span className="empty-tag">No earnings</span> : null
+        !inMonth ? null
+          : unknown === "failed" ? <span className="empty-tag unknown-tag">Didn't load</span>
+          : unknown === "loading" ? null
+          : <span className="empty-tag">No earnings</span>
       ) : (
         <div className="cell-tiles">
           {events.slice(0, PER_CELL).map((e) => <TileButton key={e.s} e={e} />)}
@@ -180,7 +184,8 @@ export function DayDrawer({ day, events, macro, onClose }: { day: string; events
   );
 }
 
-function FilterMenu({ counts }: { counts: Record<string, number> }) {
+function FilterMenu({ counts, failed }: { counts: Record<string, number>; failed?: boolean }) {
+  const none = failed ? "—" : "…";
   const { prefs } = useStore();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -192,14 +197,14 @@ function FilterMenu({ counts }: { counts: Record<string, number> }) {
   return (
     <div className="menu" ref={ref}>
       <button className="btn btn-box" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        {cur.label}{prefs.sector ? ` · ${prefs.sector}` : ""} · {counts[cur.key] ?? "…"} <Icon name="down" size={12} />
+        {cur.label}{prefs.sector ? ` · ${prefs.sector}` : ""} · {counts[cur.key] ?? none} <Icon name="down" size={12} />
       </button>
       {open && (
         <div className="menu-pop">
           {FILTERS.map((f) => (
             <button key={f.key} className={`menu-item ${f.key === prefs.filter ? "on" : ""}`} onClick={() => { actions.setPref("filter", f.key); setOpen(false); }}>
               <span><b>{f.label}</b><span className="muted small">{f.hint}</span></span>
-              <span className="eyebrow">{counts[f.key] ?? 0}</span>
+              <span className="eyebrow">{counts[f.key] ?? none}</span>
             </button>
           ))}
           <div className="menu-sep"><span className="eyebrow">Sector</span></div>
@@ -223,7 +228,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const weeks = useMemo(() => (view === "month" ? monthWeeks(a.getFullYear(), a.getMonth()) : [weekOf(anchor)]), [anchor, view]);
   const from = weeks[0][0];
   const to = weeks[weeks.length - 1][4];
-  const { data, loading, error } = useCalendar(view === "month" ? from : addDays(weekOf(anchor)[0], 0), view === "month" ? to : weekOf(anchor)[4]);
+  const { data, loading, error, retry } = useCalendar(view === "month" ? from : addDays(weekOf(anchor)[0], 0), view === "month" ? to : weekOf(anchor)[4]);
   const macro = useMacro();
   const all = data?.events ?? [];
   const filtered = useFiltered(all);
@@ -236,6 +241,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const monthEvents = view === "month" ? filtered.filter((e) => inMonth(e.d)) : filtered;
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
+    if (!data) return c; // unknown, not zero: a failed load must never read "· 0" (0026)
     const scoped = view === "month" ? all.filter((e) => inMonth(e.d)) : all;
     const watchSet = new Set(store.watch.map((w) => w.s));
     const direct = new Set(store.holdings.map((h) => h.s));
@@ -246,8 +252,10 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
     c.watch = scoped.filter((e) => watchSet.has(e.s)).length;
     c.holdings = scoped.filter((e) => direct.has(e.s) || heldVia(e.s, store.holdings).length).length;
     return c;
-  }, [all, store.watch, store.holdings, view, anchor]);
+  }, [data, all, store.watch, store.holdings, view, anchor]);
 
+  // A day that didn't load is unknown, never "No earnings" (0026).
+  const failedDays = useMemo(() => new Set(data ? missingDays(data.warnings ?? [], data.from, data.to) : []), [data]);
   const byDay = useMemo(() => {
     const m: Record<string, EarningsEvent[]> = {};
     for (const e of filtered) (m[e.d] ??= []).push(e);
@@ -292,12 +300,12 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
                 {reported.length > 0 && <> · <b>{Math.round((beats / reported.length) * 100)}%</b> of those reported so far <Term k="beat">beat</Term> on both lines</>}
                 . Tap any logo for the full read.
               </>
-            ) : loading ? "Charting the phases…" : "A quiet stretch — nothing reports with these filters."}
+            ) : loading ? "Charting the phases…" : !data ? "The calendar didn't load, so we can't say who reports yet." : "A quiet stretch — nothing reports with these filters."}
           </p>
         </div>
         <div className="toolbar">
           <div className="tgroup">
-            <FilterMenu counts={counts} />
+            <FilterMenu counts={counts} failed={!!error && !data} />
             <AskWeekButton />
             <button className="btn btn-box sq" onClick={onSearch} title="Add a ticker to your watchlist" aria-label="Add ticker"><Icon name="plus" /></button>
             <button className={`btn btn-box sq ${prefs.tiles === "logo" ? "on" : ""}`} onClick={() => actions.setPref("tiles", "logo")} title="Show logos" aria-label="Show logos"><Icon name="image" /></button>
@@ -316,7 +324,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
 
       <WeekBrief week={bWeek} current={bWeek.includes(next)} cal={data} calLoading={loading} calError={error} macro={macro.data} macroLoading={macro.loading} />
 
-      {error && <Notice tone="error">{error} Your watchlist and holdings are safe — pull to retry.</Notice>}
+      {error && !loading && <Notice tone="error">{error} Your watchlist and holdings are safe. <button className="btn btn-box" onClick={retry}>Try again</button></Notice>}
       {data && data.warnings.length > 0 && (
         <Notice tone="warn">
           {data.warnings.length === 1 ? data.warnings[0] : `${data.warnings.length} days didn't load yet — the market data service is busy.`} Retrying in the background; everything else is current.
@@ -337,7 +345,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
             ) : view === "week" ? (
               <WeekColumn key={d} day={d} events={byDay[d] ?? []} next={next} macro={macroByDay[d] ?? []} />
             ) : (
-              <DayCell key={d} day={d} events={byDay[d] ?? []} inMonth={inMonth(d)} today={today} next={next} macro={macroByDay[d] ?? []} onOpen={() => openDrawer(d)} />
+              <DayCell key={d} day={d} events={byDay[d] ?? []} unknown={!data ? (error ? "failed" : "loading") : failedDays.has(d) ? "failed" : undefined} inMonth={inMonth(d)} today={today} next={next} macro={macroByDay[d] ?? []} onOpen={() => openDrawer(d)} />
             ),
           )}
         </div>

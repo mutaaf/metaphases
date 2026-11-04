@@ -70,6 +70,7 @@
 .season-stats div { display: grid; gap: 4px; padding: 12px 14px; border-right: 1px solid var(--line); }
 .season-stats div:last-child { border-right: 0; }
 .season-stats b { font: 800 28px/1 var(--display); letter-spacing: -.02em; }
+.season-floor { display: block; font: 500 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
 .season > p { margin: 10px 0 0; }
 .season-slim { display: flex; align-items: center; gap: 12px; padding: 8px 24px; border-top: 1px solid var(--line); font-size: 13px; flex-wrap: wrap; }
 .season-bar { position: relative; width: 120px; height: 6px; background: var(--paper-2); }

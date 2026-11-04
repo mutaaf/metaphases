@@ -6,7 +6,7 @@ const mem = new Map<string, Promise<unknown>>();
 async function fetchJson(path: string) {
   const r = await fetch(path);
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.error ?? "We couldn't reach the market data service.");
+  if (!r.ok) throw Object.assign(new Error(body.error ?? "We couldn't reach the market data service."), { status: r.status });
   return body;
 }
 
@@ -46,7 +46,9 @@ function get<T>(path: string): Promise<T> {
   return mem.get(path) as Promise<T>;
 }
 
-export interface Loadable<T> { data: T | null; error: string | null; loading: boolean; retry?: () => void }
+/** `status` is the HTTP status of a failed load (0 for a network failure): 404 means "not found", anything else
+ *  means "busy", and a busy service must never be described as a fact about the thing we asked for (0026). */
+export interface Loadable<T> { data: T | null; error: string | null; loading: boolean; status?: number; retry?: () => void }
 export function useApi<T>(path: string | null): Loadable<T> {
   const [st, setSt] = useState<Loadable<T>>({ data: null, error: null, loading: !!path });
   const [nonce, setNonce] = useState(0);
@@ -68,7 +70,7 @@ export function useApi<T>(path: string | null): Loadable<T> {
           if (!live) return;
           // A transient edge failure (e.g. a cold cache over the CPU budget) usually succeeds a moment later: retry once quietly.
           if (attempt === 0) { timer = setTimeout(() => load(p, 1), 1200); return; }
-          setSt({ data: null, error: String(e.message ?? e), loading: false });
+          setSt({ data: null, error: String(e.message ?? e), loading: false, status: typeof e?.status === "number" ? e.status : 0 });
         },
       );
     load(path, 0);
