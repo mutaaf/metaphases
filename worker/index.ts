@@ -21,7 +21,7 @@ import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } fro
 import { periodKey, pickConsensus } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { applyToEvents, applyToRows, type DateOverrides } from "../shared/dateOverrides";
-import { aliasMap, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
+import { aliasMap, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -109,7 +109,7 @@ function toEvents(rows: any[]): EarningsEvent[] {
 }
 
 // ── 0024: the per-symbol supplement ─────────────────────────────────────
-const SUPP_KEY = CAL("cal:supp:v1");
+const SUPP_KEY = CAL("cal:supp:v2"); // v2: v1 cached empty rows for ADRs answered under their home label
 const SUPP_LOCK = CAL("cal:supp:lock:v1");
 /** `symbol=` only returns upcoming dates, so the supplement covers ranges that touch the next ~4 months. */
 const SUPP_BACK = 7, SUPP_AHEAD = 120;
@@ -135,7 +135,7 @@ async function supplement(env: Env, ctx: ExecutionContext, today: string, refres
   }
   if (!due.length) return doc;
   const from = addDays(today, -SUPP_BACK), to = addDays(today, SUPP_AHEAD);
-  const got = await pool(due, 2, async (s) => suppRows(s, (await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?symbol=${encodeURIComponent(s)}&from=${from}&to=${to}&token=${env.FINNHUB_API_KEY}`)).earningsCalendar));
+  const got = await pool(due, 2, async (s) => suppRows(s, (await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?symbol=${encodeURIComponent(s)}&from=${from}&to=${to}&token=${env.FINNHUB_API_KEY}`)).earningsCalendar, homeListing(U as Universe, s)));
   let changed = false;
   got.forEach((r, i) => { if (r.status === "fulfilled") { doc[due[i]] = refreshEntry(doc[due[i]], r.value, today, Date.now()); changed = true; } });
   if (changed) ctx.waitUntil(caches.default.put(SUPP_KEY, new Response(JSON.stringify(doc), { headers: { "Cache-Control": "public, max-age=604800", "Content-Type": "application/json" } })));

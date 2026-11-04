@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../../worker/index";
 import universe from "../../data/universe.json" with { type: "json" };
-import { aliasMap, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, SUPP_PER_REQUEST, SUPP_TTL_MS, type Universe } from "../../shared/calendarSupplement";
+import { aliasMap, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, SUPP_PER_REQUEST, SUPP_TTL_MS, type Universe } from "../../shared/calendarSupplement";
 
 // 0024: Finnhub's day/range calendar has no Toyota, Sony, Honda, Novo Nordisk or JD rows while each of their
 // `symbol=` answers (what the sheet reads) does. The calendar now merges those rows in, once, and renames
@@ -54,6 +54,13 @@ describe("calendar supplement (pure)", () => {
     expect(suppRows("TM", raw)).toEqual([{ s: "TM", d: "2026-11-05", h: "amc", q: 2, y: 2027, eE: 64.5, eA: null, rE: null, rA: null, t: 1 }]);
   });
 
+  it("accepts an ADR answer labelled with its home listing or unlabelled, never another company's", () => {
+    expect(homeListing(U, "TM")).toBe("7203.T");
+    expect(homeListing(U, "AAPL")).toBeUndefined();
+    const raw = [{ symbol: "7203.T", date: "2026-11-05", hour: "amc" }, { date: "2026-11-06" }, { symbol: "MSFT", date: "2026-11-07" }, { symbol: "6758.T", date: "2026-11-08" }];
+    expect(suppRows("TM", raw, "7203.T").map((r) => [r.s, r.d])).toEqual([["TM", "2026-11-05"], ["TM", "2026-11-06"]]);
+  });
+
   it("adds a missing symbol's row once, lets the feed's own row win, and never fills a failed day", () => {
     const doc = { TM: { at: 1, rows: [ev("TM", "2026-11-05")] }, NVO: { at: 1, rows: [ev("NVO", "2026-11-04")] }, SONY: { at: 1, rows: [ev("SONY", "2026-11-06")] } };
     const feed = [ev("AAPL", "2026-11-05"), ev("NVO", "2026-11-04")];
@@ -79,7 +86,8 @@ let symCalls: string[] = [];
 let rangeCalls = 0;
 let rangeRows: () => any[] = () => [raw("AAPL", "2026-11-05")];
 let rangeStatus = 200;
-const bySymbol: Record<string, any[]> = { TM: [raw("TM", "2026-11-05")], SONY: [raw("SONY", "2026-11-05", { hour: "bmo" })], HMC: [raw("HMC", "2026-11-05", { hour: "" })] };
+// Finnhub may label an ADR's rows with its home listing (TM → 7203.T).
+const bySymbol: Record<string, any[]> = { TM: [raw("7203.T", "2026-11-05")], SONY: [raw("SONY", "2026-11-05", { hour: "bmo" })], HMC: [raw("HMC", "2026-11-05", { hour: "" })] };
 
 beforeEach(() => {
   pending = []; symCalls = []; rangeCalls = 0; rangeStatus = 200; rangeRows = () => [raw("AAPL", "2026-11-05")];
