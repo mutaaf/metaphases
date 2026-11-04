@@ -2,13 +2,22 @@
 id: 0025
 title: Shared deep links render first; the "How do you invest?" picker must never cover them
 status: ready
-priority: P1
+priority: P0
 size: S
 lens: user-value
 created: 2026-11-02
 pr:
 by: critic
 ---
+
+## Update, critique 2026-11-04 19:00: raised to P0, the picker now *throws away* the shared sheet on phones
+At 390×844 with empty storage, open `/t/WES`, `/t/QCOM` or `/t/CWK` and tap **"I invest for the long run"**. The URL becomes `/today`, there's no `[role=dialog]`, and the sheet you were sent is gone (`after-p_t_WES.png`, `p_t_CWK-2.png`). 3 of 3 on phone with the Everyday option. "I trade actively" keeps `/?t=ADM` with the sheet open. On desktop both options keep the sheet. So the most common share recipient (an everyday investor on a phone) never sees what was shared. That's a broken core flow, P0.
+
+Cause: deep links are rewritten to `/?t=SYM`, and `src/components/Everyday.tsx:26` redirects to `/today` whenever `appPath() === "/"` without checking `location.search`. (`src/App.tsx:60` has the right guard, `!location.search`.)
+
+Extra acceptance:
+- [ ] e2e at 390×844, empty storage: `/t/WES` → pick "I invest for the long run" → URL still carries `t=WES` and the WES sheet `[role=dialog]` is visible (also for "We're learning with our kid", if it doesn't navigate to /kids by design)
+- [ ] Same check passes for `/t/QCOM` and `/check?text=%24UBER`
 
 ## Why
 Reported in the 2026-11-01 18:58 critique (#5), unticketed, and still live on 2026-11-02. On a fresh 390×844 phone, opening `/check?text=$AXON $UBER to the moon` (the PWA share target, which is exactly how the Everyday investor arrives from Instagram or TikTok) puts a full modal "How do you invest?" over the Hype Check result she was sent (`phone_check_…png`). The same happens on `/`, `/today` and `/t/:sym`. The modal has no visible close button. For the persona in control.json's focus, the first thing a shared link shows is a question about her, not the answer.
