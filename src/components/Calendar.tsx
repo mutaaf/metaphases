@@ -327,7 +327,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       {error && !loading && <Notice tone="error">{error} Your watchlist and holdings are safe. <button className="btn btn-box" onClick={retry}>Try again</button></Notice>}
       {data && data.warnings.length > 0 && (
         <Notice tone="warn">
-          {data.warnings.length === 1 ? data.warnings[0] : `${data.warnings.length} days didn't load yet — the market data service is busy.`} Retrying in the background; everything else is current.
+          {failedDays.size === 0 ? "Part of the calendar didn't load yet — the market data service is busy." : failedDays.size === 1 ? `${fmtLong([...failedDays][0])} didn't load yet — the market data service is busy.` : `${failedDays.size} days didn't load yet — the market data service is busy.`} Retrying in the background; everything else is current.
         </Notice>
       )}
       {prefs.filter === "holdings" && store.holdings.length === 0 && (
@@ -335,7 +335,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       )}
 
       {view === "day" ? (
-        <DayView day={anchor} events={byDay[anchor] ?? []} loading={loading} macro={macroByDay[anchor] ?? []} />
+        <DayView day={anchor} events={byDay[anchor] ?? []} loading={loading && !data} failed={(!data && !!error) || failedDays.has(anchor)} macro={macroByDay[anchor] ?? []} />
       ) : (
         <div className={`grid ${view}`}>
           {WEEKDAYS.map((w, i) => <div key={w} className={`wd wd-${i}`}><span>{w}</span></div>)}
@@ -343,7 +343,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
             loading && !data ? (
               <div key={d} className="cell"><Skeleton w={60} h={10} /><div className="cell-tiles"><Skeleton w={44} h={44} /><Skeleton w={44} h={44} /><Skeleton w={44} h={44} /></div></div>
             ) : view === "week" ? (
-              <WeekColumn key={d} day={d} events={byDay[d] ?? []} next={next} macro={macroByDay[d] ?? []} />
+              <WeekColumn key={d} day={d} events={byDay[d] ?? []} failed={(!data && !!error) || failedDays.has(d)} next={next} macro={macroByDay[d] ?? []} />
             ) : (
               <DayCell key={d} day={d} events={byDay[d] ?? []} unknown={!data ? (error ? "failed" : "loading") : failedDays.has(d) ? "failed" : undefined} inMonth={inMonth(d)} today={today} next={next} macro={macroByDay[d] ?? []} onOpen={() => openDrawer(d)} />
             ),
@@ -355,13 +355,14 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   );
 }
 
-function WeekColumn({ day, events, next, macro }: { day: string; events: EarningsEvent[]; next: string; macro: MacroEvent[] }) {
+function WeekColumn({ day, events, next, macro, failed }: { day: string; events: EarningsEvent[]; next: string; macro: MacroEvent[]; failed?: boolean }) {
   const d = parse(day);
   return (
     <div className={`wcol ${day === next ? "next" : ""}`}>
-      <div className="cell-head"><span className="cell-date">{MON3[d.getMonth()]} <b>{String(d.getDate()).padStart(2, "0")}</b></span><span className="cell-count">{events.length}</span></div>
+      <div className="cell-head"><span className="cell-date">{MON3[d.getMonth()]} <b>{String(d.getDate()).padStart(2, "0")}</b></span>{!failed && <span className="cell-count">{events.length}</span>}</div>
       {macro.map((m) => <span key={m.key} className={`mtag kind-${m.kind}`}>{m.name}</span>)}
       {HOLIDAY[day] && <span className="empty-tag">Market closed · {HOLIDAY[day]}</span>}
+      {failed && !HOLIDAY[day] && !events.length && <span className="empty-tag unknown-tag">Didn't load</span>}
       {groupBySession(events).map((g) => (
         <div key={g.h} className="wsess">
           <span className="eyebrow sess-mini"><Phase h={g.h} size={10} /> {PHASE_LABEL[g.h]}</span>
@@ -377,13 +378,15 @@ function WeekColumn({ day, events, next, macro }: { day: string; events: Earning
   );
 }
 
-function DayView({ day, events, loading, macro }: { day: string; events: EarningsEvent[]; loading: boolean; macro: MacroEvent[] }) {
+function DayView({ day, events, loading, macro, failed }: { day: string; events: EarningsEvent[]; loading: boolean; macro: MacroEvent[]; failed?: boolean }) {
   if (loading) return <div className="dayview">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={52} />)}</div>;
   return (
     <div className="dayview">
       {macro.map((m) => <Notice key={m.key}><b>{m.name}.</b> {m.blurb}</Notice>)}
       {HOLIDAY[day] && <Notice>Markets are closed for {HOLIDAY[day]}.</Notice>}
-      {!events.length && !HOLIDAY[day] && <p className="empty-big">No earnings with these filters. Try <b>Everything</b>.</p>}
+      {!events.length && !HOLIDAY[day] && (failed
+        ? <p className="empty-big">This day's earnings didn't load, so we can't say who reports. Try again in a moment.</p>
+        : <p className="empty-big">No earnings with these filters. Try <b>Everything</b>.</p>)}
       {groupBySession(events).map((g) => (
         <section key={g.h} className="sess">
           <h3 className="sess-head"><Phase h={g.h} size={14} /> {PHASE_LABEL[g.h]} <span className="muted">· {g.list.length}</span></h3>

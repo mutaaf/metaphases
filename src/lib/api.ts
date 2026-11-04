@@ -70,6 +70,8 @@ export function useApi<T>(path: string | null): Loadable<T> {
           if (!live) return;
           // A transient edge failure (e.g. a cold cache over the CPU budget) usually succeeds a moment later: retry once quietly.
           if (attempt === 0) { timer = setTimeout(() => load(p, 1), 1200); return; }
+          // A failed background retry of a partial result keeps what already loaded (0026).
+          if (p !== path) { setSt((s) => (s.data ? { ...s, loading: false } : s)); return; }
           setSt({ data: null, error: String(e.message ?? e), loading: false, status: typeof e?.status === "number" ? e.status : 0 });
         },
       );
