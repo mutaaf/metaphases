@@ -203,7 +203,7 @@ test("the week's brief: open on desktop, collapsed on phone, remembered, and its
   const head = brief.locator(".brief-head");
   await expect(head).toContainText("This week");
   await expect(head).toContainText("Nov 2–6");
-  await expect(head).toContainText(/\d+ popular companies report \(336 in all\)/);
+  await expect(head).toContainText(/\d+ popular companies report \(337 in all\)/); // 336 + Novo Nordisk (0024)
   await expect(head).toHaveAttribute("aria-expanded", isMobile ? "false" : "true");
   if (isMobile) await head.click();
   await expect(brief.locator(".brief-co")).toHaveCount(5);

@@ -16,6 +16,8 @@ const env = { FINNHUB_API_KEY: "k", FRED_API_KEY: "k", ASSETS: { fetch: async ()
 const ctx = { waitUntil: (p: Promise<unknown>) => { pending.push(p); }, passThroughOnException() {} } as any;
 let pending: Promise<unknown>[] = [];
 let calls: string[] = [];
+// Range/day calls only: the 0024 supplement's per-symbol calls (symbol=) are tested in calendarSupplement.test.ts.
+const rangeCalls = () => calls.filter((c) => !c.includes("symbol=")).length;
 let rowsFor: (from: string, to: string) => any[] = () => [];
 
 beforeEach(() => {
@@ -48,16 +50,16 @@ describe("calendar fetching", () => {
   it("serves cached days without calling upstream again", async () => {
     rowsFor = (from) => [row("AAPL", from)];
     await get("2027-03-01", "2027-03-31");
-    const first = calls.length;
+    const first = rangeCalls();
     const again = await get("2027-03-01", "2027-03-31");
-    expect(calls.length).toBe(first);
+    expect(rangeCalls()).toBe(first);
     expect(again.events.length).toBeGreaterThan(0);
   });
 
   it("falls back to per-day calls when a range looks truncated", async () => {
     rowsFor = (from, to) => (from === to ? [row("AAPL", from)] : Array.from({ length: 1500 }, (_, i) => row(`X${i}`, from)));
     const r = await get("2027-02-01", "2027-02-05");
-    expect(calls.length).toBe(1 + 5);
+    expect(rangeCalls()).toBe(1 + 5);
     expect(new Set(r.events.map((e) => e.d)).size).toBe(5);
   });
 

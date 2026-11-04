@@ -168,4 +168,14 @@ test.describe("everyday", () => {
     await page.getByRole("button", { name: "month view" }).click();
     await expect(page.locator(".tbtn[title*='(PDD)']").first()).toHaveAttribute("title", /CN¥19\.21/);
   });
+
+  // 0024: Novo Nordisk's row (merged from Finnhub's per-symbol answer) shows on Wednesday Nov 4, in kroner.
+  test("Novo Nordisk is on the calendar on Nov 4 in the day drawer and Wednesday's cell, in kroner", async ({ page }) => {
+    await page.goto("./?d=2026-11-04&day=2026-11-04");
+    const row = page.locator(".erow", { hasText: "NVO" }).first();
+    await expect(row).toContainText("DKK 4.85");
+    await expect(row).not.toContainText("$4.85");
+    await page.goto("./?d=2026-11-04");
+    await expect(page.locator(".tbtn[title*='(NVO)']").first()).toHaveAttribute("title", /DKK 4\.85/);
+  });
 });

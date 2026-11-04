@@ -21,6 +21,7 @@ import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } fro
 import { periodKey, pickConsensus } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { applyToEvents, applyToRows, type DateOverrides } from "../shared/dateOverrides";
+import { aliasMap, mergeSupplement, staleSymbols, supplementSymbols, suppRows, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -87,16 +88,53 @@ const calTtl = (day: string, today: string) => (day < addDays(today, -3) || day 
 /** Finnhub returns at most ~1500 rows per call; a range at or past this is treated as truncated and re-fetched day by day. */
 const RANGE_CAP = 1400;
 
+/** Home listings (7203.T) → the tracked US symbol (TM), from the universe's logo names (0024). */
+const ALIAS = aliasMap(U as Universe);
+/** Tracked names the range feed is known to drop; their `symbol=` rows fill the gap (0024). */
+const SUPP_SYMBOLS = supplementSymbols(U as Universe);
+
 function toEvents(rows: any[]): EarningsEvent[] {
   const out: EarningsEvent[] = [];
+  const native = new Set<string>((rows ?? []).map((e) => e.symbol));
   for (const e of rows ?? []) {
-    const tracked = e.symbol in U;
+    const alias = ALIAS[e.symbol];
+    if (alias && native.has(alias)) continue; // the US row wins over its home listing
+    const sym = alias ?? e.symbol;
+    const tracked = sym in U;
     if (!tracked && !((e.revenueEstimate ?? 0) >= BIG_REVENUE || (e.revenueActual ?? 0) >= BIG_REVENUE)) continue;
-    if (!tracked && /[.\-]/.test(e.symbol)) continue; // skip foreign share classes without logos
-    out.push({ s: e.symbol, d: e.date, h: (e.hour || "") as Session, q: e.quarter, y: e.year, eE: e.epsEstimate, eA: e.epsActual, rE: e.revenueEstimate, rA: e.revenueActual, t: tracked ? 1 : 0 });
+    if (!tracked && /[.\-]/.test(sym)) continue; // skip foreign share classes without logos
+    out.push({ s: sym, d: e.date, h: (e.hour || "") as Session, q: e.quarter, y: e.year, eE: e.epsEstimate, eA: e.epsActual, rE: e.revenueEstimate, rA: e.revenueActual, t: tracked ? 1 : 0 });
   }
   return out;
 }
+
+// ── 0024: the per-symbol supplement ─────────────────────────────────────
+const SUPP_KEY = CAL("cal:supp:v1");
+/** `symbol=` only returns upcoming dates, so the supplement covers ranges that touch the next ~4 months. */
+const SUPP_BACK = 7, SUPP_AHEAD = 120;
+
+async function readSupp(): Promise<SuppDoc> {
+  try { const hit = await caches.default.match(SUPP_KEY); return hit ? ((await hit.json()) as SuppDoc) : {}; } catch { return {}; }
+}
+
+/**
+ * The supplement document, refreshing at most a few stale symbols (pooled, 2 at a time). A failed symbol
+ * keeps its last good rows. `refresh: false` (a failed range call this request, or the share-card path)
+ * only reads the cache: a rate limit must never turn into more calls.
+ */
+async function supplement(env: Env, ctx: ExecutionContext, today: string, refresh: boolean): Promise<SuppDoc> {
+  const doc = await readSupp();
+  const due = refresh ? staleSymbols(doc, SUPP_SYMBOLS, Date.now()) : [];
+  if (!due.length) return doc;
+  const from = addDays(today, -SUPP_BACK), to = addDays(today, SUPP_AHEAD);
+  const got = await pool(due, 2, async (s) => suppRows(s, (await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?symbol=${encodeURIComponent(s)}&from=${from}&to=${to}&token=${env.FINNHUB_API_KEY}`)).earningsCalendar));
+  let changed = false;
+  got.forEach((r, i) => { if (r.status === "fulfilled") { doc[due[i]] = { at: Date.now(), rows: r.value }; changed = true; } });
+  if (changed) ctx.waitUntil(caches.default.put(SUPP_KEY, new Response(JSON.stringify(doc), { headers: { "Cache-Control": "public, max-age=604800", "Content-Type": "application/json" } })));
+  return doc;
+}
+
+const touchesSupp = (from: string, to: string, today: string) => to >= addDays(today, -SUPP_BACK) && from <= addDays(today, SUPP_AHEAD);
 
 async function putDay(day: string, events: EarningsEvent[], today: string, ctx: ExecutionContext) {
   const body = JSON.stringify(events);
@@ -117,7 +155,7 @@ async function fetchCalendarDay(day: string, env: Env): Promise<EarningsEvent[]>
  * per-day calls is what left months past February empty. A truncated range falls back to per-day calls,
  * and any failure falls back to the last good copy (kept 7 days).
  */
-async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext): Promise<PromiseSettledResult<EarningsEvent[]>[]> {
+async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, health: { failed: boolean } = { failed: false }): Promise<PromiseSettledResult<EarningsEvent[]>[]> {
   const today = iso(todayNY());
   const out: PromiseSettledResult<EarningsEvent[]>[] = new Array(days.length);
   const missing: number[] = [];
@@ -140,6 +178,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext): Pr
     // A failed range call (429 after retries, upstream down) must not fan out into per-day retries:
     // that only deepens the rate limit. Go straight to the last good copy.
     rangeError = e;
+    health.failed = true;
   }
   const settle = async (i: number, load: () => Promise<EarningsEvent[]>) => {
     const d = days[i];
@@ -148,6 +187,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext): Pr
       putDay(d, ev, today, ctx);
       out[i] = { status: "fulfilled", value: ev };
     } catch (reason) {
+      health.failed = true;
       const stale = await caches.default.match(CAL(`cal:stale:v2:${d}`));
       out[i] = stale ? { status: "fulfilled", value: (await stale.json()) as EarningsEvent[] } : { status: "rejected", reason };
     }
@@ -185,12 +225,21 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     if (!weeks.length || new Date(d + "T12:00:00Z").getUTCDay() === 1) weeks.push([]);
     weeks[weeks.length - 1].push(d);
   }
-  const perWeek = await pool(weeks, 3, (w) => calendarWeek(w, env, ctx));
+  const health = { failed: false };
+  const perWeek = await pool(weeks, 3, (w) => calendarWeek(w, env, ctx, health));
   const results = perWeek.flatMap((r, wi) => (r.status === "fulfilled" ? r.value : weeks[wi].map(() => ({ status: "rejected", reason: r.reason }) as PromiseSettledResult<EarningsEvent[]>)));
   const warnings: string[] = [];
-  const events: EarningsEvent[] = [];
-  results.forEach((r, i) => (r.status === "fulfilled" ? events.push(...r.value) : warnings.push(`Couldn't load ${days[i]} — showing the rest.`)));
-  const fixed = applyToEvents(events, OVERRIDES, from, to, iso(todayNY()), (s) => s in U);
+  let events: EarningsEvent[] = [];
+  const loaded = new Set<string>();
+  results.forEach((r, i) => (r.status === "fulfilled" ? (events.push(...r.value), loaded.add(days[i])) : warnings.push(`Couldn't load ${days[i]} — showing the rest.`)));
+  const today = iso(todayNY());
+  if (touchesSupp(from, to, today)) {
+    // After the range calls, never alongside them; and no new calls at all if any upstream call failed,
+    // even one a stale copy covered (0024: a rate limit must not become more calls).
+    const doc = await supplement(env, ctx, today, !health.failed && warnings.length === 0);
+    events = mergeSupplement(events, doc, from, to, (d) => loaded.has(d));
+  }
+  const fixed = applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U);
   const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings };
   return json(body, 600);
 }
@@ -485,7 +534,8 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
   if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
     const label = new Date(day + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
     try {
-      const evs = applyToEvents(await calendarDay(day, env, ctx), OVERRIDES, day, day, iso(todayNY()), (s) => s in U).filter((e) => e.t).sort((a, b) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0));
+      const withSupp = mergeSupplement(await calendarDay(day, env, ctx), await readSupp(), day, day, () => true); // cache only (0024)
+      const evs = applyToEvents(withSupp, OVERRIDES, day, day, iso(todayNY()), (s) => s in U).filter((e) => e.t).sort((a, b) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0));
       const top = evs.slice(0, 4).map((e) => e.s).join(", ");
       return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };
     } catch { return { title: `Earnings on ${label} · Metaphases`, desc: PAGES["/"].desc }; }
