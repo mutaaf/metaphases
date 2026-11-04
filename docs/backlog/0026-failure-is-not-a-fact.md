@@ -1,12 +1,12 @@
 ---
 id: 0026
 title: When data fails to load, say so; never present the failure as a fact about the company or the season
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: clarity
 created: 2026-11-02
-pr:
+pr: 48
 by: critic
 ---
 

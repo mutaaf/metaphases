@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { Quarter, Reaction, TickerResponse } from "../../shared/types";
 import { nyDate, peersFor, placeMarkers, seasonScore } from "../../shared/depth";
 import { useCalendar, prefetchTicker } from "../lib/api";
+import { missingDays } from "../lib/partial";
 import { co, curOf, UNIVERSE } from "../lib/data";
 import { addDays, fmtShort, todayISO } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
@@ -181,11 +182,16 @@ export function useSeason() {
   const from = addDays(today, -42);
   const { data, loading, error } = useCalendar(from, today);
   const season = useMemo(() => (data ? seasonScore(data.events, (s) => !!UNIVERSE[s]?.sp, SP_COUNT, from, today, curOf) : null), [data]);
-  return { season, loading, error };
+  // Days of the window that didn't load: the reported share is then only a floor, and the rates cover what loaded (0026).
+  const missing = useMemo(() => (data ? missingDays(data.warnings ?? [], from, today).length : 0), [data]);
+  return { season, missing, loading, error };
 }
 
+const daysWord = (n: number) => `${n} trading day${n === 1 ? "" : "s"}`;
+
 export function SeasonScoreboard({ slim }: { slim?: boolean }) {
-  const { season, loading } = useSeason();
+  const { season, missing, loading } = useSeason();
+  const floor = missing > 0 ? "at least " : "";
   if (loading && !season) return slim ? null : <Skeleton h={90} />;
   if (!season) return null;
   if (slim) {
@@ -194,7 +200,7 @@ export function SeasonScoreboard({ slim }: { slim?: boolean }) {
       <div className="season-slim">
         <span className="eyebrow">Earnings season</span>
         <span className="season-bar" aria-hidden><i style={{ width: `${season.reportedPct}%` }} /></span>
-        <span><b>{season.reportedPct}%</b> of the S&P 500 reported · <b>{season.epsBeatPct}%</b> beat on EPS · median <Term k="surprise">surprise</Term> <b>{pct(season.medianSurprise)}</b></span>
+        <span><b>{floor}{season.reportedPct}%</b> of the S&P 500 reported · <b>{season.epsBeatPct}%</b> beat on EPS · median <Term k="surprise">surprise</Term> <b>{pct(season.medianSurprise)}</b>{missing > 0 && <span className="muted season-partial"> · partial: {daysWord(missing)} didn't load</span>}</span>
       </div>
     );
   }
@@ -202,12 +208,15 @@ export function SeasonScoreboard({ slim }: { slim?: boolean }) {
     <section className="card season">
       <h4 className="eyebrow">Earnings season scoreboard · S&P 500 · {fmtShort(season.from)}–{fmtShort(season.to)}</h4>
       {!season.enough ? (
-        <p className="muted">Too early in the season: only {season.reported} index members have reported in this window.</p>
+        missing > 0
+          ? <p className="muted season-partial">Partial: {daysWord(missing)} of this window didn't load, so we're not showing season numbers yet.</p>
+          : <p className="muted">Too early in the season: only {season.reported} index members have reported in this window.</p>
       ) : (
         <>
-          <div className="season-track"><i style={{ width: `${season.reportedPct}%` }} /><span>{season.reported} of {season.members} reported</span></div>
+          {missing > 0 && <p className="season-partial notice notice-warn">Partial: {daysWord(missing)} didn't load, so at least this many have reported and the rates cover only the reports that loaded.</p>}
+          <div className="season-track"><i style={{ width: `${season.reportedPct}%` }} /><span>{floor}{season.reported} of {season.members} reported</span></div>
           <div className="season-stats">
-            <div><span className="eyebrow">Reported</span><b>{season.reportedPct}%</b></div>
+            <div><span className="eyebrow">Reported</span><b>{floor && <small className="season-floor">at least </small>}{season.reportedPct}%</b></div>
             <div><span className="eyebrow"><Term k="eps">EPS</Term> beat rate</span><b>{season.epsBeatPct ?? "—"}%</b></div>
             <div><span className="eyebrow"><Term k="revenue">Revenue</Term> beat rate</span><b>{season.revBeatPct != null ? `${season.revBeatPct}%` : "—"}</b>{season.revExcluded > 0 && <small className="muted rev-excluded">{season.revExcluded} <Term k="revbasis">can't compare</Term></small>}</div>
             <div><span className="eyebrow">Median <Term k="surprise">surprise</Term></span><b>{pct(season.medianSurprise)}</b></div>

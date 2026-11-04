@@ -54,7 +54,7 @@ function AiTake({ data, flags, caption, owned }: { data: TickerResponse; flags: 
 }
 
 function HypeCard({ sym, caption }: { sym: string; caption: string }) {
-  const { data, loading, error } = useTicker(sym);
+  const { data, loading, error, status, retry } = useTicker(sym);
   const { holdings, watch } = useStore();
   const today = todayISO();
   const tracked = !!UNIVERSE[sym];
@@ -65,7 +65,17 @@ function HypeCard({ sym, caption }: { sym: string; caption: string }) {
   const owned = (direct?.v ?? 0) + via.reduce((a, v) => a + v.dollars, 0);
   const starred = watch.some((w) => w.s === sym);
   if (loading && !data) return <article className="hc-card"><Skeleton h={28} w="50%" /><Skeleton h={90} /><Skeleton h={140} /></article>;
-  if (error && !data) return <article className="hc-card"><h3>{sym}</h3><Notice tone="warn">We couldn't find market data for “{sym}”. Double-check the ticker — or it may be too small for free data sources, which is itself worth noting.</Notice></article>;
+  if (error && !data) {
+    // Only a definitive not-found for a symbol we don't track may say anything about the ticker itself (0026).
+    if (status === 404 && !tracked) return <article className="hc-card"><h3>{sym}</h3><Notice tone="warn">We couldn't find market data for “{sym}”. Double-check the ticker — or it may be too small for free data sources, which is itself worth noting.</Notice></article>;
+    return (
+      <article className="hc-card" aria-label={`Hype check: ${sym}`}>
+        <h3>{name}</h3>
+        <Notice tone="warn">Couldn't load {sym} right now — the data service is busy. That says nothing about the company; try again in a moment.</Notice>
+        <div className="cta-row"><button className="cta cta-secondary" onClick={retry}>Try again</button></div>
+      </article>
+    );
+  }
   if (!data) return null;
   const reds = flags.filter((f) => f.tone !== "info").length;
   return (
