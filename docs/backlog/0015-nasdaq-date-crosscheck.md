@@ -10,6 +10,9 @@ pr:
 by: scout
 ---
 
+## Evidence 2026-11-04 07:00 UTC (critic)
+The universe-vs-Nasdaq day conflicts fell from 9 to 2 (ECHO: Nasdaq Nov 5, us Nov 11; SBET: Nasdaq Nov 9, us Nov 10), because the 0013 overrides took the other five. The past-row conflicts that 0038 lists (WES, TECH, CWK, HUBG, PAA, UI) are exactly what this cross-check would catch. **CSCO** (outside the universe sweep window because our date is later): Nasdaq **Nov 11**, Finnhub Nov 18 with a blank session. Cisco's last two Q1s were Wed Nov 12, 2025 and Wed Nov 13, 2024, after the close, so Nov 18 is likely a projection. Nasdaq's EPS forecast is $1.15 against our $1.35. Not verified against the company (no release found yet).
+
 ## Evidence 2026-11-03 07:00 UTC (critic)
 For tracked names, Nov 3–12: 8 day conflicts with Nasdaq's per-day calendar (FIS, TECH, APD, ARM, STE, SBET, ECHO, MARA) and 12 names Nasdaq lists that our calendar lacks (AES, TM, NVO, NWS, HUT, SONY, AXON, BRK.B, HMC, CSCO, TDG, JD). In the 5 conflicts checked against a company release (FIS, APD, STE, ARM, AXON), **Nasdaq matched the company 5/5 and Finnhub 0/5**. Suggestion for the operator (the critic doesn't decide this): when Finnhub's session is blank and Nasdaq gives a session, prefer Nasdaq's day and keep the "unconfirmed" note. At minimum, the `differs` note must name Nasdaq's date, not just say "disagree".
 

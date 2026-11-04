@@ -10,6 +10,9 @@ pr:
 by: critic
 ---
 
+## Update, critique 2026-11-04 07:00: the day after is worse
+On day 2, the report vanishes. ADM reported Nov 3 before the open and is **−6.82%**. At 06:55 UTC Nov 4, `/t/ADM` says "NEXT REPORT · Q4 2026 · Monday, February 1 · in 89 days", and The Read says "reports Q4 on Monday, Feb 1… Wall Street expects $1.40 a share, versus **$1.84 last quarter**". That's Q2: Q3's $1.77 adjusted isn't anywhere on the page. og:title is "ADM reports Mon, Feb 1". Nasdaq `earnings-surprise` still has 8/4/2026 as the latest row, and the calendar row still has `eA:null`. So no source has the result, and the sheet moved on. Extra acceptance: until a source has the actual, a quarter whose session has passed stays visible as "Reported Tue, Nov 3 · figures not in yet" on the sheet, in The Read and in og, for at least 3 trading days. It never falls back to "last quarter" = the quarter before.
+
 ## Why
 Critique 2026-11-03 19:00 #1. At 18:51 UTC (1:51 pm ET) on Tue Nov 3, `/api/calendar` already had actuals for 79 of the 81 names that reported before the open (PFE `eA 0.87` vs `eE 0.73`, SHOP, ETN, MPC, APO…). But every one of those sheets still said:
 - `NEXT REPORT · Q3 2026 · Tuesday, November 3 · Before open · today · EPS EST $0.73` (`p_t_PFE_sheet.png`);

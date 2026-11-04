@@ -10,6 +10,9 @@ pr:
 by: critic
 ---
 
+## Still wrong 2026-11-04 07:00 UTC (critic): report day
+**NVO reports today** (Novo Nordisk's H1 report names Nov 4 for the nine-month report). `/t/NVO` correctly says "Wednesday, November 4 · Before open · today · DKK 4.85", but `/api/calendar` for Nov 4 has **no NVO row**, so it's absent from today's column and the week's biggest-reporters list. The same goes for TM (Nasdaq Nov 4; sheet Nov 5 amc), NWS (Nov 4), HUT (Nov 4), SONY (Nov 5), HMC and BRK.B (Nov 6), JD (sheet Nov 12) and CSCO's Nasdaq date. 10 universe names are on Nasdaq's Nov 4–13 calendar and missing from ours.
+
 ## Still wrong 2026-11-03 07:00 UTC (critic)
 NVO (Nov 4), TM (Nov 5), SONY, HMC, JD (Nov 12) **and NWS** (Nov 4, a US filer) have a sheet `next` date in the window but no `/api/calendar` row. NWS shows this is the sheet-vs-calendar membership gap (separate Finnhub queries), not only ADRs. Extra acceptance: for every universe name, a sheet `next.date` within the next 14 days implies a calendar row on that date (sweep test on fixtures).
 
