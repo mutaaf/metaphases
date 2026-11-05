@@ -13,16 +13,17 @@ const ev = (s: string, d: string, extra: Partial<EarningsEvent> = {}): EarningsE
 describe("closed-market days", () => {
   it("knows NYSE holidays and weekends", () => {
     expect(closedDay("2026-11-26")).toBe("Thanksgiving");
-    expect(closedDay("2026-11-28")).toBe("a weekend");
+    expect(closedDay("2026-11-28")).toBeNull(); // weekends aren't flagged: Berkshire really publishes on Saturdays
     expect(closedDay("2026-11-27")).toBeNull(); // early close is still a trading day
     expect(closedDay("2026-11-25")).toBeNull();
   });
 
   it("flags an event projected onto Thanksgiving; the same event with a company date is not flagged", () => {
-    const [mrvl, cfirm, ok] = flagClosed([ev("MRVL", "2026-11-26"), ev("XYZ", "2026-11-26", { o: "https://example.com/release" }), ev("CRM", "2026-11-25")]);
+    const [mrvl, cfirm, ok, done] = flagClosed([ev("MRVL", "2026-11-26"), ev("XYZ", "2026-11-26", { o: "https://example.com/release" }), ev("CRM", "2026-11-25"), ev("OLD", "2026-11-26", { eA: 1.2 })]);
     expect(mrvl.c).toBe("Thanksgiving");
     expect(cfirm.c).toBeUndefined();
     expect(ok.c).toBeUndefined();
+    expect(done.c).toBeUndefined(); // results are in: it happened
   });
 });
 
@@ -85,5 +86,20 @@ describe("0045 closed-day projections through the worker", () => {
     expect(r.next).toMatchObject({ date: "2026-11-26", closed: "Thanksgiving" });
     expect(r.read[0]).toMatch(/not confirmed/i);
     expect(r.read[0]).not.toMatch(/reports Q3 on/);
+  });
+});
+
+describe("0045 closed-day projections in the .ics feed and with a company date", () => {
+  it("a calendar entry on a holiday says the date isn't confirmed", async () => {
+    const { buildIcs } = await import("../../shared/depth");
+    const out = buildIcs([{ symbol: "MRVL", name: "Marvell", date: "2026-11-26", session: "", quarter: 3, year: 2027, epsE: 1.11, url: "https://x/t/MRVL", closed: "Thanksgiving" }], new Date("2026-11-05T00:00:00Z"));
+    expect(out).toContain("SUMMARY:MRVL earnings · date not confirmed");
+  });
+
+  it("a company-announced date is never flagged, even on a holiday", () => {
+    const O: DateOverrides = { MRVL: { date: "2026-11-26", hour: "amc", quarter: 3, year: 2027, source: "https://example.com/r", checked: "2026-11-05" } };
+    const rows = applyToRows("MRVL", [mrvlRow], O, "2026-11-05");
+    expect(rows[0].source).toBe("https://example.com/r"); // the worker skips closedDay when a source is set
+    expect(flagClosed([ev("MRVL", "2026-11-26", { o: "https://example.com/r" })])[0].c).toBeUndefined();
   });
 });
