@@ -16,6 +16,7 @@ test.describe("Moon Club help & support", () => {
     // No links out of kids mode.
     await expect(page.locator(".k-support a[href^='http']")).toHaveCount(0);
     await expect(page.locator(".k-support a[href^='mailto']")).toHaveCount(0);
+    await expect(page.getByTestId("support-email")).toHaveText("support@mutaafaziz.com");
 
     const form = page.getByRole("form", { name: "Contact us" });
     await expect(form).toContainText("don't include your child's name");

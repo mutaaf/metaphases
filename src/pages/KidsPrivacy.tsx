@@ -45,7 +45,7 @@ export function PrivacyPage() {
       </section>
       <section className="k-section" data-testid="privacy-support">
         <h2>When a grown-up writes to us</h2>
-        <p>The <a href={href("/kids/support")} onClick={(e) => { e.preventDefault(); navigate("/kids/support"); }}>Help &amp; support</a> page has a contact form for grown-ups. It is the only place we keep anything you send.</p>
+        <p>The <a href={href("/kids/support")} onClick={(e) => { e.preventDefault(); navigate("/kids/support"); }}>Help &amp; support</a> page has a contact form for grown-ups. It is the only place we keep anything you send. Emails to <b>support@mutaafaziz.com</b> go straight to Mutaaf's inbox and are only used to reply.</p>
         <ul className="k-list">
           <li><b>What we keep.</b> Your question, and only if you add them, a reply email and your device or app version, plus the time it arrived.</li>
           <li><b>How long.</b> Up to 180 days, then it's deleted automatically. We may delete it sooner, once we've replied.</li>
