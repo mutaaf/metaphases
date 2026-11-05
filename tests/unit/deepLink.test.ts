@@ -18,5 +18,8 @@ describe("isDeepLink (0025)", () => {
     expect(isDeepLink("/", "?t=")).toBe(false);
     expect(isDeepLink("/compass", "")).toBe(false);
     expect(isDeepLink("/t/", "")).toBe(false);
+    // Only what App.tsx actually opens as a sheet counts.
+    expect(isDeepLink("/t/123", "")).toBe(false);
+    expect(isDeepLink("/t/ABCDEFGHIJK", "")).toBe(false);
   });
 });

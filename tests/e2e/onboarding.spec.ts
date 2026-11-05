@@ -29,14 +29,13 @@ test.describe("deep links on a first visit", () => {
     await expect(picker(page)).toHaveCount(0);
   });
 
-  test("/today shows the stories with no picker, and the inline switch sets the lens and persists", async ({ page }) => {
+  test("/today shows the stories with no picker, and its lens switch sets the lens and persists", async ({ page }) => {
     await page.goto("./today");
     await expect(page.locator(".story")).toBeVisible();
+    await page.waitForTimeout(3000);
     await expect(picker(page)).toHaveCount(0);
-    const note = page.locator(".lens-note");
-    await expect(note).toContainText(/plain English/i);
-    await note.getByRole("button", { name: /switch to trader/i }).click();
-    await expect(note).toHaveCount(0);
+    await expect(page.locator(".lens-note")).toHaveCount(0); // Today carries its own "Viewing as" switch
+    await page.locator("main .lens-switch").getByRole("button", { name: "Trader" }).click();
     expect(await lens(page)).toBe("trader");
     await page.reload();
     await expect(page.locator(".app")).toHaveClass(/lens-trader/);
@@ -45,7 +44,8 @@ test.describe("deep links on a first visit", () => {
 
   test("dismissing the inline note keeps plain English", async ({ page }) => {
     await page.goto("./t/WES");
-    const note = page.locator(".sheet .lens-note"); // the sheet covers the page, so the note rides in it
+    await expect(page.locator(".lens-note")).toHaveCount(1); // only in the sheet, which covers the page
+    const note = page.locator(".sheet .lens-note");
     await note.getByRole("button", { name: /keep plain english/i }).click();
     await expect(note).toHaveCount(0);
     expect(await lens(page)).toBe("everyday");
@@ -84,6 +84,18 @@ test.describe("the picker on a plain first visit", () => {
     await expect(page.locator(".sheet[role=dialog]")).toBeVisible();
     expect(new URL(page.url()).searchParams.get("t")).toBe("WES");
     expect(await lens(page)).toBe("everyday");
+    // Focus moves into the sheet that is now on top, and Tab stays inside it.
+    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest(".sheet"))).toBe(true);
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => !!document.activeElement?.closest(".sheet"))).toBe(true);
+  });
+
+  test("the search hotkey waits until the picker is answered", async ({ page }) => {
+    await page.goto("./");
+    await expect(picker(page)).toBeVisible();
+    await page.keyboard.press("/");
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("dialog")).toHaveCount(1);
   });
 
   test("choosing 'I invest for the long run' keeps the sheet that's open (phone too)", async ({ page }) => {

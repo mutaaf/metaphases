@@ -33,8 +33,8 @@ function LensPickerDialog() {
     // "Learning with our kid" opens kids mode once; the home page stays the grown-up calendar (everyday lens).
     actions.setPref("lens", lens === "kids" ? "everyday" : lens);
     if (lens === "kids") { navigate("/kids", true); return; }
-    // Only a bare home page moves to Today; a sheet or anything else in the URL stays put.
-    if (lens === "everyday" && matchMedia(PHONE).matches && appPath() === "/" && !location.search) navigate("/today", true);
+    // Only the home page moves to Today; an open sheet (?t=) stays put.
+    if (lens === "everyday" && matchMedia(PHONE).matches && appPath() === "/" && !new URLSearchParams(location.search).get("t")) navigate("/today", true);
   };
   // Closing (× or Esc) means "plain English is fine": it sets the lens and closes only the picker.
   const close = () => actions.setPref("lens", "everyday");
