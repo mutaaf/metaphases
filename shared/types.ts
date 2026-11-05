@@ -15,7 +15,7 @@ export interface EarningsEvent {
   rA: number | null; // revenue actual
   t: 0 | 1; // 1 = in the curated Metaphases universe, 0 = large untracked reporter
   o?: string; // the company's announcement URL when its date overrides Finnhub's (data/date-overrides.json)
-  c?: string; // a projected date on a closed-market day ("Thanksgiving", "a weekend"): certainly not confirmed (0045)
+  c?: string; // a projected date on an NYSE holiday ("Thanksgiving"): not a real date yet (0045)
 }
 
 export interface CalendarResponse {
