@@ -46,6 +46,12 @@ export const test = base.extend<{ lens: "trader" | "everyday" | "kids" | "unset"
       const input = { s, nick: s, range, move: range === "1d" ? -2.1 : -3.4, market: range === "1d" ? -1.6 : -2.5, sector: { etf: "RSPC", name: "the TV, games and internet companies", move: range === "1d" ? -2.4 : -3.9 }, report: null, dividend: null, normal: range === "1d" ? 1.4 : 3.2, asOf: "2026-10-30" };
       r.fulfill({ contentType: "application/json", body: JSON.stringify({ input, why: null, warnings: [] }) });
     });
+    // Moon Club support form: accepts any non-empty question (the worker's validation is unit-tested).
+    await page.route("**/api/kids/support", (r) => {
+      const b = r.request().postDataJSON() ?? {};
+      if (typeof b.message !== "string" || b.message.trim().length < 5) return r.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Please write your question." }) });
+      r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, id: "8215000000000-abcd1234" }) });
+    });
     // Logos come from a third-party CDN; keep tests hermetic.
     await page.route("https://static2.finnhub.io/**", (r) => r.fulfill({ status: 404, body: "" }));
     await use(page);
