@@ -90,7 +90,7 @@ export function quartersFrom(series: Record<string, Pt[]> | undefined, sharesMil
 }
 
 // ── ICS (RFC 5545) ─────────────────────────────────────────────────────
-export interface IcsItem { symbol: string; name: string; date: string; session: Session; quarter: number; year: number; epsE: number | null; cur?: string; url: string }
+export interface IcsItem { symbol: string; name: string; date: string; session: Session; quarter: number; year: number; epsE: number | null; cur?: string; url: string; /** Projected onto a market holiday (0045): the entry says the date isn't confirmed. */ closed?: string }
 const SESSION_TEXT: Record<Session, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "time not yet confirmed" };
 const escText = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 
@@ -119,7 +119,7 @@ export function buildIcs(items: IcsItem[], stamp: Date): string {
       `DTSTAMP:${dt}`,
       `DTSTART;VALUE=DATE:${it.date.replace(/-/g, "")}`,
       `DTEND;VALUE=DATE:${shift(it.date, 1).replace(/-/g, "")}`,
-      `SUMMARY:${escText(`${it.symbol} earnings · ${SESSION_TEXT[it.session]}`)}`,
+      `SUMMARY:${escText(`${it.symbol} earnings · ${it.closed ? "date not confirmed" : SESSION_TEXT[it.session]}`)}`,
       `DESCRIPTION:${escText(`${it.name} reports Q${it.quarter} ${it.year} ${SESSION_TEXT[it.session]}.${est} Full read: ${it.url}`)}`,
       `URL:${it.url}`,
       "TRANSP:TRANSPARENT",

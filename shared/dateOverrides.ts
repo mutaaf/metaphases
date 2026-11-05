@@ -108,20 +108,18 @@ export function validateOverrides(raw: unknown, today: string): string[] {
 }
 
 /**
- * Why the market is closed on `d` ("Thanksgiving", "a weekend"), or null on a trading day (early closes trade).
- * A report projected onto a closed day is certainly not a confirmed date (0045).
+ * The NYSE holiday on `d` ("Thanksgiving"), or null on a trading day (early closes trade). A feed's projected
+ * report on a US market holiday is almost surely not the real date (0045). Weekends are deliberately not
+ * flagged: some companies really do publish then (Berkshire releases on Saturdays).
  */
 export function closedDay(d: string): string | null {
-  const h = HOLIDAYS.find((x) => x.date === d);
-  if (h) return h.name;
-  const wd = new Date(d + "T12:00:00Z").getUTCDay();
-  return wd === 0 || wd === 6 ? "a weekend" : null;
+  return HOLIDAYS.find((x) => x.date === d)?.name ?? null;
 }
 
-/** Flags calendar events projected onto a closed-market day (`c`), unless the company announced the date (`o`). */
+/** Flags upcoming calendar events projected onto a market holiday (`c`), unless the company announced the date (`o`) or results are in. */
 export function flagClosed(events: EarningsEvent[]): EarningsEvent[] {
   return events.map((e) => {
-    const c = e.o ? null : closedDay(e.d);
+    const c = e.o || e.eA != null ? null : closedDay(e.d);
     return c ? { ...e, c } : e;
   });
 }

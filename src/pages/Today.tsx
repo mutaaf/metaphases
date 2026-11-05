@@ -46,7 +46,7 @@ function ReportCard({ s, today }: { s: Extract<Story, { kind: "report" }>; today
       <span className="st-why">{why}</span>
       <div className="st-co"><Tile s={s.e.s} size={64} force="logo" /><div><h2>{name}</h2><span className="eyebrow">{s.e.s}</span></div></div>
       <p className="st-does">{whatTheyDo(name, data?.profile?.industry ?? UNIVERSE[s.e.s]?.ind)}</p>
-      <p className="st-when"><Phase h={s.e.h} size={26} /> Reports {whenPlain(s.e.d, s.e.h, today)}</p>
+      <p className="st-when"><Phase h={s.e.h} size={26} /> {s.e.c ? "Report date not confirmed yet" : <>Reports {whenPlain(s.e.d, s.e.h, today)}</>}</p>
       <dl className="st-stats">
         <div><dt>Wall Street expects</dt><dd>{s.e.eE != null ? `${epsIn(s.e.eE, curOf(s.e.s))} a share` : "—"}{s.e.eE != null && !isUsd(curOf(s.e.s)) && <span className="muted small"> in {currencyName(curOf(s.e.s))}, not dollars</span>}</dd></div>
         <div><dt>How much it moves</dt><dd>{data ? (data.expectedMove != null ? `±${data.expectedMove.toFixed(1)}%` : "—") : <Skeleton w={70} h={22} />}</dd></div>
@@ -61,7 +61,7 @@ function ReportCard({ s, today }: { s: Extract<Story, { kind: "report" }>; today
 
 function storyShare(s: Story, today: string): { kind: string; title: string; text: string } | null {
   if (s.kind === "mood") return { kind: "mood", title: "The market's mood today", text: `${moodPlain(s.score).headline} — Market Mood ${s.score}/100.` };
-  if (s.kind === "report") return { kind: `t/${s.e.s}`, title: `${s.e.s} reports ${whenPlain(s.e.d, s.e.h, today)}`, text: `${nameOf(s.e.s)} reports ${whenPlain(s.e.d, s.e.h, today)}.` };
+  if (s.kind === "report") return { kind: `t/${s.e.s}`, title: s.e.c ? `${s.e.s}: report date not confirmed yet` : `${s.e.s} reports ${whenPlain(s.e.d, s.e.h, today)}`, text: s.e.c ? `${nameOf(s.e.s)}'s report date isn't confirmed yet.` : `${nameOf(s.e.s)} reports ${whenPlain(s.e.d, s.e.h, today)}.` };
   if (s.kind === "macro") return { kind: "week", title: s.m.name, text: `${s.m.name} ${whenPlain(s.m.date, "", today).replace(" (time not confirmed yet)", "")}.` };
   return null;
 }

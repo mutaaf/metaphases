@@ -696,7 +696,7 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
     const sym = syms[i];
     for (const e of applyToRows(sym, r.value?.earningsCalendar ?? [], OVERRIDES, today)) {
       if (e.date < today) continue;
-      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: e.epsEstimate ?? null, cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}` });
+      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: e.epsEstimate ?? null, cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}) });
     }
   });
   items.sort((a, b) => a.date.localeCompare(b.date));
@@ -716,9 +716,9 @@ async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, c
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const svg = await cached(`og:svg:v2:${sym}:${day}`, 21600, ctx, () => cardFor(sym, env, ctx));
+    const svg = await cached(`og:svg:v3:${sym}:${day}`, 21600, ctx, () => cardFor(sym, env, ctx));
     if (fmt === "svg") return new Response(svg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=21600" } });
-    const key = new Request(`https://cache.metaphases.internal/og-png-v2-${sym}-${day}`);
+    const key = new Request(`https://cache.metaphases.internal/og-png-v3-${sym}-${day}`);
     const hit = await caches.default.match(key);
     if (hit) return hit;
     const { renderPng } = await import("./og");
@@ -736,7 +736,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const svg = await cached(`story:svg:v2:${kind}:${day}`, 21600, ctx, async () => {
+    const svg = await cached(`story:svg:v3:${kind}:${day}`, 21600, ctx, async () => {
       if (kind === "kids") return storyKidsSvg();
       const rc = kind.match(/^kids-recap:(\d+)\.(\d+)\.(\d+)\.(n|-?[\d.]+)\.(\d)$/);
       if (rc) {
