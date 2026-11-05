@@ -30,6 +30,7 @@ import { AppNudge, AppPage } from "./KidsAppPage";
 import { GameNightLink, GardenLink, GrownUpPicks, LeagueLink, PackLink, SharedLinkNudge } from "./KidsLinks";
 import { isLeagueLinkCode, isLinkId } from "../../shared/kidsLinks";
 import { PrivacyPage } from "./KidsPrivacy";
+import { SupportPage } from "./KidsSupport";
 import { WhyCard } from "./KidsWhy";
 import { guessLearn, guessReveal, piggyTip } from "../../shared/kidsCoach";
 import { growRows } from "../../shared/kidsPacks";
@@ -370,6 +371,11 @@ function StoryPage() {
           </div>
         </>
       )}
+      <footer className="k-foot" aria-label="For grown-ups">
+        <a href={href("/kids/support")} onClick={(e) => { e.preventDefault(); navigate("/kids/support"); }}>Help &amp; support</a>
+        <span aria-hidden>·</span>
+        <a href={href("/kids/privacy")} onClick={(e) => { e.preventDefault(); navigate("/kids/privacy"); }}>Privacy</a>
+      </footer>
     </div>
   );
 }
@@ -1021,6 +1027,7 @@ function GrownUps() {
           <li><b>Luna, the AI helper,</b> uses a free model with a kid-safe prompt: simple words, money topics only, never advice, and she never asks for personal details. She can still make mistakes, so stay nearby.</li>
           <li>Nothing here is investment advice.</li>
           <li><a href={href("/kids/privacy")} onClick={(e) => { e.preventDefault(); navigate("/kids/privacy"); }}>Read the full privacy policy</a></li>
+          <li><a href={href("/kids/support")} onClick={(e) => { e.preventDefault(); navigate("/kids/support"); }}>Help &amp; support</a>: answers for grown-ups and a way to ask us a question.</li>
         </ul>
       </section>
       <section className="k-section">
@@ -1271,7 +1278,7 @@ export default function KidsApp() {
   const [gate, setGate] = useState(false);
   const points = pointsFor(progressOf(st));
   const lvl = levelFor(points);
-  useEffect(() => { if (!path.endsWith("/print")) document.title = path === "/kids/privacy" ? "Privacy policy · Moon Club and Metaphases Kids" : "Metaphases Kids: the Market Moon Club"; window.scrollTo({ top: 0 }); }, [path]);
+  useEffect(() => { if (!path.endsWith("/print")) document.title = path === "/kids/privacy" ? "Privacy policy · Moon Club and Metaphases Kids" : path === "/kids/support" ? "Moon Club help & support" : "Metaphases Kids: the Market Moon Club"; window.scrollTo({ top: 0 }); }, [path]);
   const lessonId = path.match(/^\/kids\/school\/([a-z-]+)(\/print)?$/);
   const lesson = lessonId ? LESSONS.find((l) => l.id === lessonId[1]) : undefined;
   if (lesson && lessonId?.[2]) return <WorksheetPage lesson={lesson} />;
@@ -1288,6 +1295,7 @@ export default function KidsApp() {
     path === "/kids/grownups" ? <GrownUps /> :
     path === "/kids/app" ? <AppPage Gate={ParentGate} /> :
     path === "/kids/privacy" ? <PrivacyPage /> :
+    path === "/kids/support" ? <SupportPage /> :
     path === "/kids/gamenight" ? <GameNightLink /> :
     path === "/kids/garden" ? <GardenLink /> :
     leagueCode && isLeagueLinkCode(leagueCode) ? <LeagueLink code={leagueCode} Gate={ParentGate} Setup={LeagueSetup} /> :

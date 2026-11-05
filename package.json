@@ -17,7 +17,8 @@
     "check": "npm run check:fast && playwright test",
     "refresh:data": "python3 scripts/build_universe.py && python3 scripts/refresh_etfs.py",
     "export:kids": "npx -y tsx scripts/export-kids-content.ts",
-    "packs:sign": "npx -y tsx scripts/sign-packs.ts"
+    "packs:sign": "npx -y tsx scripts/sign-packs.ts",
+    "support:inbox": "node scripts/support-inbox.mjs"
   },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",

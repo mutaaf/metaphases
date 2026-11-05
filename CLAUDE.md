@@ -8,6 +8,7 @@ Earnings calendar at **mutaafaziz.com/metaphases/**: a Cloudflare Worker on rout
 - `npm run typecheck` / `npm run build` / `npm run deploy`
 - `npm run check`: the CI gate (backlog validator + typecheck + vitest + build + Playwright on recorded fixtures with the clock frozen at 2026-10-31). `npm run check:fast` skips e2e.
 - `npm run refresh:data`: universe + ETF holdings (the weekly GitHub Action does this automatically)
+- `npm run support:inbox`: read the Moon Club support inbox (parents' messages from `/kids/support`, KV namespace `SUPPORT` id `2f2fec9876f6472e9d8d3018223a58ba`, remote), newest first. `-- --limit 50`, `-- --json`, `-- --delete <id>` once you've replied. Needs `wrangler login`. Messages expire after 180 days; rate-limit counters (`rl:` keys, hashed IPs) after an hour/2 days.
 - `npm run universe`: rebuild `data/universe.json` (needs FINNHUB_API_KEY in env, about 11 min at 60 req/min; resumable)
 
 ## Environment nuances (found the hard way)
