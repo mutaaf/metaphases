@@ -7,7 +7,8 @@ import { appPath, href, navigate, param, setParam, useLocation } from "./lib/rou
 import { actions, useStore } from "./lib/store";
 import { nowNY } from "./lib/dates";
 import { AiLayer, AiTopButton } from "./components/ai/mount";
-import { isEveryday, LensPicker, LensSwitch, TabBar } from "./components/Everyday";
+import { SHARE_TICKER } from "./lib/deepLink";
+import { isEveryday, LensNote, LensPicker, LensSwitch, TabBar } from "./components/Everyday";
 
 // The calendar ships in the main bundle; every other page loads on demand.
 const WatchlistPage = lazy(() => import("./pages/Watchlist"));
@@ -62,7 +63,7 @@ export default function App() {
 
   // Share URLs: /t/AAPL opens the calendar with AAPL's sheet on top.
   useEffect(() => {
-    const m = path.match(/^\/t\/([A-Za-z.\-]{1,10})$/);
+    const m = path.match(SHARE_TICKER);
     if (m) navigate(`/?t=${m[1].toUpperCase()}`, true);
   }, [path]);
 
@@ -73,6 +74,7 @@ export default function App() {
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
+      if (document.querySelector(".lens-scrim")) return; // the lens picker is up: answer it first
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setSearch(true); }
       else if (e.key === "/" && !(e.target as HTMLElement).closest("input,textarea")) { e.preventDefault(); setSearch(true); }
     };
@@ -117,7 +119,7 @@ export default function App() {
       </header>
       <div className="frame">
         {!focusRoute && <MacroStrip />}
-        <main id="main" tabIndex={-1}><Suspense fallback={<PageSkeleton />}>{page}</Suspense></main>
+        <main id="main" tabIndex={-1}>{!t && !focusRoute && <LensNote />}<Suspense fallback={<PageSkeleton />}>{page}</Suspense></main>
         <footer className="legend">
           <div className="legend-keys">
             <span className="eyebrow">Legend:</span>

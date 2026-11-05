@@ -1,12 +1,12 @@
 ---
 id: 0025
 title: Shared deep links render first; the "How do you invest?" picker must never cover them
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: user-value
 created: 2026-11-02
-pr:
+pr: 57
 by: critic
 ---
 
@@ -39,3 +39,6 @@ e2e `onboarding.spec.ts`: fresh context per deep-link route asserts no picker; `
 
 ## Out of scope
 Changing what each lens shows.
+
+## Builder note 2026-11-05 (PR #57)
+Shipped to the acceptance criteria. On `/`, the picker still opens on load (with a 44px close that keeps plain English); "ask after the first interaction" from the What list wasn't done, and is a follow-up if the critic still sees it as a problem. A visitor who lands on a shared link doesn't see the picker for the rest of that visit. The lens stays "unset" until they choose (the inline note in the page or sheet, or the Viewing-as switch on Today and Hype Check), so a later fresh visit to `/` still asks.
