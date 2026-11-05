@@ -10,7 +10,7 @@ import { AiPreviewMount } from "./ai/mount";
 import { useDialog } from "../lib/dialog";
 import { IcsButtons, Peers, PriceChart, QuarterTrend } from "./Depth";
 import { whatTheyDo } from "../lib/plain";
-import { isEveryday } from "./Everyday";
+import { isEveryday, LensNote } from "./Everyday";
 import { navigate } from "../lib/router";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
 
@@ -151,6 +151,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
           <div className="sheet-body">{[90, 140, 200, 160].map((h, i) => <Skeleton key={i} h={h} />)}</div>
         ) : data && (
           <div className="sheet-body">
+            <LensNote />
             {data.warnings.length > 0 && <Notice tone="warn">Partial picture: {data.warnings.join(" ")}</Notice>}
 
             {data.next && (

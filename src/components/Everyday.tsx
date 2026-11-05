@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useDialog } from "../lib/dialog";
 import { appPath, href, navigate, useLocation } from "../lib/router";
 import { actions, useStore } from "../lib/store";
+import { isDeepLink } from "../lib/deepLink";
 import { Mark } from "./bits";
 
 const PHONE = "(max-width: 760px)";
@@ -15,21 +16,35 @@ export function useIsPhone() {
 }
 export const isEveryday = (lens: string) => lens !== "trader";
 
-/** First visit: "how do you invest?" — sets the lens, never blocks for long. */
+// 0025: a visitor who arrives on a shared link (a sheet, Hype Check, Today) sees what was shared, never
+// the picker. Decided once, from the URL the app was opened at.
+const landedDeep = isDeepLink(appPath(), location.search);
+
+/** First visit: "how do you invest?" — sets the lens, never blocks for long, never covers a shared link. */
 export function LensPicker() {
   const { prefs } = useStore();
+  if (prefs.lens !== "unset" || landedDeep) return null;
+  return <LensPickerDialog />;
+}
+
+function LensPickerDialog() {
   const ref = useRef<HTMLDivElement>(null);
   const choose = (lens: "everyday" | "trader" | "kids") => {
     // "Learning with our kid" opens kids mode once; the home page stays the grown-up calendar (everyday lens).
     actions.setPref("lens", lens === "kids" ? "everyday" : lens);
     if (lens === "kids") { navigate("/kids", true); return; }
-    if (lens === "everyday" && matchMedia(PHONE).matches && appPath() === "/") navigate("/today", true);
+    // Only a bare home page moves to Today; a sheet or anything else in the URL stays put.
+    if (lens === "everyday" && matchMedia(PHONE).matches && appPath() === "/" && !location.search) navigate("/today", true);
   };
-  useDialog(ref, () => choose("everyday"));
-  if (prefs.lens !== "unset") return null;
+  // Closing (× or Esc) means "plain English is fine": it sets the lens and closes only the picker.
+  const close = () => actions.setPref("lens", "everyday");
+  useDialog(ref, close, { top: true });
   return (
     <div className="drawer-scrim center lens-scrim">
       <div className="lens-pick" ref={ref} role="dialog" aria-modal="true" aria-labelledby="lens-title">
+        <button className="lens-close" onClick={close} aria-label="Close, keep plain English">
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" /></svg>
+        </button>
         <Mark size={28} />
         <h2 id="lens-title">How do you <em>invest</em>?</h2>
         <p className="muted">We'll set Metaphases up to fit. You can switch any time.</p>
@@ -47,6 +62,21 @@ export function LensPicker() {
         </button>
       </div>
     </div>
+  );
+}
+
+/** Instead of the picker on a shared link: one quiet line inside the page. Gone once the lens is set. */
+export function LensNote() {
+  const { prefs } = useStore();
+  if (prefs.lens !== "unset" || !landedDeep) return null;
+  return (
+    <p className="lens-note" role="note">
+      <span>In plain English</span>
+      <button onClick={() => actions.setPref("lens", "trader")}>Switch to Trader</button>
+      <button className="lens-note-x" onClick={() => actions.setPref("lens", "everyday")} aria-label="Keep plain English">
+        <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" /></svg>
+      </button>
+    </p>
   );
 }
 

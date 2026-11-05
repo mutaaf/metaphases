@@ -7,7 +7,7 @@ import { appPath, href, navigate, param, setParam, useLocation } from "./lib/rou
 import { actions, useStore } from "./lib/store";
 import { nowNY } from "./lib/dates";
 import { AiLayer, AiTopButton } from "./components/ai/mount";
-import { isEveryday, LensPicker, LensSwitch, TabBar } from "./components/Everyday";
+import { isEveryday, LensNote, LensPicker, LensSwitch, TabBar } from "./components/Everyday";
 
 // The calendar ships in the main bundle; every other page loads on demand.
 const WatchlistPage = lazy(() => import("./pages/Watchlist"));
@@ -117,7 +117,7 @@ export default function App() {
       </header>
       <div className="frame">
         {!focusRoute && <MacroStrip />}
-        <main id="main" tabIndex={-1}><Suspense fallback={<PageSkeleton />}>{page}</Suspense></main>
+        <main id="main" tabIndex={-1}><LensNote /><Suspense fallback={<PageSkeleton />}>{page}</Suspense></main>
         <footer className="legend">
           <div className="legend-keys">
             <span className="eyebrow">Legend:</span>

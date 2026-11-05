@@ -1,7 +1,7 @@
 ---
 id: 0025
 title: Shared deep links render first; the "How do you invest?" picker must never cover them
-status: ready
+status: in-progress
 priority: P0
 size: S
 lens: user-value

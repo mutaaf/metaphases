@@ -4,6 +4,14 @@
 /* ── Lens picker ── */
 .lens-scrim { z-index: 70; }
 .lens-pick { width: min(480px, calc(100% - 32px)); background: var(--paper); border: 1.5px solid var(--ink); box-shadow: var(--shadow); padding: var(--s6) var(--s5) var(--s5); display: grid; gap: var(--s3); animation: drop .25s; color: var(--ink); }
+.lens-pick { position: relative; }
+.lens-close { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink-2); border: 1px solid transparent; }
+.lens-close:hover, .lens-close:focus-visible { color: var(--ink); border-color: var(--line-2); }
+.lens-note { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; margin: var(--s2) 0 var(--s3); padding: 0 0 0 var(--s3); border: 1px dashed var(--line-2); font: 500 10px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); max-width: 100%; }
+.lens-note span { margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lens-note button { white-space: nowrap; flex: none; }
+.lens-note button { min-height: 40px; padding: 0 var(--s2); font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--accent); }
+.lens-note .lens-note-x { min-width: 40px; padding: 0; display: grid; place-items: center; color: var(--ink-2); }
 .lens-pick .mark { color: var(--accent); }
 .lens-pick h2 { font: 800 34px/1 var(--display); letter-spacing: -.04em; margin: var(--s2) 0 0; }
 .lens-pick h2 em { font: italic 400 1.12em/0.8 var(--serif); color: var(--accent); }
