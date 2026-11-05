@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { missingDays } from "../../src/lib/partial";
+import { missingDays, needsRetry } from "../../src/lib/partial";
 
 describe("missingDays (0026)", () => {
   it("collects single days and week ranges inside the window, weekdays only, deduped", () => {
@@ -17,5 +17,15 @@ describe("missingDays (0026)", () => {
   });
   it("is empty for a clean window", () => {
     expect(missingDays([], "2026-09-19", "2026-10-31")).toEqual([]);
+  });
+});
+
+// 0047: a progress note ("still checking N overseas names") is not a failure: no quiet retry, no "busy" notice.
+describe("needsRetry", () => {
+  it("retries only for real failures, never for a pending count", () => {
+    expect(needsRetry({ warnings: [], pending: 40 })).toBe(false);
+    expect(needsRetry({ warnings: [] })).toBe(false);
+    expect(needsRetry({ warnings: ["Couldn't load 2026-11-05 — showing the rest."], pending: 3 })).toBe(true);
+    expect(needsRetry(null)).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../../worker/index";
 import universe from "../../data/universe.json" with { type: "json" };
-import { aliasMap, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, SUPP_PER_REQUEST, SUPP_TTL_MS, type Universe } from "../../shared/calendarSupplement";
+import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, SUPP_PER_REQUEST, SUPP_TTL_MS, type Universe } from "../../shared/calendarSupplement";
 
 // 0024: Finnhub's day/range calendar has no Toyota, Sony, Honda, Novo Nordisk or JD rows while each of their
 // `symbol=` answers (what the sheet reads) does. The calendar now merges those rows in, once, and renames
@@ -72,6 +72,44 @@ describe("calendar supplement (pure)", () => {
   });
 });
 
+describe("supplement store converges (0047)", () => {
+  const entry = (at: number, s: string) => ({ at, rows: [ev(s, "2026-11-05")] });
+  const fakeStore = (initial: Record<string, any> = {}) => {
+    let doc = initial;
+    return { read: async () => structuredClone(doc), write: async (d: any) => { doc = structuredClone(d); }, get doc() { return doc; } };
+  };
+
+  it("two interleaved refreshes over different symbols both survive", async () => {
+    const store = fakeStore();
+    const seenA = await store.read(), seenB = await store.read(); // both read the empty document
+    await commitSupp(store, seenA, { TM: entry(1, "TM"), SONY: entry(1, "SONY") });
+    await commitSupp(store, seenB, { HMC: entry(2, "HMC"), NVO: entry(2, "NVO") });
+    expect(Object.keys(store.doc).sort()).toEqual(["HMC", "NVO", "SONY", "TM"]);
+  });
+
+  it("never writes back less than it read, even if the stored copy went missing", async () => {
+    const store = fakeStore();
+    const seen = { TM: entry(5, "TM"), SONY: entry(5, "SONY") }; // what this request read before the copy was evicted
+    const out = await commitSupp(store, seen, { HMC: entry(6, "HMC") });
+    expect(Object.keys(out).sort()).toEqual(["HMC", "SONY", "TM"]);
+    expect(Object.keys(store.doc).sort()).toEqual(["HMC", "SONY", "TM"]);
+  });
+
+  it("drops names that are no longer on the supplement list", async () => {
+    const store = fakeStore({ OLD: entry(1, "OLD") });
+    await commitSupp(store, {}, { TM: entry(2, "TM") }, ["TM", "SONY"]);
+    expect(Object.keys(store.doc)).toEqual(["TM"]);
+  });
+
+  it("keeps the newer answer when two requests refreshed the same symbol", async () => {
+    const store = fakeStore({ TM: entry(10, "TM") });
+    await commitSupp(store, { TM: entry(1, "TM") }, { SONY: entry(3, "SONY") });
+    expect(store.doc.TM.at).toBe(10);
+    await commitSupp(store, {}, { TM: entry(20, "TM") });
+    expect(store.doc.TM.at).toBe(20);
+  });
+});
+
 // ── through the worker ──────────────────────────────────────────────────
 class MemCache {
   store = new Map<string, string>();
@@ -110,7 +148,7 @@ const minutePasses = () => { const st = (globalThis as any).caches.default.store
 const get = async (from: string, to: string) => {
   const r = await worker.fetch(new Request(`https://mutaafaziz.com/metaphases/api/calendar?from=${from}&to=${to}`), env, ctx);
   await Promise.all(pending); pending = [];
-  return r.json() as Promise<{ events: any[]; warnings: string[] }>;
+  return r.json() as Promise<{ events: any[]; warnings: string[]; pending?: number }>;
 };
 
 describe("calendar supplement in the worker", () => {
@@ -135,7 +173,8 @@ describe("calendar supplement in the worker", () => {
     expect(r.events.filter((e) => e.s === "HMC")).toEqual([]);
     expect((await get("2026-11-09", "2026-11-13")).events.filter((e) => e.s === "HMC")).toEqual([expect.objectContaining({ d: "2026-11-10", h: "bmo" })]);
     expect(symCalls.length).toBe(n);
-    expect(r.warnings).toEqual([]); // everything fetched: no "still checking" note
+    expect(r.warnings).toEqual([]);
+    expect(r.pending ?? 0).toBe(0); // everything fetched: nothing left to check
   });
 
   it("refreshes at most once a minute per colo, however many visitors arrive at once", async () => {
@@ -147,10 +186,10 @@ describe("calendar supplement in the worker", () => {
     expect(symCalls.length).toBe(before);
   });
 
-  it("says when overseas names haven't been checked yet, so a missing row never reads as 'doesn't report'", async () => {
+  it("counts overseas names not checked yet as pending, never as a warning (0047: progress isn't a failure)", async () => {
     const r = await get("2026-11-05", "2026-11-05");
-    expect(r.warnings.some((w) => /Still checking \d+ overseas companies/.test(w))).toBe(true);
-    expect(r.warnings.some((w) => /^Couldn't load/.test(w))).toBe(false); // not a failed day
+    expect(r.pending).toBe(supplementSymbols(U).length - SUPP_PER_REQUEST);
+    expect(r.warnings).toEqual([]); // every call succeeded: nothing failed, so nothing to retry or flag
   });
 
   it("keeps the feed's own row when it has one, and renames a home-listing row", async () => {

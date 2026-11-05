@@ -330,6 +330,9 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
           {failedDays.size === 0 ? "Part of the calendar didn't load yet — the market data service is busy." : failedDays.size === 1 ? `${fmtLong([...failedDays][0])} didn't load yet — the market data service is busy.` : `${failedDays.size} days didn't load yet — the market data service is busy.`} Retrying in the background; everything else is current.
         </Notice>
       )}
+      {data && !data.warnings.length && (data.pending ?? 0) > 0 && (
+        <Notice>Some overseas companies' report dates are still being checked, so a few may be missing for now.</Notice>
+      )}
       {prefs.filter === "holdings" && store.holdings.length === 0 && (
         <Notice>You haven't added holdings yet. <button className="link" onClick={() => navigate("/compass")}>Open Compass</button> to paste them in — funds count too.</Notice>
       )}

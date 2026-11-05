@@ -1,6 +1,7 @@
 import type { CalendarResponse, MacroResponse, TickerResponse } from "../../shared/types";
 import { useEffect, useState } from "react";
 import { BASE } from "./router";
+import { needsRetry } from "./partial";
 
 const mem = new Map<string, Promise<unknown>>();
 async function fetchJson(path: string) {
@@ -28,6 +29,7 @@ async function fetchCalendar(path: string): Promise<CalendarResponse> {
   parts.forEach((p, i) => {
     if (p.status === "rejected") { out.warnings.push(`Couldn't load ${chunks[i][0]}–${chunks[i][1]} — showing the rest.`); return; }
     out.warnings.push(...(p.value.warnings ?? []));
+    if (p.value.pending) out.pending = Math.max(out.pending ?? 0, p.value.pending); // one global count, repeated per chunk
     for (const e of p.value.events ?? []) {
       const k = `${e.s}|${e.d}`;
       if (e.d < from || e.d > to || seen.has(k)) continue;
@@ -63,8 +65,7 @@ export function useApi<T>(path: string | null): Loadable<T> {
           if (!live) return;
           setSt({ data, error: null, loading: false });
           // Partial result (some upstream calls were rate-limited): quietly retry twice.
-          const w = (data as { warnings?: string[] })?.warnings;
-          if (w?.length && attempt < 2) timer = setTimeout(() => load(`${path}${path.includes("?") ? "&" : "?"}_r=${attempt + 1}`, attempt + 1), 4000 * (attempt + 1));
+          if (needsRetry(data as { warnings?: string[] }) && attempt < 2) timer = setTimeout(() => load(`${path}${path.includes("?") ? "&" : "?"}_r=${attempt + 1}`, attempt + 1), 4000 * (attempt + 1));
         },
         (e) => {
           if (!live) return;

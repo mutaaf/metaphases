@@ -88,3 +88,24 @@ test("week and day views also say a failed day didn't load, and the notice count
   await expect(page.locator(".dayview")).toContainText("didn't load");
   await expect(page.locator(".dayview")).not.toContainText("No earnings");
 });
+
+test("a pending overseas check is not a failure: no 'busy' notice and no retries when every response is 200 (0047)", async ({ page }) => {
+  const read = (n: string) => JSON.parse(readFileSync(new URL(`../fixtures/${n}`, import.meta.url), "utf8"));
+  const oct = read("calendar-2026-10.json"), nov = read("calendar-2026-11.json");
+  const urls: string[] = [];
+  await page.route("**/api/calendar**", (r) => {
+    urls.push(r.request().url());
+    const to = new URL(r.request().url()).searchParams.get("to") ?? "";
+    const body = { ...(to < "2026-11-07" ? oct : nov), warnings: [], pending: 12 };
+    return r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("./");
+  await expect(page.locator(".page-head .dek")).toContainText(/companies report/);
+  await page.waitForTimeout(5000); // past the first quiet retry (4 s) a warning would schedule
+  await expect(page.locator(".notice-warn")).toHaveCount(0);
+  await expect(page.getByText(/service is busy/)).toHaveCount(0);
+  await expect(page.getByText(/still being checked/)).toBeVisible();
+  expect(urls.filter((u) => u.includes("_r=")).length).toBe(0);
+  expect(urls.length).toBeLessThanOrEqual(13);
+});
