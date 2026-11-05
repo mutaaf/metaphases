@@ -3,6 +3,7 @@
 // release as its source, and the company's date wins on the calendar, the sheet and share meta.
 // Curated by hand from company releases only. Every entry needs an https `source` and a `checked` date.
 import type { EarningsEvent, Session } from "./types";
+import { HOLIDAYS } from "./market";
 
 export interface DateOverride {
   date: string; // YYYY-MM-DD, the company's announced release date
@@ -104,4 +105,23 @@ export function validateOverrides(raw: unknown, today: string): string[] {
       bad(`checked ${v.checked} is more than ${MAX_CHECK_AGE} days old; re-read the source`);
   }
   return errs;
+}
+
+/**
+ * Why the market is closed on `d` ("Thanksgiving", "a weekend"), or null on a trading day (early closes trade).
+ * A report projected onto a closed day is certainly not a confirmed date (0045).
+ */
+export function closedDay(d: string): string | null {
+  const h = HOLIDAYS.find((x) => x.date === d);
+  if (h) return h.name;
+  const wd = new Date(d + "T12:00:00Z").getUTCDay();
+  return wd === 0 || wd === 6 ? "a weekend" : null;
+}
+
+/** Flags calendar events projected onto a closed-market day (`c`), unless the company announced the date (`o`). */
+export function flagClosed(events: EarningsEvent[]): EarningsEvent[] {
+  return events.map((e) => {
+    const c = e.o ? null : closedDay(e.d);
+    return c ? { ...e, c } : e;
+  });
 }
