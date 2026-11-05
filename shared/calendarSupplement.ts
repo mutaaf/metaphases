@@ -115,3 +115,26 @@ export function mergeSupplement(events: EarningsEvent[], doc: SuppDoc, from: str
   }
   return extra.length ? [...events, ...extra] : events;
 }
+
+/** Per symbol, the newer answer wins; symbols in either document are kept. */
+export function mergeDocs(...docs: SuppDoc[]): SuppDoc {
+  const out: SuppDoc = {};
+  for (const d of docs) for (const [s, e] of Object.entries(d ?? {})) if (!out[s] || e.at >= out[s].at) out[s] = e;
+  return out;
+}
+
+/**
+ * 0047: write refreshed entries without erasing anyone else's. The cache copy is re-read right before the
+ * write and merged with what this request read earlier and what it just fetched, so a concurrent refresh (or a
+ * cache node with an older copy) can't erase what this request saw. It narrows the race, not closes it:
+ * the cache has no compare-and-swap, so the UI treats the count as progress, never as a failure. One document, not a key per symbol: ~64 cache reads per calendar request would eat the
+ * subrequest budget.
+ */
+export async function commitSupp(store: { read(): Promise<SuppDoc>; write(d: SuppDoc): Promise<void> }, seen: SuppDoc, updates: SuppDoc, keep?: readonly string[]): Promise<SuppDoc> {
+  const latest = await store.read().catch(() => ({}) as SuppDoc);
+  const doc = mergeDocs(seen, latest, updates);
+  // Names no longer on the supplement list are dropped, so stale rows can't linger forever.
+  if (keep) { const k = new Set(keep); for (const s of Object.keys(doc)) if (!k.has(s)) delete doc[s]; }
+  await store.write(doc);
+  return doc;
+}

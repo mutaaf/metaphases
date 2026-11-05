@@ -23,7 +23,10 @@ export interface CalendarResponse {
   to: string;
   events: EarningsEvent[];
   asOf: string;
+  /** Real failures only ("Couldn't load <day>"): the client says so and quietly retries (0026). */
   warnings: string[];
+  /** Overseas names whose dates haven't been checked yet (0024): progress, not a failure (0047). */
+  pending?: number;
 }
 
 export type Grade = "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C+" | "C" | "C-" | "D" | "F";

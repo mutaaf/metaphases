@@ -22,7 +22,7 @@ import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } fro
 import { periodKey, pickConsensus } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
-import { aliasMap, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
+import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -139,10 +139,14 @@ async function supplement(env: Env, ctx: ExecutionContext, today: string, refres
   if (!due.length) return doc;
   const from = addDays(today, -SUPP_BACK), to = addDays(today, SUPP_AHEAD);
   const got = await pool(due, 2, async (s) => suppRows(s, (await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?symbol=${encodeURIComponent(s)}&from=${from}&to=${to}&token=${env.FINNHUB_API_KEY}`)).earningsCalendar, homeListing(U as Universe, s)));
-  let changed = false;
-  got.forEach((r, i) => { if (r.status === "fulfilled") { doc[due[i]] = refreshEntry(doc[due[i]], r.value, today, Date.now()); changed = true; } });
-  if (changed) ctx.waitUntil(caches.default.put(SUPP_KEY, new Response(JSON.stringify(doc), { headers: { "Cache-Control": "public, max-age=604800", "Content-Type": "application/json" } })));
-  return doc;
+  const updates: SuppDoc = {};
+  got.forEach((r, i) => { if (r.status === "fulfilled") updates[due[i]] = refreshEntry(doc[due[i]], r.value, today, Date.now()); });
+  if (!Object.keys(updates).length) return doc;
+  // Read-merge-write (0047): never overwrite another refresh's progress with this request's older copy.
+  const write = (d: SuppDoc) => caches.default.put(SUPP_KEY, new Response(JSON.stringify(d), { headers: { "Cache-Control": "public, max-age=604800", "Content-Type": "application/json" } }));
+  const done = commitSupp({ read: readSupp, write }, doc, updates, SUPP_SYMBOLS);
+  ctx.waitUntil(done.catch(() => {}));
+  return { ...doc, ...updates };
 }
 
 const touchesSupp = (from: string, to: string, today: string) => to >= addDays(today, -SUPP_BACK) && from <= addDays(today, SUPP_AHEAD);
@@ -244,17 +248,18 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
   const loaded = new Set<string>();
   results.forEach((r, i) => (r.status === "fulfilled" ? (events.push(...r.value), loaded.add(days[i])) : warnings.push(`Couldn't load ${days[i]} — showing the rest.`)));
   const today = iso(todayNY());
+  let pending = 0;
   if (touchesSupp(from, to, today)) {
     // After the range calls, never alongside them; and no new calls at all if any upstream call failed,
     // even one a stale copy covered (0024: a rate limit must not become more calls).
     const doc = await supplement(env, ctx, today, !health.failed && warnings.length === 0);
     events = mergeSupplement(events, doc, from, to, (d) => loaded.has(d));
-    // Not fetched yet here (a cold cache): say so, never let an absent row read as "doesn't report".
-    const cold = unfetched(doc, SUPP_SYMBOLS);
-    if (cold) warnings.push(`Still checking ${cold} overseas companies' report dates — some may be missing for now.`);
+    // Not fetched yet here (a cold cache): count them so an absent row never reads as "doesn't report".
+    // A progress count, not a warning (0047): nothing failed, so the client mustn't say "busy" or retry.
+    pending = unfetched(doc, SUPP_SYMBOLS);
   }
   const fixed = flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U));
-  const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings };
+  const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings, ...(pending ? { pending } : {}) };
   return json(body, 600);
 }
 

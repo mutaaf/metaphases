@@ -18,3 +18,6 @@ export function missingDays(warnings: readonly string[], from: string, to: strin
   }
   return [...out].sort();
 }
+
+/** 0047: only a real failure is worth a quiet retry. A pending count (overseas names still being checked) isn't one. */
+export const needsRetry = (data: { warnings?: readonly string[] } | null | undefined) => (data?.warnings?.length ?? 0) > 0;

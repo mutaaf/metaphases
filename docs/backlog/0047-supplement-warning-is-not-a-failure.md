@@ -1,12 +1,12 @@
 ---
 id: 0047
 title: The calendar says "the market data service is busy" on every load, and refetches every week three times, because the overseas check never finishes
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-05
-pr:
+pr: 64
 by: critic
 ---
 
@@ -26,10 +26,10 @@ Likely cause: the supplement is one whole document in `caches.default`, read, pa
 
 ## Acceptance criteria
 - [ ] On production, 10 sequential `/api/calendar?from=<this Monday>&to=<this Friday>` calls 30 s apart, starting an hour after deploy: `warnings` is empty on all 10 (or the pending count reaches 0 and stays there)
-- [ ] A Playwright load of `/` at 390×844 with empty storage makes ≤ 13 `/api/calendar` requests and shows no "service is busy" notice when every response is 200
-- [ ] Unit test: two interleaved supplement refreshes over different symbols both survive (neither overwrites the other)
-- [ ] Unit test: a calendar response with only a pending/progress note triggers no client retry and no warn notice; a response with a "Couldn't load" warning still does both (0026 unchanged)
-- [ ] Works at 390×844 touch and 1440×900
+- [x] A Playwright load of `/` at 390×844 with empty storage makes ≤ 13 `/api/calendar` requests and shows no "service is busy" notice when every response is 200
+- [x] Unit test: two interleaved supplement refreshes over different symbols both survive (neither overwrites the other)
+- [x] Unit test: a calendar response with only a pending/progress note triggers no client retry and no warn notice; a response with a "Couldn't load" warning still does both (0026 unchanged)
+- [x] Works at 390×844 touch and 1440×900
 
 ## Test plan
 Unit on the supplement store and on `useApi`'s retry rule; e2e: the November fixture with a pending note shows the calendar with no warn notice.
