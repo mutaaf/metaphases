@@ -4,7 +4,7 @@
 // stored 180 days in KV, only to reply. No third parties, no tracking, no links out.
 import { useState, type FormEvent, type ReactNode } from "react";
 import { BASE, href, navigate } from "../lib/router";
-import { PRIVACY_CONTACT } from "./KidsPrivacy";
+export const SUPPORT_EMAIL = "support@mutaafaziz.com";
 
 export const SUPPORT_MAX = 2000;
 
@@ -224,7 +224,7 @@ export function SupportPage() {
 
       <section className="k-section" id="contact" aria-labelledby="contact-h">
         <h2 id="contact-h">Contact us</h2>
-        <p>Ask us anything about Moon Club or Metaphases Kids. You can also email <b data-testid="support-email">{PRIVACY_CONTACT}</b>.</p>
+        <p>Ask us anything about Moon Club or Metaphases Kids. You can also email <b data-testid="support-email">{SUPPORT_EMAIL}</b>.</p>
         <ContactForm />
       </section>
 
