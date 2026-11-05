@@ -75,6 +75,22 @@ test("a date the company announced itself says so and links its announcement (00
   expect(w).toBeLessThanOrEqual(0);
 });
 
+test("a projected date on a market holiday reads as not confirmed, never as a plain date (0045)", async ({ page }) => {
+  await page.route("**/api/ticker/MRVL", async (r) => {
+    const body = JSON.parse(readFileSync(new URL("../fixtures/ticker-NVDA.json", import.meta.url), "utf8").replaceAll('"NVDA"', '"MRVL"'));
+    body.next = { ...body.next, date: "2026-11-26", session: "", quarter: 3, year: 2027, closed: "Thanksgiving" };
+    delete body.next.confirmed;
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/MRVL");
+  const card = page.locator(".next-card");
+  await expect(card.locator("h3")).toHaveText("Date not confirmed");
+  await expect(card.locator(".nc-closed")).toContainText("markets are closed that day (Thanksgiving)");
+  await expect(card).not.toContainText(/in \d+ days|today|tomorrow/);
+  const w = await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth), document.documentElement.scrollWidth - document.documentElement.clientWidth));
+  expect(w).toBeLessThanOrEqual(0);
+});
+
 test("the sheet shows no company-confirmed label for a feed date", async ({ page }) => {
   await page.goto("./t/NVDA");
   await expect(page.locator(".next-card h3")).toBeVisible();

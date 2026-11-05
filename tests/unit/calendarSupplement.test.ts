@@ -130,7 +130,10 @@ describe("calendar supplement in the worker", () => {
     expect(new Set(symCalls).size).toBe(n);
     expect(symCalls.length).toBe(n); // each symbol once within its 12 h
     const r = await get("2026-11-02", "2026-11-06");
-    for (const s of ["TM", "SONY", "HMC"]) expect(r.events.filter((e) => e.s === s)).toHaveLength(1);
+    for (const s of ["TM", "SONY"]) expect(r.events.filter((e) => e.s === s)).toHaveLength(1);
+    // HMC's supplement row says Nov 5, but Honda announced Tue Nov 10 (0045 override): off this week, onto next.
+    expect(r.events.filter((e) => e.s === "HMC")).toEqual([]);
+    expect((await get("2026-11-09", "2026-11-13")).events.filter((e) => e.s === "HMC")).toEqual([expect.objectContaining({ d: "2026-11-10", h: "bmo" })]);
     expect(symCalls.length).toBe(n);
     expect(r.warnings).toEqual([]); // everything fetched: no "still checking" note
   });

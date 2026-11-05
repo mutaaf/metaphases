@@ -21,7 +21,7 @@ import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { periodKey, pickConsensus } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
-import { applyToEvents, applyToRows, type DateOverrides } from "../shared/dateOverrides";
+import { applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
 import { aliasMap, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
 interface Env {
@@ -253,7 +253,7 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     const cold = unfetched(doc, SUPP_SYMBOLS);
     if (cold) warnings.push(`Still checking ${cold} overseas companies' report dates — some may be missing for now.`);
   }
-  const fixed = applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U);
+  const fixed = flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U));
   const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings };
   return json(body, 600);
 }
@@ -396,7 +396,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
 
   const name = profile?.name || U[symbol]?.n || symbol;
   const read: string[] = [];
-  if (nextE) {
+  // A projected date on a closed-market day isn't a date yet (0045): say so instead of stating it.
+  const closed = nextE && !nextE.source ? closedDay(nextE.date) : null;
+  if (nextE && closed) {
+    read.push(`${name}'s Q${nextE.quarter} report date is not confirmed yet: the data feed projects ${new Date(nextE.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}, when the market is closed (${closed}).`);
+  } else if (nextE) {
     const when = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "(time not yet confirmed)" }[nextE.hour as Session] ?? "";
     read.push(`${name} reports Q${nextE.quarter} on ${new Date(nextE.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })} ${when}.`);
   }
@@ -411,7 +415,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     symbol,
     profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, marketCap: profile.marketCapitalization, currency: typeof profile.currency === "string" ? profile.currency : "USD", exchange: profile.exchange, ipo: profile.ipo } : null,
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
-    next: nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate, currency, ...(nextE.source ? { confirmed: nextE.source } : {}) } : null,
+    next: nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate, currency, ...(nextE.source ? { confirmed: nextE.source } : {}), ...(closed ? { closed } : {}) } : null,
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
@@ -533,8 +537,8 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
     try {
       const d = await tickerData(sym, env, ctx);
       const name = d.profile?.name ?? U[sym]?.n ?? sym;
-      const when = d.next ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
-      const title = when ? `${sym} reports ${when} ${SESSION_WORDS[d.next!.session]} · Metaphases`.replace("  ", " ") : `${name} (${sym}) earnings · Metaphases`;
+      const when = d.next && !d.next.closed ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
+      const title = when ? `${sym} reports ${when} ${SESSION_WORDS[d.next!.session]} · Metaphases`.replace("  ", " ") : d.next?.closed ? `${sym} earnings: date not confirmed yet · Metaphases` : `${name} (${sym}) earnings · Metaphases`;
       const bits = [
         d.beatRate ? `Beat ${d.beatRate.beats} of its last ${d.beatRate.total}` : null,
         d.expectedMove != null ? `typical move ±${d.expectedMove.toFixed(1)}%` : null,
@@ -704,7 +708,7 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
 // ── /og/t/:sym.(svg|png): per-ticker share card ─────────────────────────
 async function cardFor(sym: string, env: Env, ctx: ExecutionContext): Promise<string> {
   const d = await tickerData(sym, env, ctx);
-  const when = d.next ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
+  const when = d.next && !d.next.closed ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
   return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null, cur: d.next?.currency });
 }
 
@@ -746,7 +750,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
         const name = d.profile?.name ?? U[sym]?.n ?? sym;
         return storyTickerSvg({
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
-          when: d.next ? whenPlain(d.next.date, d.next.session, day) : "date not announced yet",
+          when: d.next && !d.next.closed ? whenPlain(d.next.date, d.next.session, day) : d.next ? "date not confirmed yet" : "date not announced yet",
           session: d.next?.session ?? "", epsE: d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
           beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null,
         });

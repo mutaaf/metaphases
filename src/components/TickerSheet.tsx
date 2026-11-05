@@ -118,8 +118,10 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   }, [symbol]);
 
   const up = (data?.quote?.changePct ?? 0) >= 0;
-  const nextIn = data?.next ? daysBetween(today, data.next.date) : null;
-  const shareText = data?.next
+  const nextIn = data?.next && !data.next.closed ? daysBetween(today, data.next.date) : null;
+  const shareText = data?.next?.closed
+    ? `${name}: report date not confirmed yet — earnings track record, quality grade and setup.`
+    : data?.next
     ? `${name} reports ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`} — ${data.beatRate ? `beat ${data.beatRate.beats} of its last ${data.beatRate.total}` : "see the setup"}${data.expectedMove ? `, typical move ±${data.expectedMove.toFixed(1)}%` : ""}.`
     : `${name}: earnings track record, quality grade and setup.`;
   const doShare = () => share(`${symbol} on Metaphases`, shareText, `${location.origin}${BASE}/t/${symbol}`, () => { setCopied(true); setTimeout(() => setCopied(false), 1800); });
@@ -159,7 +161,8 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                 <div className="nc-phase"><Phase h={data.next.session} size={44} /></div>
                 <div>
                   <span className="eyebrow">Next report · Q{data.next.quarter} {data.next.year}</span>
-                  <h3>{fmtLong(data.next.date)}</h3>
+                  <h3>{data.next.closed ? "Date not confirmed" : fmtLong(data.next.date)}</h3>
+                  {data.next.closed && <span className="muted nc-closed">The data feed projects {fmtLong(data.next.date)}, but markets are closed that day ({data.next.closed}).</span>}
                   <span className="muted"><Term k={data.next.session || "bmo"}>{PHASE_LABEL[data.next.session]}</Term>{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>
                   {data.next.confirmed && <span className="nc-confirmed small"><Term k="companydate">Confirmed by the company</Term> · <a href={data.next.confirmed} target="_blank" rel="noopener noreferrer">source</a></span>}
                 </div>

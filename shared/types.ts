@@ -15,6 +15,7 @@ export interface EarningsEvent {
   rA: number | null; // revenue actual
   t: 0 | 1; // 1 = in the curated Metaphases universe, 0 = large untracked reporter
   o?: string; // the company's announcement URL when its date overrides Finnhub's (data/date-overrides.json)
+  c?: string; // a projected date on a closed-market day ("Thanksgiving", "a weekend"): certainly not confirmed (0045)
 }
 
 export interface CalendarResponse {
@@ -50,7 +51,7 @@ export interface TickerResponse {
   symbol: string;
   profile: { name: string; logo: string; industry: string; country: string; web: string; marketCap: number; /** Currency of marketCap (Finnhub profile; local for many foreign filers). */ currency?: string; exchange: string; ipo: string } | null;
   quote: { price: number; change: number; changePct: number; prevClose: number; asOf: number } | null;
-  next: { date: string; session: Session; quarter: number; year: number; epsE: number | null; revE: number | null; /** ISO code of epsE/revE. "" = not dollars, currency unknown. */ currency?: string; /** The company's announcement URL when its date overrides Finnhub's. */ confirmed?: string } | null;
+  next: { date: string; session: Session; quarter: number; year: number; epsE: number | null; revE: number | null; /** ISO code of epsE/revE. "" = not dollars, currency unknown. */ currency?: string; /** The company's announcement URL when its date overrides Finnhub's. */ confirmed?: string; /** Projected onto a closed-market day (holiday name or "a weekend"): not a real date yet (0045). */ closed?: string } | null;
   compass: { score: number | null; grade: Grade | null; factors: Factor[] };
   setup: { score: number | null; grade: Grade | null; factors: Factor[]; trend: string; rsi: number | null; atrPct: number | null; from52wHigh: number | null };
   history: Reaction[];
