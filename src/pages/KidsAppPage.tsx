@@ -50,6 +50,7 @@ export function AppPage({ Gate }: { Gate: ComponentType<{ onPass: () => void; on
           <li><b>Luna can think on the device.</b> On iPhones and iPads with Apple Intelligence, kids' questions never leave the device.</li>
           <li><b>Same club.</b> Family League codes work between the app and this website.</li>
           <li><b>Same promises.</b> Pretend money only, no ads, no accounts, no tracking. <a href={href("/kids/privacy")} onClick={(e) => { e.preventDefault(); navigate("/kids/privacy"); }}>Read the privacy policy</a>.</li>
+          <li><b>Questions?</b> <a href={href("/kids/support")} onClick={(e) => { e.preventDefault(); navigate("/kids/support"); }}>Help &amp; support</a> has answers for grown-ups and a way to reach us.</li>
         </ul>
       </section>
 

@@ -44,7 +44,7 @@ test.describe("Kids privacy policy", () => {
     await expect(page.locator(".k-privacy a[href^='http']")).toHaveCount(0);
     await expect(page.locator(".k-privacy a[href^='mailto']")).toHaveCount(0);
     await expect(page.getByTestId("privacy-contact")).toHaveText("mutaaf@digitalcraftai.com");
-    await expect(page.locator(".k-privacy")).toContainText("Effective November 3, 2026");
+    await expect(page.locator(".k-privacy")).toContainText("Effective November 4, 2026");
     await expect(page.locator(".k-privacy")).toContainText("Cloudflare Workers AI");
     await expect(page).toHaveTitle(/Privacy/);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

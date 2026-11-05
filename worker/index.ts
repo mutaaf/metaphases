@@ -16,6 +16,7 @@ import guestNova from "../packs/guest-coach-nova/pack.json" with { type: "json" 
 import { storyKidsRecapSvg, storyKidsSvg, storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../shared/story";
 import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
+import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { periodKey, pickConsensus } from "../shared/compare";
@@ -29,6 +30,8 @@ interface Env {
   ASSETS: Fetcher;
   AI?: { run(model: string, input: unknown, opts?: unknown): Promise<unknown> };
   CF_VERSION?: { id: string; tag?: string; timestamp?: string };
+  /** Moon Club support inbox (KV, 180-day TTL). */
+  SUPPORT?: KvLike;
 }
 
 const BASE = "/metaphases";
@@ -510,6 +513,7 @@ const PAGES: Record<string, { title: string; desc: string; image?: string; kids?
   "/kids/start": { title: "Luna's Lemonade Stand — learn money by playing", desc: "Run a lemonade stand to learn what a company, a share, a price and a report card are. A free game for ages 8–12, with no ads.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/kids/app": { title: "Moon Club for iPhone & iPad — money, explained for kids", desc: "Luna's money club as a native iPhone and iPad app: quests, one-minute lessons and a pretend piggy bank. On-device AI, no ads, no accounts, no tracking.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/kids/privacy": { title: "Privacy · Metaphases Kids and Moon Club", desc: "Privacy policy for Moon Club and Metaphases Kids. No accounts, no ads, no tracking: what stays on the device, what leaves it and why.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
+  "/kids/support": { title: "Moon Club help & support", desc: "Answers for grown-ups about Moon Club and Metaphases Kids: pretend money, Ask Luna, the grown-up check, Family League codes, lesson packs, resetting progress, plus a contact form.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/kids/school": { title: "Moon School — one-minute money lessons for kids", desc: "93 tiny lessons on money, earning, saving, spending, borrowing, companies, shares, report cards, charts and why prices move, with worked examples, growth pictures and sorting games. Read aloud, for ages 6–11.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/kids/guess": { title: "Guess the Report Card — a kids' game with real companies", desc: "Will a company kids know beat or miss its report card? Guess, then see why. Pretend money only, for ages 6–11, no ads.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/kids/piggy": { title: "The Pretend Piggy Bank — practise with real prices", desc: "$1,000 of pretend coins across up to five companies kids know, following real prices. Learn why spreading out is safer. No real money.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
@@ -804,6 +808,7 @@ export default {
       if (p === "/api/quotes") return await quotes(url, env, ctx);
       if (p === "/api/kids/candles") return await kidsCandles(url, ctx);
       if (p === "/api/kids/why") return await kidsWhy(url, env, ctx);
+      if (p === "/api/kids/support") return await handleSupport(req, env);
       if (p === "/api/kids/packs" || p.startsWith("/api/kids/packs/")) return kidsPacks(p);
       if (p === "/og/story/kids.png") return await storyCard("kids", req, env, ctx);
       // 0027: counts only; parseRecapQuery drops anything else, so nothing personal can be rendered.

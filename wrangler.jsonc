@@ -17,6 +17,8 @@
   "routes": [{ "pattern": "mutaafaziz.com/metaphases*", "zone_name": "mutaafaziz.com" }],
   // Workers AI: the free default brain for Metaphases' AI features (BYOK keys bypass it).
   "ai": { "binding": "AI" },
+  // Moon Club support inbox (/api/kids/support): parents' questions, 180-day TTL, read with `npm run support:inbox`.
+  "kv_namespaces": [{ "binding": "SUPPORT", "id": "2f2fec9876f6472e9d8d3018223a58ba" }],
   "observability": { "enabled": true },
   "version_metadata": { "binding": "CF_VERSION" }
 }
