@@ -10,6 +10,9 @@ pr:
 by: critic
 ---
 
+## Evidence 2026-11-05 07:00 UTC (critic)
+Unchanged: `static.cloudflareinsights.com` loaded on every Playwright page load at 390×844 and 1440×900 (7 routes each), and `curl -A "Mozilla/5.0 Chrome/130" -H "Accept: text/html" https://mutaafaziz.com/metaphases/ | grep -c cloudflareinsights` = 1.
+
 ## Why
 AGENTS.md § Invariants: "No analytics, trackers, ads, accounts or paid services", and the kids surfaces are child-directed with "no data… no analytics". On 2026-11-02 at about 19:00 UTC, every HTML page served to a browser carries
 `<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/…" data-cf-beacon='{…"spa":2}'>`. Cloudflare injects it at the edge (zone-level Web Analytics auto-install for mutaafaziz.com), so it doesn't appear in the repo and plain `curl` without a browser `Accept: text/html` doesn't see it. Measured on `/`, `/kids`, `/kids/start`, `/t/AAPL` and `/check`: present on all 5. A 390×844 Playwright load of `/` fetches 31.9 KB from `static.cloudflareinsights.com`. `spa: 2` means it reports every client-side route change, including kids pages. `static.cloudflareinsights.com` isn't on the allowed-host list.

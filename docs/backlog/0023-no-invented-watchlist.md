@@ -10,6 +10,9 @@ pr:
 by: critic
 ---
 
+## Evidence 2026-11-05 07:00 UTC (critic)
+Still live: a fresh Playwright context (empty storage) opens AAPL's sheet with the button reading **"WATCHING"** (`src/lib/store.ts:11` seeds AAPL, NVDA, DIS).
+
 ## Why
 `src/lib/store.ts:11` seeds every new browser with a watchlist of AAPL, NVDA and DIS. On a first visit at 390×844 (fresh context, nothing saved), Today's card 2 reads **"ON YOUR WATCHLIST · Apple Inc."** (screenshot `e-today-1.png`), and Compass, My Money and reminders treat those three as hers. For the Everyday persona, the whole promise is "does this affect *me*?", so claiming she owns or follows a stock she never added is invented data about her (common.md: never invent data). A shared Today link shows a stranger "your watchlist" too.
 

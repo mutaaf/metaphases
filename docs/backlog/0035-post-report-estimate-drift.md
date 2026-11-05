@@ -10,6 +10,9 @@ pr:
 by: critic
 ---
 
+## Evidence 2026-11-05 07:00 UTC (critic)
+Still live on build `8d4fca50`. Retrace's S&P scoreboard says **revenue beat rate 44%** (375 of 502 reported, EPS 74%), and the November header says "**46%** of those reported so far beat on both lines". Revenue beats run near 65% in a normal season, so 44% is the drifted-estimate artifact this ticket describes, now shown at the top of two pages. Bar unchanged: the season revenue beat rate on Retrace and the home strip is computed against pre-report consensus and lands within 10 points of the Nasdaq `consensusForecast`-based rate for the same names.
+
 ## Why
 On 2026-11-02 at about 19:00 UTC, the critic compared the EPS estimate Metaphases shows for the **60 largest S&P 500 companies that reported Oct 26–30** (`/api/calendar` `eE`, which is also the sheet's history estimate since #21's `pickConsensus` prefers Finnhub) with Nasdaq's `consensusForecast` for the same quarter:
 - Finnhub's figure was **higher than Nasdaq's in 49 of 60** cases, and often sits a hair above the printed actual: V **3.5055** vs actual 3.48, ABBV **3.823** vs 3.82, VZ **1.3111** vs 1.31, MA **5.3156** vs 5.31, ITW **3.0049** vs 3.00, RSG **1.9465** vs 1.94. That pattern looks like a consensus revised after the print, not the bar the street set beforehand.
