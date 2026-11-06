@@ -1,7 +1,7 @@
 ---
 id: 0035
 title: Stop calling beats "misses": Finnhub's estimate for an already-reported quarter has drifted toward the actual (V, MA, ABBV, VZ shown as misses)
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: data-quality

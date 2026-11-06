@@ -16,6 +16,8 @@ export interface EarningsEvent {
   t: 0 | 1; // 1 = in the curated Metaphases universe, 0 = large untracked reporter
   o?: string; // the company's announcement URL when its date overrides Finnhub's (data/date-overrides.json)
   c?: string; // a projected date on an NYSE holiday ("Thanksgiving"): not a real date yet (0045)
+  /** After the print, where eE/rE came from (0035): "s" = our pre-report snapshot of Finnhub's estimates, "n" = Nasdaq's pre-report EPS consensus. Absent = Finnhub's current figure, which may have been revised toward the actual. */
+  pr?: "s" | "n";
 }
 
 export interface CalendarResponse {
