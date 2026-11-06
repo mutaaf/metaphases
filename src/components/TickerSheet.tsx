@@ -12,6 +12,7 @@ import { IcsButtons, Peers, PriceChart, QuarterTrend } from "./Depth";
 import { whatTheyDo } from "../lib/plain";
 import { isEveryday, LensNote } from "./Everyday";
 import { navigate } from "../lib/router";
+import { isDated } from "../../shared/pending";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
 
 function FactorList({ factors }: { factors: Factor[] }) {
@@ -118,8 +119,8 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   }, [symbol]);
 
   const up = (data?.quote?.changePct ?? 0) >= 0;
-  const nextIn = data?.next && !data.next.closed ? daysBetween(today, data.next.date) : null;
-  const shareText = data?.next?.closed
+  const nextIn = isDated(data?.next) ? daysBetween(today, data.next.date) : null;
+  const shareText = data?.next?.closed || data?.next?.overdue
     ? `${name}: report date not confirmed yet — earnings track record, quality grade and setup.`
     : data?.next
     ? `${name} reports ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`} — ${data.beatRate ? `beat ${data.beatRate.beats} of its last ${data.beatRate.total}` : "see the setup"}${data.expectedMove ? `, typical move ±${data.expectedMove.toFixed(1)}%` : ""}.`
@@ -141,7 +142,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
           </div>
           <div className="sheet-actions">
             <button className={`btn btn-box ${w ? "on" : ""}`} onClick={() => actions.toggleWatch(symbol)} aria-pressed={!!w}><Icon name="star" size={14} /> {w ? "Watching" : "Watch"}</button>
-            {data?.next && <IcsButtons symbols={[symbol]} compact />}
+            {data?.next && !data.next.overdue && <IcsButtons symbols={[symbol]} compact />}
             <button className="btn btn-box sq" onClick={doShare} aria-label={`Share ${symbol}'s read`}><Icon name="share" size={14} /></button>
             <button className="icon-btn sheet-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
           </div>
@@ -161,9 +162,10 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                 <div className="nc-phase"><Phase h={data.next.session} size={44} /></div>
                 <div>
                   <span className="eyebrow">Next report · Q{data.next.quarter} {data.next.year}</span>
-                  <h3>{data.next.closed ? "Date not confirmed" : fmtLong(data.next.date)}</h3>
+                  <h3>{data.next.closed || data.next.overdue ? "Date not confirmed" : fmtLong(data.next.date)}</h3>
                   {data.next.closed && <span className="muted nc-closed">The data feed projects {fmtLong(data.next.date)}, but markets are closed that day ({data.next.closed}).</span>}
-                  <span className="muted"><Term k={data.next.session || "bmo"}>{PHASE_LABEL[data.next.session]}</Term>{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>
+                  {data.next.overdue && <span className="muted nc-closed">{data.next.date ? `The data feed expected it on ${fmtLong(data.next.date)}, and there are no results yet.` : "The data feed has no date for this quarter yet, and there are no results yet."} The new date isn't confirmed.</span>}
+                  {!data.next.overdue && <span className="muted"><Term k={data.next.session || "bmo"}>{PHASE_LABEL[data.next.session]}</Term>{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
                   {data.next.confirmed && <span className="nc-confirmed small"><Term k="companydate">Confirmed by the company</Term> · <a href={data.next.confirmed} target="_blank" rel="noopener noreferrer">source</a></span>}
                 </div>
                 <dl className="nc-stats">
@@ -191,7 +193,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
               </section>
             )}
 
-            {data.next && <Peers symbol={symbol} date={data.next.date} />}
+            {isDated(data.next) && <Peers symbol={symbol} date={data.next.date} />}
 
             {everyday && !direct && via.length === 0 && (
               <section className="owned owned-none">
