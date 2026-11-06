@@ -21,7 +21,7 @@ import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { applyPreReport, nasdaqDayEps, periodKey, pickConsensus, type EstSnapshot } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
-import { applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
+import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
 import { isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
 import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
@@ -396,7 +396,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // Only call it pending when the calendar shows the quarter's day passed at least two trading days ago with no
     // figures. A fresher row, a row with figures, or no row at all (this colo never cached it) can just be a feed
     // that's a day behind a normal report, and that must not read as a missed report.
-    if (row && row.eA == null && row.rA == null && tradingDaysSince(row.d, today) >= 2) {
+    // A company-announced date for this quarter that has passed means it reported on that day (AXON, Nov 5),
+    // whatever the cached Finnhub projection (Nov 2) says: the feeds are only behind.
+    const ov = activeOverrides(OVERRIDES, today)[symbol];
+    const companyDated = !!ov && ov.quarter === skip.quarter && ov.year === skip.year;
+    if (!companyDated && row && row.eA == null && row.rA == null && tradingDaysSince(row.d, today) >= 2) {
       pending = { ...skip, passed: row.d, hour: (row.h ?? "") as Session, eE: row.eE ?? null, rE: row.rE ?? null };
     }
   }

@@ -125,3 +125,16 @@ describe("/api/ticker keeps an unreported quarter as next (AXON shape, Nov 4)", 
     expect(r.next.overdue).toBeUndefined();
   });
 });
+
+// Live regression, 2026-11-06 10:07 UTC: AXON reported on its announced date (Nov 5, data/date-overrides.json),
+// but the cached Finnhub day still held the Nov 2 projection with no figures and Nasdaq hadn't caught up,
+// so the sheet said "expected it on Monday, Nov 2 and has no results yet".
+describe("a company-announced date that has passed is a report, not an overdue quarter", () => {
+  it("AXON on Nov 6: no overdue flag", async () => {
+    vi.setSystemTime(new Date("2026-11-06T10:00:00Z"));
+    cache.store.set(CAL("cal:v2:2026-11-02"), JSON.stringify([{ ...axonQ3Day, s: "AXON" }]));
+    const r = await get("/api/ticker/AXON");
+    expect(r.next?.overdue).toBeUndefined();
+    expect(r.read.join(" ")).not.toContain("expected it on Monday, Nov 2");
+  });
+});
