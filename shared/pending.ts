@@ -21,8 +21,8 @@ export function nqDate(s: unknown): string | null {
 
 /** A quarterly reporter's reports are ≤ this many days apart (Q4 reports can run to ~130). */
 const QUARTERLY_MAX = 115;
-/** More than this between the last report and the next listed date means a quarter is missing. */
-const SKIP_GAP = 140;
+/** More than this between the last report and the next listed date means a quarter is missing (a late Q4 runs ~145; a true skip ~180+). */
+const SKIP_GAP = 160;
 
 export interface NextRow { date: string; quarter: number; year: number; source?: string }
 
@@ -38,7 +38,7 @@ export function skippedQuarter(next: NextRow | undefined | null, reported: strin
   return next.quarter > 1 ? { quarter: next.quarter - 1, year: next.year } : { quarter: 4, year: next.year - 1 };
 }
 
-/** Trading days we look back through the cached calendar for the quarter's passed projected date. */
+/** Calendar days (about 15 trading days) we look back through the cached calendar for the quarter's passed projected date. */
 export const LOOKBACK_DAYS = 21;
 
 /** Weekdays strictly before `today`, newest first, not earlier than `notBefore`, for the lookback. */

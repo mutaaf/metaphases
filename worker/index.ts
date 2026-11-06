@@ -22,7 +22,7 @@ import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } fro
 import { applyPreReport, nasdaqDayEps, periodKey, pickConsensus, type EstSnapshot } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
-import { isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, nqDate, skippedQuarter } from "../shared/pending";
+import { isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
 import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
 interface Env {
@@ -390,12 +390,14 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // with its passed date and estimates when the cached calendar still holds its row.
   const reportedDates = rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null);
   const skip = skippedQuarter(nextE, reportedDates);
-  let pending: { quarter: number; year: number; passed: string | null; hour: Session; eE: number | null; rE: number | null } | null = null;
+  let pending: { quarter: number; year: number; passed: string; hour: Session; eE: number | null; rE: number | null } | null = null;
   if (skip) {
     const row = await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
-    // A row with figures means it did report and Nasdaq hasn't caught up: not pending (0040 territory).
-    if (!row || (row.eA == null && row.rA == null)) {
-      pending = { ...skip, passed: row?.d ?? null, hour: (row?.h ?? "") as Session, eE: row?.eE ?? null, rE: row?.rE ?? null };
+    // Only call it pending when the calendar shows the quarter's day passed at least two trading days ago with no
+    // figures. A fresher row, a row with figures, or no row at all (this colo never cached it) can just be a feed
+    // that's a day behind a normal report, and that must not read as a missed report.
+    if (row && row.eA == null && row.rA == null && tradingDaysSince(row.d, today) >= 2) {
+      pending = { ...skip, passed: row.d, hour: (row.h ?? "") as Session, eE: row.eE ?? null, rE: row.rE ?? null };
     }
   }
   // A company-dated row that the override had to create carries no estimates; borrow the calendar's for that quarter.
@@ -469,7 +471,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const closed = nextE && !nextE.source && !pending ? closedDay(nextE.date) : null;
   const longDay = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
   if (pending) {
-    read.push(`${name}'s Q${pending.quarter} report date is not confirmed yet: ${pending.passed ? `the data feed expected it on ${longDay(pending.passed)} and has no results yet` : "the data feed has no date for it, and no results yet"}.`);
+    read.push(`${name}'s Q${pending.quarter} report date is not confirmed yet: the data feed expected it on ${longDay(pending.passed)} and has no results yet.`);
   } else if (nextE && closed) {
     read.push(`${name}'s Q${nextE.quarter} report date is not confirmed yet: the data feed projects ${new Date(nextE.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}, when the market is closed (${closed}).`);
   } else if (nextE) {
@@ -487,7 +489,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     symbol,
     profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, marketCap: profile.marketCapitalization, currency: typeof profile.currency === "string" ? profile.currency : "USD", exchange: profile.exchange, ipo: profile.ipo } : null,
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
-    next: pending ? { date: pending.passed ?? "", session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
+    next: pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
       : nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate, currency, ...(nextE.source ? { confirmed: nextE.source } : {}), ...(closed ? { closed } : {}) } : null,
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],

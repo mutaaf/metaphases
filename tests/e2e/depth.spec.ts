@@ -119,11 +119,11 @@ test("an unreported quarter reads as not confirmed, never as the quarter after i
   await page.screenshot({ path: test.info().outputPath("overdue-sheet.png") });
 });
 
-test("a calendar row whose day passed with no results says so, untinted (0038)", async ({ page }) => {
+test("a calendar row whose day passed with no figures says so, untinted (0038)", async ({ page }) => {
   await page.goto("./?d=2026-10-21&day=2026-10-21");
   const drawer = page.locator(".drawer[role=dialog]");
   const bkr = drawer.locator(".erow", { hasText: "BKR" });
-  await expect(bkr.locator(".chip-nores")).toHaveText(/No result yet/i);
+  await expect(bkr.locator(".chip-nores")).toHaveText(/No figures yet/i);
   await expect(bkr.locator(".res-beat, .res-miss, .res-mixed")).toHaveCount(0);
   await bkr.screenshot({ path: test.info().outputPath("overdue-calendar.png") });
 });

@@ -15,8 +15,9 @@ describe("skippedQuarter", () => {
   it("keeps the listed quarter when it's the very next one (AES reported Nov 3, next Feb 24)", () => {
     expect(skippedQuarter({ date: "2027-02-24", quarter: 4, year: 2026 }, ["2026-11-03", "2026-08-04"])).toBeNull();
   });
-  it("a long Q4 gap (Nov 5 → Mar 16) is not a skip", () => {
+  it("a long Q4 gap (Nov 5 → Mar 16; Oct 14 → Mar 12, 149 days) is not a skip", () => {
     expect(skippedQuarter({ date: "2027-03-16", quarter: 4, year: 2026 }, ["2026-11-05", "2026-08-06"])).toBeNull();
+    expect(skippedQuarter({ date: "2027-03-12", quarter: 4, year: 2026 }, ["2026-10-14", "2026-07-15"])).toBeNull();
   });
   it("can't tell for semiannual reporters, and trusts company-confirmed dates", () => {
     expect(skippedQuarter(q4, ["2026-08-04", "2026-02-10"])).toBeNull();
@@ -78,7 +79,7 @@ let cache: MemCache;
 beforeEach(() => {
   pending = [];
   vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date("2026-11-03T15:00:00Z"));
+  vi.setSystemTime(new Date("2026-11-04T15:00:00Z"));
   cache = new MemCache();
   (globalThis as any).caches = { default: cache };
   vi.stubGlobal("fetch", vi.fn(async (u: string) => {
@@ -96,7 +97,7 @@ const get = async (path: string) => {
   return r.json() as Promise<any>;
 };
 
-describe("/api/ticker keeps an unreported quarter as next (AXON, Nov 3)", () => {
+describe("/api/ticker keeps an unreported quarter as next (AXON shape, Nov 4)", () => {
   it("with the calendar's passed row: Q3, the passed date, its estimates, flagged overdue", async () => {
     cache.store.set(CAL("cal:v2:2026-11-02"), JSON.stringify([axonQ3Day]));
     const r = await get("/api/ticker/ZZZT");
@@ -107,10 +108,15 @@ describe("/api/ticker keeps an unreported quarter as next (AXON, Nov 3)", () => 
     expect(tickerShareTitle("ZZZT", "Zzzt", r.next)).not.toContain("Feb");
   });
 
-  it("without it: Q3, no date and no estimate (never Q4's)", async () => {
+  it("no cached row (a cold colo): no overdue claim, since it may just have reported and the feeds lag", async () => {
     const r = await get("/api/ticker/ZZZT");
-    expect(r.next).toMatchObject({ quarter: 3, year: 2026, date: "", epsE: null, overdue: true });
-    expect(r.read[0]).toContain("has no date for it");
+    expect(r.next.overdue).toBeUndefined();
+  });
+
+  it("a row from yesterday is inside the grace day: a normal report the feeds haven't caught up with", async () => {
+    cache.store.set(CAL("cal:v2:2026-11-03"), JSON.stringify([{ ...axonQ3Day, d: "2026-11-03" }]));
+    const r = await get("/api/ticker/ZZZT");
+    expect(r.next.overdue).toBeUndefined();
   });
 
   it("a passed row with figures means it reported and Nasdaq is behind: no overdue flag", async () => {
