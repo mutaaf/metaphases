@@ -7,9 +7,10 @@ checks in occasionally. Act like a senior engineer and product owner: careful, t
 ## 0 · Preflight (always, in this order)
 1. `git fetch origin && git checkout main && git reset --hard origin/main`. Never start from a stale tree.
 2. Read `agents/control.json`. If `"paused": true` or your agent's `"enabled"` is `false`, print
-   - If today (UTC) is after `"expires"`, print `EXPIRED by agents/control.json` and stop. Only the operator renews it.
    `PAUSED by agents/control.json` and stop. A non-empty `"focus"` is the operator's steering and
    outranks your own ideas.
+   If today (UTC) is after `"expires"`, print `EXPIRED by agents/control.json` and stop. Only the
+   operator renews it.
 3. Read `AGENTS.md` (vision, invariants, definition of done) and `docs/LESSONS.md`. Don't repeat a lesson.
 4. Check production: `curl -s https://mutaafaziz.com/metaphases/api/health`. (Every path in these
    prompts, like `/api/...` or `/t/AAPL`, is relative to `https://mutaafaziz.com/metaphases`.) Note any source
