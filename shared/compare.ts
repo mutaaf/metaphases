@@ -107,23 +107,25 @@ export const sameEpsBasis = (a: number | null | undefined, b: number | null | un
 export type EstSnapshot = Record<string, { eE: number | null; rE: number | null }>;
 
 /**
- * Before the print: record each row's estimate (`updates` holds the entries that are new or changed,
+ * Before the print (`record`: days after today only): record each row's estimate (`updates` holds the entries that are new or changed,
  * so the caller writes only those).
  * After it: swap in the snapshot (`pr: "s"`), else Nasdaq's pre-report EPS consensus when it agrees on
  * basis (`pr: "n"`). `usd(s)` guards Nasdaq's dollar figures against home-currency estimates.
  */
-export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasdaqEps: Record<string, number> = {}, usd: (s: string) => boolean = () => true): { events: EarningsEvent[]; updates: EstSnapshot } {
+export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasdaqEps: Record<string, number> = {}, usd: (s: string) => boolean = () => true, record = true): { events: EarningsEvent[]; updates: EstSnapshot } {
   const updates: EstSnapshot = {};
   const out = events.map((e) => {
     if (e.eA == null && e.rA == null) {
       const was = snap[e.s];
-      if (e.eE != null || e.rE != null) {
+      // `record` is false from report day on: Finnhub can revise before the actual lands.
+      if (record && (e.eE != null || e.rE != null)) {
         if (!was || was.eE !== e.eE || was.rE !== e.rE) updates[e.s] = { eE: e.eE ?? null, rE: e.rE ?? null };
       }
       return e;
     }
     const s = snap[e.s];
-    if (s && (s.eE != null || s.rE != null)) return { ...e, eE: s.eE ?? e.eE, rE: s.rE ?? e.rE, pr: "s" as const };
+    // Only a complete snapshot (every figure the row has) counts as the pre-report bar.
+    if (s && (s.eE != null || s.rE != null) && (s.eE != null || e.eE == null) && (s.rE != null || e.rE == null)) return { ...e, eE: s.eE, rE: s.rE, pr: "s" as const };
     const n = nasdaqEps[e.s];
     if (n != null && usd(e.s) && sameEpsBasis(n, e.eE)) return { ...e, eE: n, pr: "n" as const };
     return e;

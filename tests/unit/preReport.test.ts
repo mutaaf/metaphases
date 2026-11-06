@@ -16,9 +16,10 @@ const ctx = { waitUntil: (p: Promise<unknown>) => { pending.push(p); }, passThro
 let finnhub: any[] = [];
 let nasdaqCalls = 0;
 let nasdaqFails = false;
+let nasdaqEmpty = false;
 
 beforeEach(() => {
-  pending = []; nasdaqCalls = 0; nasdaqFails = false;
+  pending = []; nasdaqCalls = 0; nasdaqFails = false; nasdaqEmpty = false;
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-06-01T15:00:00Z"));
   (globalThis as any).caches = { default: new MemCache() };
@@ -27,6 +28,7 @@ beforeEach(() => {
     if (url.hostname === "api.nasdaq.com") {
       nasdaqCalls++;
       if (nasdaqFails) return new Response("no", { status: 503 });
+      if (nasdaqEmpty) return new Response(JSON.stringify({ data: null }));
       return new Response(JSON.stringify({ data: { rows: [{ symbol: "V", epsForecast: "$3.43" }, { symbol: "MA", epsForecast: "$5.14" }] } }));
     }
     const from = url.searchParams.get("from")!, to = url.searchParams.get("to")!;
@@ -65,6 +67,14 @@ describe("calendar: pre-report estimates (0035)", () => {
     const r = await get("2026-06-02", "2026-06-02");
     expect(r.events[0]).toMatchObject({ eE: 3.44, rE: 10.6e9, eA: 3.48, pr: "s" });
     expect(nasdaqCalls).toBe(0);
+  });
+
+  it("an empty Nasdaq answer isn't cached: the next rebuild asks again", async () => {
+    nasdaqEmpty = true;
+    finnhub = [row("V", "2026-05-28", 3.5055, 3.48)];
+    await get("2026-05-28", "2026-05-28");
+    const cache = (globalThis as any).caches.default as MemCache;
+    expect([...cache.store.keys()].some((k) => k.includes("nq%3Acal"))).toBe(false);
   });
 
   it("a Nasdaq failure leaves Finnhub's figures and shows no warning", async () => {
