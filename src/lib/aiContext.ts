@@ -2,14 +2,15 @@
 // Pure functions (unit-tested) — the worker renders them into prompt lines and trims to a budget.
 import type { EarningsEvent, MacroResponse, TickerResponse } from "../../shared/types";
 import { co, curOf, heldVia, resultOf, surprise, UNIVERSE } from "./data";
-import { revenueVerdict, revenueBeatRate } from "../../shared/compare";
+import { revenueBeatRate, revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { weekOf } from "./dates";
 import type { Holding } from "./store";
 
 const slimEvent = (e: EarningsEvent) => {
   const c = co(e.s);
-  // A revenue actual on a different basis from its estimate (GOOGL net of TAC vs gross) isn't passed as a fact to judge.
-  const nc = revenueVerdict(e, curOf(e.s)) === "not-comparable";
+  // A revenue actual on a different basis from its estimate (GOOGL net of TAC vs gross), or a hair under an estimate
+  // revised after the print (0035), isn't passed as a fact to judge.
+  const nc = revenueSkipped(revenueVerdict(e, curOf(e.s)));
   return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.h, eE: e.eE, eA: e.eA, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: c?.ec, res: resultOf(e) ?? undefined };
 };
 

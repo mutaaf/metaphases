@@ -19,7 +19,7 @@ import { handleAi } from "./ai";
 import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
-import { periodKey, pickConsensus } from "../shared/compare";
+import { applyPreReport, nasdaqDayEps, periodKey, pickConsensus, type EstSnapshot } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
 import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
@@ -159,6 +159,41 @@ async function putDay(day: string, events: EarningsEvent[], today: string, ctx: 
   ]));
 }
 
+// ── 0035: estimates as they stood before the print ─────────────────────
+const EST = (day: string) => CAL(`est:v1:${day}`);
+/** Kept well past a season: the snapshot is the only record of the bar before the print. */
+const EST_TTL = 180 * 86400;
+
+async function readSnap(day: string): Promise<EstSnapshot> {
+  try { const hit = await caches.default.match(EST(day)); return hit ? ((await hit.json()) as EstSnapshot) : {}; } catch { return {}; }
+}
+
+/** Nasdaq's day calendar: pre-report EPS consensus for that day's reporters (one call per day, cached). */
+function nasdaqDay(day: string, today: string, ctx: ExecutionContext): Promise<Record<string, number>> {
+  return cached(`nq:cal:v1:${day}`, day < today ? 7 * 86400 : 3600, ctx, async () => nasdaqDayEps(await getJson(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, UA)));
+}
+
+const usdEstimates = (s: string) => isUsd(U[s]?.ec ?? "USD");
+
+/**
+ * Snapshot unreported rows' estimates; judge reported rows against the snapshot, else Nasdaq's
+ * pre-report consensus. Never fails the day: a Nasdaq error leaves Finnhub's figures as they were.
+ */
+async function preReportDay(day: string, events: EarningsEvent[], today: string, ctx: ExecutionContext): Promise<EarningsEvent[]> {
+  const snap = await readSnap(day);
+  const needNq = events.some((e) => (e.eA != null || e.rA != null) && !snap[e.s] && e.eE != null);
+  const nq = needNq ? await nasdaqDay(day, today, ctx).catch(() => ({})) : {};
+  const { events: out, updates } = applyPreReport(events, snap, nq, usdEstimates);
+  if (Object.keys(updates).length) {
+    // Re-read just before writing and add only our entries: another request's newer snapshot survives (0047).
+    ctx.waitUntil((async () => {
+      const latest = await readSnap(day);
+      await caches.default.put(EST(day), new Response(JSON.stringify({ ...latest, ...updates }), { headers: { "Cache-Control": `public, max-age=${EST_TTL}`, "Content-Type": "application/json" } }));
+    })().catch(() => {}));
+  }
+  return out;
+}
+
 async function fetchCalendarDay(day: string, env: Env): Promise<EarningsEvent[]> {
   const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${day}&to=${day}&token=${env.FINNHUB_API_KEY}`);
   return toEvents(data.earningsCalendar);
@@ -198,7 +233,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
   const settle = async (i: number, load: () => Promise<EarningsEvent[]>) => {
     const d = days[i];
     try {
-      const ev = await load();
+      const ev = await preReportDay(d, await load(), today, ctx);
       putDay(d, ev, today, ctx);
       out[i] = { status: "fulfilled", value: ev };
     } catch (reason) {
@@ -331,6 +366,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const nextE = cal.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
   const lastE = cal.filter((e) => e.date < today).sort((a, b) => b.date.localeCompare(a.date))[0];
   const habit: Session = (nextE?.hour || lastE?.hour || "") as Session;
+  // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
+  const lastSnap = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
 
   // Finnhub's estimates for foreign filers are in the reporting currency; Nasdaq's history is USD.
   const rows: any[] = nasdaq?.data?.earningsSurpriseTable?.rows ?? [];
@@ -367,7 +404,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const before = session === "bmo" ? closeOn(date, -1) : closeOn(date, 0);
     const after = session === "bmo" ? closeOn(date, 0) : closeOn(date, 1);
     if (before && after) move = ((after - before) / before) * 100;
-    const pick = pickConsensus({ estimate: r.consensusForecast, actual: r.eps, surprisePct: r.percentageSurprise }, f);
+    const pick = pickConsensus({ estimate: r.consensusForecast, actual: r.eps, surprisePct: r.percentageSurprise }, f, lastE && lastE.date === date ? lastSnap : null);
     history.push({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move });
   });
   // Fall back to Finnhub's four quarters if Nasdaq was unreachable.
@@ -378,7 +415,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   if (usd && lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date)) {
     const b = lastE.hour === "bmo" ? closeOn(lastE.date, -1) : closeOn(lastE.date, 0);
     const a = lastE.hour === "bmo" ? closeOn(lastE.date, 0) : closeOn(lastE.date, 1);
-    history.unshift({ date: lastE.date, session: lastE.hour, period: `Q${lastE.quarter} ${lastE.year}`, epsE: lastE.epsEstimate, epsA: lastE.epsActual, surprisePct: lastE.epsEstimate ? ((lastE.epsActual - lastE.epsEstimate) / Math.abs(lastE.epsEstimate)) * 100 : null, move: b && a ? ((a - b) / b) * 100 : null });
+    const est = lastSnap ?? lastE.epsEstimate;
+    history.unshift({ date: lastE.date, session: lastE.hour, period: `Q${lastE.quarter} ${lastE.year}`, epsE: est, epsA: lastE.epsActual, surprisePct: est ? ((lastE.epsActual - est) / Math.abs(est)) * 100 : null, move: b && a ? ((a - b) / b) * 100 : null });
   }
 
   const judged = history.filter((h) => h.epsA != null && h.epsE != null);
