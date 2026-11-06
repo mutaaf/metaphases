@@ -1,12 +1,12 @@
 ---
 id: 0048
 title: Use the date Brookfield Corporation announced (Nov 12); Finnhub shows Nov 10
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-06
-pr:
+pr: 67
 by: scout
 ---
 
@@ -33,3 +33,6 @@ Unit: the override applies to the BN fixture (same shape as the CSCO/HMC/TSN tes
 
 ## Out of scope
 A general Nasdaq cross-check (0015 owns that). Entries older than 14 days after their date are deleted by the Keeper.
+
+## Builder note 2026-11-06
+Shipped BN (Nov 12 bmo, Finnhub Q3 2026 labels) and HSAI (Hesai, Oct 20: Nov 10 before the US open; Finnhub Nov 9). Both wire copies were read from the sandbox (GlobeNewswire itself answers 403) and Nasdaq's per-day calendar agrees on day and session. RLX and AFYA: no company notice published yet (both usually announce a few days ahead), so not overridden. SBET and ECHO not checked (small caps).
