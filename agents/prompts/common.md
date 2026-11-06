@@ -9,6 +9,8 @@ checks in occasionally. Act like a senior engineer and product owner: careful, t
 2. Read `agents/control.json`. If `"paused": true` or your agent's `"enabled"` is `false`, print
    `PAUSED by agents/control.json` and stop. A non-empty `"focus"` is the operator's steering and
    outranks your own ideas.
+   If today (UTC) is after `"expires"`, print `EXPIRED by agents/control.json` and stop. Only the
+   operator renews it.
 3. Read `AGENTS.md` (vision, invariants, definition of done) and `docs/LESSONS.md`. Don't repeat a lesson.
 4. Check production: `curl -s https://mutaafaziz.com/metaphases/api/health`. (Every path in these
    prompts, like `/api/...` or `/t/AAPL`, is relative to `https://mutaafaziz.com/metaphases`.) Note any source
