@@ -74,7 +74,7 @@ export default function RetracePage() {
             <div className="stat"><span className="eyebrow"><Term k="revenue">Revenue</Term> beat rate</span><b>{rev.pct != null ? `${Math.round(rev.pct)}%` : "—"}</b>{rev.excluded > 0 && <small className="muted rev-excluded">{rev.excluded} <Term k="revbasis">can't compare</Term></small>}</div>
             <div className="stat"><span className="eyebrow">Median <Term k="surprise">surprise</Term></span><b>{pct(median)}</b></div>
           </div>
-          <p className="muted small retrace-basis">Every beat and miss is judged against the <Term k="beat">estimate as it stood before the report</Term>, not one revised afterwards.</p>
+          <p className="muted small retrace-basis">Beats and misses are judged against the <Term k="beat">estimate as it stood before the report</Term> wherever we have it, not one revised afterwards.</p>
           <section className="card">
             <h4 className="eyebrow">The month in one bar</h4>
             <div className="big-strip">

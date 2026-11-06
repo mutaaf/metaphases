@@ -221,7 +221,7 @@ export function SeasonScoreboard({ slim }: { slim?: boolean }) {
             <div><span className="eyebrow"><Term k="revenue">Revenue</Term> beat rate</span><b>{season.revBeatPct != null ? `${season.revBeatPct}%` : "—"}</b>{season.revExcluded > 0 && <small className="muted rev-excluded">{season.revExcluded} <Term k="revbasis">can't compare</Term></small>}</div>
             <div><span className="eyebrow">Median <Term k="surprise">surprise</Term></span><b>{pct(season.medianSurprise)}</b></div>
           </div>
-          <p className="muted small">Counts each index member's latest report in the last six weeks (our free data window), judged against the estimate as it stood before each report. Historically, roughly three in four companies beat EPS estimates in a typical quarter.</p>
+          <p className="muted small">Counts each index member's latest report in the last six weeks (our free data window), judged against the estimate as it stood before each report wherever we have it. Historically, roughly three in four companies beat EPS estimates in a typical quarter.</p>
         </>
       )}
     </section>
