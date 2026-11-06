@@ -22,6 +22,7 @@ import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } fro
 import { applyPreReport, nasdaqDayEps, periodKey, pickConsensus, type EstSnapshot } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
+import { isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, nqDate, skippedQuarter } from "../shared/pending";
 import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
 interface Env {
@@ -341,7 +342,7 @@ function slimMetric(raw: any) {
 
 /** The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON. */
 async function tickerData(symbol: string, env: Env, ctx: ExecutionContext): Promise<TickerResponse> {
-  return cached<TickerResponse>(`tk:v2:${symbol}`, 300, ctx, () => buildTicker(symbol, env, ctx));
+  return cached<TickerResponse>(`tk:v3:${symbol}`, 300, ctx, () => buildTicker(symbol, env, ctx));
 }
 
 async function ticker(symbol: string, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -383,6 +384,25 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     usdEps: rows.slice(0, 4).map((r) => (typeof r.eps === "number" ? r.eps : parseFloat(r.eps))),
   });
   const usd = isUsd(currency);
+
+  // 0038: a quarter whose projected date passed without a result has dropped off `symbol=` (future dates
+  // only), so `nextE` may be the quarter after it. Keep the unreported quarter as the next report instead,
+  // with its passed date and estimates when the cached calendar still holds its row.
+  const reportedDates = rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null);
+  const skip = skippedQuarter(nextE, reportedDates);
+  let pending: { quarter: number; year: number; passed: string | null; hour: Session; eE: number | null; rE: number | null } | null = null;
+  if (skip) {
+    const row = await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
+    // A row with figures means it did report and Nasdaq hasn't caught up: not pending (0040 territory).
+    if (!row || (row.eA == null && row.rA == null)) {
+      pending = { ...skip, passed: row?.d ?? null, hour: (row?.h ?? "") as Session, eE: row?.eE ?? null, rE: row?.rE ?? null };
+    }
+  }
+  // A company-dated row that the override had to create carries no estimates; borrow the calendar's for that quarter.
+  if (nextE?.source && nextE.epsEstimate == null && nextE.revenueEstimate == null) {
+    const row = await passedRow(symbol, nextE, lookbackDays(today, addDays(today, -LOOKBACK_DAYS)));
+    if (row && row.eA == null) { nextE.epsEstimate = row.eE; nextE.revenueEstimate = row.rE; }
+  }
   // The sheet explains a non-USD basis next to the estimates (next.currency); no partial-data warning needed.
 
   // Past prints: Nasdaq gives report dates; Finnhub gives estimate/actual. Join on order (both newest-first).
@@ -446,14 +466,17 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const name = profile?.name || U[symbol]?.n || symbol;
   const read: string[] = [];
   // A projected date on a closed-market day isn't a date yet (0045): say so instead of stating it.
-  const closed = nextE && !nextE.source ? closedDay(nextE.date) : null;
-  if (nextE && closed) {
+  const closed = nextE && !nextE.source && !pending ? closedDay(nextE.date) : null;
+  const longDay = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
+  if (pending) {
+    read.push(`${name}'s Q${pending.quarter} report date is not confirmed yet: ${pending.passed ? `the data feed expected it on ${longDay(pending.passed)} and has no results yet` : "the data feed has no date for it, and no results yet"}.`);
+  } else if (nextE && closed) {
     read.push(`${name}'s Q${nextE.quarter} report date is not confirmed yet: the data feed projects ${new Date(nextE.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}, when the market is closed (${closed}).`);
   } else if (nextE) {
     const when = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "(time not yet confirmed)" }[nextE.hour as Session] ?? "";
     read.push(`${name} reports Q${nextE.quarter} on ${new Date(nextE.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })} ${when}.`);
   }
-  const estLine = readEstimate(name, nextE?.epsEstimate, currency, history[0]?.epsA);
+  const estLine = readEstimate(name, pending ? pending.eE : nextE?.epsEstimate, currency, history[0]?.epsA);
   if (estLine) read.push(estLine);
   if (beatRate) read.push(`It has beaten the estimate in ${beats} of its last ${judged.length} reports.`);
   if (expectedMove != null) read.push(`The stock has moved about ±${expectedMove.toFixed(1)}% on a typical report — that's the size of swing to be ready for.`);
@@ -464,7 +487,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     symbol,
     profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, marketCap: profile.marketCapitalization, currency: typeof profile.currency === "string" ? profile.currency : "USD", exchange: profile.exchange, ipo: profile.ipo } : null,
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
-    next: nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate, currency, ...(nextE.source ? { confirmed: nextE.source } : {}), ...(closed ? { closed } : {}) } : null,
+    next: pending ? { date: pending.passed ?? "", session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
+      : nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate, currency, ...(nextE.source ? { confirmed: nextE.source } : {}), ...(closed ? { closed } : {}) } : null,
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
@@ -472,6 +496,18 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     read, warnings,
   };
   return body;
+}
+
+/** The pending quarter's row in the cached calendar days (fresh, else the last good copy), newest day first. */
+async function passedRow(symbol: string, q: { quarter: number; year: number }, days: string[]): Promise<EarningsEvent | null> {
+  const found = await Promise.all(days.map(async (d) => {
+    try {
+      const hit = (await caches.default.match(CAL(`cal:v2:${d}`))) ?? (await caches.default.match(CAL(`cal:stale:v2:${d}`)));
+      const evs = hit ? ((await hit.json()) as EarningsEvent[]) : [];
+      return evs.find((e) => e.s === symbol && e.q === q.quarter && e.y === q.year) ?? null;
+    } catch { return null; }
+  }));
+  return found.find((e) => e != null) ?? null;
 }
 
 // ── /api/macro ─────────────────────────────────────────────────────────
@@ -576,7 +612,6 @@ const PAGES: Record<string, { title: string; desc: string; image?: string; kids?
   "/kids/pack": { title: "A Moon Club lesson pack", desc: "New one-minute money lessons and a new island on the Moon Club map, checked by a teacher and a markets expert. A grown-up turns it on.", image: `${SITE}${BASE}/og-kids.png`, kids: true },
   "/about": { title: "Where Metaphases comes from · Metaphases", desc: "A calmer earnings calendar with a memory: the best ideas from Market Digest and Compass, free, explained, never advice. Data, lineage and how the agents keep it running." },
 };
-const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
 async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ title: string; desc: string; image?: string; kids?: boolean } | null> {
   const path = url.pathname.slice(BASE.length) || "/";
@@ -586,8 +621,7 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
     try {
       const d = await tickerData(sym, env, ctx);
       const name = d.profile?.name ?? U[sym]?.n ?? sym;
-      const when = d.next && !d.next.closed ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
-      const title = when ? `${sym} reports ${when} ${SESSION_WORDS[d.next!.session]} · Metaphases`.replace("  ", " ") : d.next?.closed ? `${sym} earnings: date not confirmed yet · Metaphases` : `${name} (${sym}) earnings · Metaphases`;
+      const title = tickerShareTitle(sym, name, d.next);
       const bits = [
         d.beatRate ? `Beat ${d.beatRate.beats} of its last ${d.beatRate.total}` : null,
         d.expectedMove != null ? `typical move ±${d.expectedMove.toFixed(1)}%` : null,
@@ -757,7 +791,7 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
 // ── /og/t/:sym.(svg|png): per-ticker share card ─────────────────────────
 async function cardFor(sym: string, env: Env, ctx: ExecutionContext): Promise<string> {
   const d = await tickerData(sym, env, ctx);
-  const when = d.next && !d.next.closed ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
+  const when = isDated(d.next) ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
   return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null, cur: d.next?.currency });
 }
 
@@ -799,7 +833,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
         const name = d.profile?.name ?? U[sym]?.n ?? sym;
         return storyTickerSvg({
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
-          when: d.next && !d.next.closed ? whenPlain(d.next.date, d.next.session, day) : d.next ? "date not confirmed yet" : "date not announced yet",
+          when: isDated(d.next) ? whenPlain(d.next.date, d.next.session, day) : d.next ? "date not confirmed yet" : "date not announced yet",
           session: d.next?.session ?? "", epsE: d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
           beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null,
         });

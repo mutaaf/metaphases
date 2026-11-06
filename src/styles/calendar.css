@@ -31,6 +31,7 @@ button.chip:hover { border-color: var(--ink); }
 .chip.res-beat { color: var(--beat); background: var(--beat-bg); border-color: transparent; }
 .chip.res-mixed { color: var(--mixed); background: var(--mixed-bg); border-color: transparent; }
 .chip.res-miss { color: var(--miss); background: var(--miss-bg); border-color: transparent; }
+.chip.chip-nores { border-style: dashed; }
 
 /* ── Calendar grid ── */
 .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--line-2); background: var(--paper); box-shadow: var(--shadow); }

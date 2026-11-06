@@ -10,12 +10,13 @@ import { addDays, fmtShort, todayISO } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { BASE, setParam } from "../lib/router";
 import { Icon, Phase, PHASE_LABEL, Skeleton, Term, Tile } from "./bits";
+import { isDated } from "../../shared/pending";
 
 // ── Price chart with earnings markers ──────────────────────────────────
 export function PriceChart({ data }: { data: TickerResponse }) {
   const ch = data.chart;
   const [sel, setSel] = useState<number | null>(null);
-  const W = 680, H = 220, PADL = 8, PADR = data.next ? 64 : 8, PADT = 14, PADB = 22;
+  const W = 680, H = 220, PADL = 8, PADR = isDated(data.next) ? 64 : 8, PADT = 14, PADB = 22;
   const g = useMemo(() => {
     if (!ch || ch.c.length < 2) return null;
     const all = [...ch.c, ...ch.s50.filter((x): x is number => x != null), ...ch.s200.filter((x): x is number => x != null)];
@@ -41,7 +42,7 @@ export function PriceChart({ data }: { data: TickerResponse }) {
         {g.months.map((mo) => (
           <g key={mo.i}><line x1={g.x(mo.i)} x2={g.x(mo.i)} y1={PADT} y2={H - PADB} className="pc-grid" /><text x={g.x(mo.i) + 3} y={H - 6} className="pc-month">{mo.label}</text></g>
         ))}
-        {data.next && g.band > 0 && (
+        {isDated(data.next) && g.band > 0 && (
           <g className="pc-proj">
             <rect x={endX + 6} width={PADR - 14} y={g.y(g.last + g.band)} height={g.y(g.last - g.band) - g.y(g.last + g.band)} rx="3" />
             <text x={endX + PADR / 2 - 1} y={g.y(g.last + g.band) - 4} textAnchor="middle">±{data.expectedMove!.toFixed(1)}%</text>
@@ -66,7 +67,7 @@ export function PriceChart({ data }: { data: TickerResponse }) {
       <div className="pc-legend">
         <span><i className="lg-close" /> Price</span><span><i className="lg-s50" /> <Term k="sma">50-day</Term></span><span><i className="lg-s200" /> 200-day</span>
         <span><i className="lg-mark" /> Report (tap)</span>
-        {data.next && g.band > 0 && <span><i className="lg-band" /> <Term k="expectedmove">Typical move</Term> into {fmtShort(data.next.date)}</span>}
+        {isDated(data.next) && g.band > 0 && <span><i className="lg-band" /> <Term k="expectedmove">Typical move</Term> into {fmtShort(data.next.date)}</span>}
       </div>
       {m && <MarkerDetail r={m.r} />}
     </div>

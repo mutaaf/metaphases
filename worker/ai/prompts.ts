@@ -65,7 +65,7 @@ function tickerFacts(t: Obj): string[] {
   const name = clip(t.profile?.name ?? t.symbol, 60);
   L.push(`Company: ${name} (${clip(t.symbol, 10)}), ${clip(t.profile?.industry ?? "", 40)}, market cap ${t.profile?.marketCap && (isUsd(cur3(t.next?.currency)) || !isUsd(cur3(t.profile.currency))) ? moneyIn(t.profile.marketCap * 1e6, cur3(t.profile.currency)) : "—"}.`);
   if (t.quote) L.push(`Price $${n(t.quote.price)} (${n(t.quote.changePct)}% today).`);
-  if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} on ${clip(t.next.date, 10)} ${clip(t.next.session || "time TBD", 4)}; consensus EPS ${epsIn(t.next.epsE, cur3(t.next.currency))}, revenue estimate ${moneyIn(t.next.revE, cur3(t.next.currency))}${isUsd(cur3(t.next.currency)) ? "" : ` (estimates in ${cur3(t.next.currency) || "local currency"}, not USD; never compare them with USD figures)`}.`);
+  if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} ${t.next.closed || t.next.overdue ? "(date not confirmed yet)" : `on ${clip(t.next.date, 10)} ${clip(t.next.session || "time TBD", 4)}`}; consensus EPS ${epsIn(t.next.epsE, cur3(t.next.currency))}, revenue estimate ${moneyIn(t.next.revE, cur3(t.next.currency))}${isUsd(cur3(t.next.currency)) ? "" : ` (estimates in ${cur3(t.next.currency) || "local currency"}, not USD; never compare them with USD figures)`}.`);
   else L.push("Next report date: not available.");
   if (t.beatRate) L.push(`Beat the EPS estimate in ${t.beatRate.beats} of the last ${t.beatRate.total} reports.`);
   if (typeof t.expectedMove === "number") L.push(`Typical stock move on a report: ±${n(t.expectedMove, 1)}%.`);

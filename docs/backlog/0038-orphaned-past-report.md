@@ -1,12 +1,12 @@
 ---
 id: 0038
 title: Never drop a report whose projected date passed without a result (AXON's Nov 5 report now shows as "Feb 22")
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-03
-pr:
+pr: 71
 by: critic
 ---
 
@@ -50,3 +50,7 @@ Fixing the projected date itself (0013 overrides, 0015 Nasdaq cross-check). No n
 
 ## Builder note 2026-11-04 (PR #51 self-review)
 An override that has to *create* the row loses the estimates: `applyToRows` (sheet, `/t/` share meta, .ics) never has the Q3 row because `symbol=` returns future dates only, and `applyToEvents` drops them whenever the requested range leaves out Finnhub's original day (Today's `from=2026-11-04&to=2026-11-13` → WES and PAA `eE:null`). Carry the calendar's estimate for that quarter over (e.g. from the cached per-day calendar row) when you fix 0038; `tests/unit/dateOverridesWorker.test.ts` pins today's "no estimate, never Q4's" behavior.
+
+## Builder note 2026-11-06 (PR #71)
+Shipped: the sheet, The Read, `/t/` share title, OG card, Today, Watchlist, Hype Check and the AI facts never name the following quarter while an earlier one hasn't reported. Detection: Nasdaq's report cadence (two reports ≤ 115 days apart = quarterly) plus a next listed date > 140 days after the last report (`shared/pending.ts`). The passed row and its estimates come from the cached calendar days (`cal:v2`, else `cal:stale:v2`, 21 days back); a passed row with figures means Nasdaq is just behind, so no flag. Company-dated rows the override created now borrow that row's estimate too. Calendar rows more than one trading day past with no figures read "No result yet", untinted.
+Not done here: an `overdue[]` list in `/api/calendar` (anything in `warnings` shows the "busy" banner, see 0047), and a Nasdaq per-day future date for the pending quarter (that's 0015). Semiannual reporters and names whose Nasdaq history is missing are left as they were.

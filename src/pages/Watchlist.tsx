@@ -7,20 +7,21 @@ import { actions, useStore } from "../lib/store";
 import { GradeBadge, Icon, Phase, Skeleton, Term, Tile } from "../components/bits";
 import { PageHero } from "../components/Hero";
 import { IcsButtons } from "../components/Depth";
+import { isDated } from "../../shared/pending";
 
 export const POPULAR = ["AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "NFLX"];
 
 function WatchRow({ s, buy, note }: { s: string; buy?: number; note?: string }) {
   const { data, loading } = useTicker(s);
   const today = todayISO();
-  const n = data?.next && !data.next.closed ? daysBetween(today, data.next.date) : null;
+  const n = isDated(data?.next) ? daysBetween(today, data.next.date) : null;
   const below = buy && data?.quote ? data.quote.price <= buy : false;
   return (
-    <button className={`wl-row ${below ? "alert" : ""}`} onClick={() => setParam("t", s)} aria-label={`${nameOf(s)}${data?.next ? (data.next.closed ? ", report date not confirmed" : `, reports ${fmtShort(data.next.date)}`) : ""}${below ? ", at or below your buy price" : ""}`}>
+    <button className={`wl-row ${below ? "alert" : ""}`} onClick={() => setParam("t", s)} aria-label={`${nameOf(s)}${data?.next ? (data.next.closed || data.next.overdue ? ", report date not confirmed" : `, reports ${fmtShort(data.next.date)}`) : ""}${below ? ", at or below your buy price" : ""}`}>
       <Tile s={s} size={44} />
       <span className="wl-id"><b>{s}</b><span className="muted">{data?.profile?.name ?? nameOf(s)}</span>{note && <span className="wl-note">“{note}”</span>}</span>
       <span className="wl-next">
-        {loading && !data ? <Skeleton w={90} /> : data?.next?.closed ? <span className="muted small">Date not confirmed</span> : data?.next ? (
+        {loading && !data ? <Skeleton w={90} /> : data?.next?.closed || data?.next?.overdue ? <span className="muted small">Date not confirmed</span> : data?.next ? (
           <><Phase h={data.next.session} size={14} /> <span><b>{fmtShort(data.next.date)}</b><span className="eyebrow">{n === 0 ? "today" : `in ${n}d`}</span></span></>
         ) : <span className="muted small">No date yet</span>}
       </span>

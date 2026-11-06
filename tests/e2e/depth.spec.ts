@@ -96,3 +96,34 @@ test("the sheet shows no company-confirmed label for a feed date", async ({ page
   await expect(page.locator(".next-card h3")).toBeVisible();
   await expect(page.locator(".nc-confirmed")).toHaveCount(0);
 });
+
+test("an unreported quarter reads as not confirmed, never as the quarter after it (0038)", async ({ page }) => {
+  // The worker keeps the unreported quarter as `next` (unit-tested); here the sheet gets its output shape.
+  await page.route("**/api/ticker/AXON", async (r) => {
+    const body = JSON.parse(readFileSync(new URL("../fixtures/ticker-NVDA.json", import.meta.url), "utf8").replaceAll('"NVDA"', '"AXON"'));
+    body.next = { ...body.next, date: "2026-10-27", session: "", quarter: 3, year: 2026, epsE: 1.87, overdue: true };
+    delete body.next.confirmed;
+    body.read = ["Axon's Q3 report date is not confirmed yet: the data feed expected it on Tuesday, Oct 27 and has no results yet.", ...body.read.slice(1)];
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/AXON");
+  const card = page.locator(".next-card");
+  await expect(card.locator("h3")).toHaveText("Date not confirmed");
+  await expect(card.locator(".eyebrow").first()).toContainText("Q3 2026");
+  await expect(card.locator(".nc-closed")).toContainText("expected it on Tuesday, October 27");
+  await expect(card).not.toContainText(/in \d+ days|today|tomorrow/);
+  await expect(page.locator(".pc-proj")).toHaveCount(0); // no "typical move into <date>" band
+  await expect(page.locator(".sheet-actions")).not.toContainText(/calendar/i);
+  const w = await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth), document.documentElement.scrollWidth - document.documentElement.clientWidth));
+  expect(w).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: test.info().outputPath("overdue-sheet.png") });
+});
+
+test("a calendar row whose day passed with no results says so, untinted (0038)", async ({ page }) => {
+  await page.goto("./?d=2026-10-21&day=2026-10-21");
+  const drawer = page.locator(".drawer[role=dialog]");
+  const bkr = drawer.locator(".erow", { hasText: "BKR" });
+  await expect(bkr.locator(".chip-nores")).toHaveText(/No result yet/i);
+  await expect(bkr.locator(".res-beat, .res-miss, .res-mixed")).toHaveCount(0);
+  await bkr.screenshot({ path: test.info().outputPath("overdue-calendar.png") });
+});
