@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { applyPreReport, nasdaqDayEps, pickConsensus, periodKey, REV_BASIS_MAX, revenueBeatRate, revenueComparable, revenueVerdict, sameEpsBasis, type EstSnapshot } from "../../shared/compare";
-import { seasonScore } from "../../shared/depth";
 import type { EarningsEvent } from "../../shared/types";
 import { seasonScore } from "../../shared/depth";
 import { epsIn, moneyIn } from "../../shared/currency";
@@ -117,6 +116,12 @@ describe("judge a print against the bar set before it (0035)", () => {
     const after = applyPreReport([ev("V", { eE: 3.5055, eA: 3.48, rE: 10.75e9, rA: 10.7e9 })], round, { V: 3.43 });
     expect(after.events[0]).toMatchObject({ eE: 3.44, rE: 10.6e9, pr: "s" });
     expect(after.updates).toEqual({});
+  });
+
+  it("doesn't snapshot on report day (Finnhub can revise before the actual lands), and a partial snapshot isn't the bar", () => {
+    expect(applyPreReport([ev("V", { eE: 3.5, rE: 10e9 })], {}, {}, () => true, false).updates).toEqual({});
+    const partial = applyPreReport([ev("V", { eE: 3.5055, eA: 3.48, rE: 10.75e9, rA: 10.7e9 })], { V: { eE: null, rE: 10.6e9 } }, { V: 3.43 });
+    expect(partial.events[0]).toMatchObject({ eE: 3.43, rE: 10.75e9, pr: "n" });
   });
 
   it("falls back to Nasdaq's pre-report EPS for reported rows with no snapshot, only in dollars and on the same basis", () => {

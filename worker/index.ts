@@ -53,9 +53,9 @@ async function cached<T>(key: string, ttl: number, ctx: ExecutionContext, fn: ()
   return val;
 }
 
-async function getJson<T = any>(url: string, headers: Record<string, string> = {}): Promise<T> {
+async function getJson<T = any>(url: string, headers: Record<string, string> = {}, timeoutMs?: number): Promise<T> {
   for (let attempt = 0; ; attempt++) {
-    const r = await fetch(url, { headers, cf: { cacheTtl: 60 } } as RequestInit);
+    const r = await fetch(url, { headers, cf: { cacheTtl: 60 }, ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}) } as RequestInit);
     if (r.status === 429 && attempt < 3) { await new Promise((ok) => setTimeout(ok, 700 * (attempt + 1))); continue; }
     if (!r.ok) throw new Error(`${new URL(url).hostname} ${r.status}`);
     return (await r.json()) as T;
@@ -170,10 +170,16 @@ async function readSnap(day: string): Promise<EstSnapshot> {
 
 /** Nasdaq's day calendar: pre-report EPS consensus for that day's reporters (one call per day, cached). */
 function nasdaqDay(day: string, today: string, ctx: ExecutionContext): Promise<Record<string, number>> {
-  return cached(`nq:cal:v1:${day}`, day < today ? 7 * 86400 : 3600, ctx, async () => nasdaqDayEps(await getJson(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, UA)));
+  return cached(`nq:cal:v1:${day}`, day < today ? 7 * 86400 : 3600, ctx, async () => {
+    // A slow Nasdaq must not hold up the calendar, and an empty answer isn't cached for a week.
+    const eps = nasdaqDayEps(await getJson(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, UA, 4000));
+    if (!Object.keys(eps).length) throw new Error("nasdaq day calendar empty");
+    return eps;
+  });
 }
 
-const usdEstimates = (s: string) => isUsd(U[s]?.ec ?? "USD");
+/** Nasdaq's figures are dollars: only swap them in for tracked names whose estimates are in dollars too. */
+const usdEstimates = (s: string) => s in U && isUsd(U[s].ec ?? "USD");
 
 /**
  * Snapshot unreported rows' estimates; judge reported rows against the snapshot, else Nasdaq's
@@ -183,7 +189,7 @@ async function preReportDay(day: string, events: EarningsEvent[], today: string,
   const snap = await readSnap(day);
   const needNq = events.some((e) => (e.eA != null || e.rA != null) && !snap[e.s] && e.eE != null);
   const nq = needNq ? await nasdaqDay(day, today, ctx).catch(() => ({})) : {};
-  const { events: out, updates } = applyPreReport(events, snap, nq, usdEstimates);
+  const { events: out, updates } = applyPreReport(events, snap, nq, usdEstimates, day > today);
   if (Object.keys(updates).length) {
     // Re-read just before writing and add only our entries: another request's newer snapshot survives (0047).
     ctx.waitUntil((async () => {
