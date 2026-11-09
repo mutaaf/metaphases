@@ -26,7 +26,7 @@ function JustReported({ j, today }: { j: NonNullable<TickerResponse["justReporte
       <dl className="nc-stats">
         <div><dt>EPS</dt><dd>{epsIn(j.epsA, j.currency)}</dd></div>
         <div><dt><Term k="consensus">Expected</Term></dt><dd>{epsIn(j.epsE, j.currency)}</dd></div>
-        <div><dt><Term k="surprise">Result</Term></dt><dd className={s == null ? "" : s >= 0 ? "pos" : "neg"}>{verdict ?? (j.epsA == null ? "Figures not in yet" : "—")}</dd></div>
+        <div><dt><Term k="surprise">Result</Term></dt><dd className={s == null || Math.abs(s) < 0.5 ? "" : s > 0 ? "pos" : "neg"}>{verdict ?? (j.epsA == null ? "Figures not in yet" : "—")}</dd></div>
       </dl>
     </section>
   );
@@ -141,7 +141,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   const due = data?.next?.status === "results-pending";
   const shareText = just
     ? `${name} reported Q${just.quarter}${just.epsA != null ? `: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? ` vs ${epsIn(just.epsE, just.currency)} expected` : ""}` : ""}.`
-    : due ? `${name}'s Q${data!.next!.quarter} results are due; the figures aren't in yet.`
+    : due ? `${name}'s Q${data!.next!.quarter} results were expected; none are in yet.`
     : data?.next?.closed || data?.next?.overdue
     ? `${name}: report date not confirmed yet — earnings track record, quality grade and setup.`
     : data?.next
@@ -189,7 +189,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                   <h3>{data.next.closed || data.next.overdue ? "Date not confirmed" : fmtLong(data.next.date)}</h3>
                   {data.next.closed && <span className="muted nc-closed">The data feed projects {fmtLong(data.next.date)}, but markets are closed that day ({data.next.closed}).</span>}
                   {data.next.overdue && <span className="muted nc-closed">{data.next.date ? `The data feed expected it on ${fmtLong(data.next.date)}, and there are no results yet.` : "The data feed has no date for this quarter yet, and there are no results yet."} The new date isn't confirmed.</span>}
-                  {due && <span className="muted nc-closed">Results were due {data.next.session ? `${PHASE_LABEL[data.next.session].toLowerCase()} ` : ""}{data.next.date === today ? "today" : `on ${fmtLong(data.next.date)}`}. The figures aren't in our data yet.</span>}
+                  {due && <span className="muted nc-closed">Results were expected {data.next.session ? `${PHASE_LABEL[data.next.session].toLowerCase()} ` : ""}{data.next.date === today ? "today" : `on ${fmtLong(data.next.date)}`}. None are in our data yet.</span>}
                   {!data.next.overdue && !due && <span className="muted"><Term k={data.next.session || "bmo"}>{PHASE_LABEL[data.next.session]}</Term>{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
                   {data.next.confirmed && <span className="nc-confirmed small"><Term k="companydate">Confirmed by the company</Term> · <a href={data.next.confirmed} target="_blank" rel="noopener noreferrer">source</a></span>}
                 </div>

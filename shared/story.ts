@@ -41,7 +41,7 @@ ${body}
 const lines = (ls: string[], x: number, y: number, size: number, lh: number, attrs: string) =>
   ls.map((l, i) => `<text x="${x}" y="${y + i * lh}" font-size="${size}" ${attrs}>${xml(l)}</text>`).join("\n");
 
-export interface StoryTicker { symbol: string; name: string; does: string; when: string; session: Session; epsE: number | null; cur?: string; move: number | null; grade: string | null; beats: number | null; total: number | null }
+export interface StoryTicker { symbol: string; name: string; does: string; when: string; session: Session; epsE: number | null; cur?: string; move: number | null; grade: string | null; beats: number | null; total: number | null; /** 0039: replaces "Reports …" once the report is out or due. */ headline?: string; stat?: { label: string; value: string } }
 
 export function storyTickerSvg(d: StoryTicker): string {
   const symSize = d.symbol.length > 4 ? 190 : 240;
@@ -53,8 +53,8 @@ export function storyTickerSvg(d: StoryTicker): string {
 ${phase(d.session, 880, 470, 92)}
 ${lines(wrap(d.name, 26), 96, 650, 52, 62, `font-family="Schibsted Grotesk" font-weight="700" fill="#3b3a37"`)}
 ${lines(wrap(d.does, 34), 96, 770, 40, 54, `font-family="Schibsted Grotesk" fill="#3b3a37"`)}
-${lines(wrap(`Reports ${d.when}`, 26), 96, 960, 72, 80, `font-family="Instrument Serif" font-style="italic" fill="${ACCENT}"`)}
-${stat(1180, "WALL STREET EXPECTS", d.epsE != null ? `${epsIn(d.epsE, d.cur)} a share` : "—")}
+${lines(wrap(d.headline ?? `Reports ${d.when}`, 26), 96, 960, 72, 80, `font-family="Instrument Serif" font-style="italic" fill="${ACCENT}"`)}
+${d.stat ? stat(1180, d.stat.label, d.stat.value) : stat(1180, "WALL STREET EXPECTS", d.epsE != null ? `${epsIn(d.epsE, d.cur)} a share` : "—")}
 ${stat(1350, "USUALLY MOVES", d.move != null ? `±${d.move.toFixed(1)}%` : "—")}
 ${stat(1520, "QUALITY GRADE · BEAT RECORD", `${d.grade ?? "—"} · ${d.beats != null && d.total ? `${d.beats} of ${d.total}` : "—"}`)}`;
   return frame("This week's report", body);

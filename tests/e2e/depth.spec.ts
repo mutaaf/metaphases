@@ -156,13 +156,13 @@ test("a report whose session passed without figures says results are due, never 
   await page.route("**/api/ticker/CVS", async (r) => {
     const body = nvdaAs("CVS");
     body.next = { ...body.next, date: "2026-10-31", session: "bmo", quarter: 3, year: 2026, epsE: 1.67, status: "results-pending" };
-    body.read = ["CVS's Q3 results were due before the opening bell today (Saturday, Oct 31); the figures aren't in our data yet.", "The estimate going in was $1.67 a share."];
+    body.read = ["CVS's Q3 results were expected before the opening bell today (Saturday, Oct 31); none are in our data yet.", "The estimate going in was $1.67 a share."];
     await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto("./t/CVS");
   const card = page.locator(".next-card");
   await expect(card.locator(".eyebrow").first()).toContainText("This report · Q3 2026");
-  await expect(card).toContainText("Results were due before open today. The figures aren't in our data yet.");
+  await expect(card).toContainText("Results were expected before open today. None are in our data yet.");
   await expect(card).not.toContainText("expects");
   await expect(card).not.toContainText("· today");
   await expect(page.getByRole("button", { name: /Write the preview/ })).toHaveCount(0);

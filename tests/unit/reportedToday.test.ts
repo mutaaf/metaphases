@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../../worker/index";
 import { isDated, tickerShareTitle } from "../../shared/pending";
-import { pendingLine, reportedLine, reportOutcome, sessionPassed, tickerShareDesc } from "../../shared/reported";
+import { pendingLine, reportedCard, reportedLine, reportOutcome, sessionPassed, tickerShareDesc } from "../../shared/reported";
+import { storyTickerSvg } from "../../shared/story";
 import { cardSvg } from "../../shared/depth";
 
 // 0039: once a company has reported, the sheet, The Read and the share card say so the same day.
@@ -35,7 +36,7 @@ describe("reportOutcome", () => {
       .toBe("Pfizer Inc. reported Q3 today (Tuesday, Nov 3) before the opening bell: $0.87 a share against $0.73 expected, a beat of 19%.");
     expect(reportedLine("X", { date: "2026-11-03", session: "amc", quarter: 3, epsE: 1, epsA: 0.9 }, "2026-11-04", fmt)).toContain("on Tuesday, Nov 3 after the close: $0.90 a share against $1.00 expected, a miss of 10%.");
     expect(pendingLine("Pfizer Inc.", { date: "2026-11-03", session: "bmo", quarter: 3 }, "2026-11-03"))
-      .toBe("Pfizer Inc.'s Q3 results were due before the opening bell today (Tuesday, Nov 3); the figures aren't in our data yet.");
+      .toBe("Pfizer Inc.'s Q3 results were expected before the opening bell today (Tuesday, Nov 3); none are in our data yet.");
   });
 });
 
@@ -112,12 +113,12 @@ describe("/api/ticker on report day (PFE shape, Nov 3, 1 pm ET)", () => {
     const r = await get("/api/ticker/ZZZR");
     expect(r.next).toMatchObject({ quarter: 3, date: "2026-11-03", status: "results-pending", epsE: 0.73 });
     expect(r.justReported).toBeUndefined();
-    expect(r.read[0]).toContain("results were due before the opening bell today");
+    expect(r.read[0]).toContain("results were expected before the opening bell today");
     expect(r.read.join(" ")).not.toMatch(FUTURE);
     expect(r.read.join(" ")).not.toContain("expects");
     expect(r.read.join(" ")).toContain("The estimate going in was $0.73 a share.");
     expect(isDated(r.next)).toBe(false);
-    expect(tickerShareTitle("ZZZR", "ZZZR", r.next)).toBe("ZZZR's Q3 results are due: figures not in yet · Metaphases");
+    expect(tickerShareTitle("ZZZR", "ZZZR", r.next)).toBe("ZZZR's Q3 results expected: none in yet · Metaphases");
     expect(tickerShareDesc("ZZZR", r)).not.toContain("Street expects");
   });
 
@@ -146,8 +147,44 @@ describe("/api/ticker the day after (ADM shape, Nov 4): the report never vanishe
     const r = await get("/api/ticker/ZZZR");
     expect(r.next).toMatchObject({ quarter: 3, date: "2026-11-03", status: "results-pending" });
     expect(r.next.overdue).toBeUndefined();
-    expect(r.read[0]).toContain("results were due before the opening bell on Tuesday, Nov 3");
+    expect(r.read[0]).toContain("results were expected before the opening bell on Tuesday, Nov 3");
     expect(r.read.join(" ")).not.toMatch(/Feb|last quarter/);
+  });
+});
+
+describe("review fixes", () => {
+  it("Nasdaq already lists the report a day off (Nov 4): one row, not the quarter counted twice", async () => {
+    vi.setSystemTime(new Date("2026-11-05T15:00:00Z"));
+    symbolRows = [q4];
+    const rows = [{ fiscalQtrEnd: "Sep 2026", dateReported: "11/4/2026", eps: 0.87, consensusForecast: "0.73", percentageSurprise: "19.2" }, ...nasdaqRows];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      const url = new URL(u);
+      if (url.hostname === "api.nasdaq.com") return new Response(JSON.stringify({ data: { earningsSurpriseTable: { rows } } }));
+      if (url.pathname.endsWith("/calendar/earnings")) return new Response(JSON.stringify({ earningsCalendar: symbolRows }));
+      return new Response("{}", { status: 404 });
+    }));
+    cache.store.set(CAL("cal:v2:2026-11-03"), JSON.stringify([{ ...q3Day, eA: 0.87 }]));
+    const r = await get("/api/ticker/ZZZR");
+    expect(r.history.filter((h: any) => h.epsA === 0.87)).toHaveLength(1);
+    expect(r.beatRate.total).toBe(3);
+  });
+
+  it("'Just reported' comes down after a few trading days; the history row stays", async () => {
+    vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); // 5 trading days after Nov 3
+    symbolRows = [q4];
+    cache.store.set(CAL("cal:v2:2026-11-03"), JSON.stringify([{ ...q3Day, eA: 0.87 }]));
+    const r = await get("/api/ticker/ZZZR");
+    expect(r.justReported).toBeUndefined();
+    expect(r.history[0]).toMatchObject({ date: "2026-11-03", epsA: 0.87 });
+  });
+
+  it("story and share cards: reported or expected, never 'Wall Street expects' or 'Reports'", () => {
+    const pend = reportedCard({ next: { date: "2026-11-03", session: "bmo", quarter: 3, year: 2026, epsE: 1.67, revE: null, currency: "USD", status: "results-pending" } }, "2026-11-03");
+    expect(pend).toEqual({ headline: "Q3 results expected, none in yet", stat: { label: "EPS EST GOING IN", value: "$1.67" } });
+    expect(reportedCard({ next: null, justReported: { date: "2026-11-03", session: "bmo", quarter: 3, year: 2026, epsE: 0.73, epsA: 0.87, currency: "USD" } }, "2026-11-03")?.headline).toBe("Reported Q3 today");
+    const svg = storyTickerSvg({ symbol: "CVS", name: "CVS Health", does: "Pharmacies", when: "x", session: "bmo", epsE: 1.67, move: 3, grade: "B", beats: 3, total: 4, ...pend! });
+    expect(svg).not.toContain("WALL STREET EXPECTS");
+    expect(svg).not.toContain("Reports x");
   });
 });
 

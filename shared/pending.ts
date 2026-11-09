@@ -84,7 +84,7 @@ export function tickerShareTitle(sym: string, name: string, next: { date: string
   // 0039: a report that's out leads the title, whatever comes next.
   if (just) return just.epsA == null ? `${sym} reported Q${just.quarter} · Metaphases`
     : `${sym} reported Q${just.quarter}: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? ` vs ${epsIn(just.epsE, just.currency)} expected` : ""} · Metaphases`;
-  if (next?.status === "results-pending") return `${sym}'s Q${next.quarter} results are due: figures not in yet · Metaphases`;
+  if (next?.status === "results-pending") return `${sym}'s Q${next.quarter} results expected: none in yet · Metaphases`;
   if (isDated(next)) {
     const when = new Date(next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
     return `${sym} reports ${when} ${SESSION_WORDS[(next as { session: string }).session] ?? ""} · Metaphases`.replace("  ", " ");

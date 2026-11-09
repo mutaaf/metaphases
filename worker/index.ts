@@ -22,8 +22,8 @@ import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } fro
 import { applyPreReport, nasdaqDayEps, periodKey, pickConsensus, type EstSnapshot } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
-import { isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
-import { pendingLine, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
+import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
+import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
 import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
 interface Env {
@@ -481,7 +481,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
 
   // 0039: the report that's out heads the history until Nasdaq lists it. Non-dollar figures stay off the
   // dollar table ("—"); the move waits for a settled post-report close.
-  if (reported && !history.some((h) => h.date === reported.date)) {
+  if (reported && !history.some((h) => Math.abs(daysApart(h.date, reported.date)) <= 3)) {
     const settled = tradingDaysSince(reported.date, today) >= (reported.hour === "bmo" ? 1 : 2);
     const b = reported.hour === "bmo" ? closeOn(reported.date, -1) : closeOn(reported.date, 0);
     const a = reported.hour === "bmo" ? closeOn(reported.date, 0) : closeOn(reported.date, 1);
@@ -542,7 +542,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     next: duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
       : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}) } : null,
-    ...(reported ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency } } : {}),
+    ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
@@ -840,15 +840,9 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
 async function cardFor(sym: string, env: Env, ctx: ExecutionContext): Promise<string> {
   const d = await tickerData(sym, env, ctx);
   const when = isDated(d.next) ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
-  const j = d.justReported;
-  const short = (x: string) => new Date(x + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
-  const today = iso(todayNY());
   // 0039: once it's out (or due), the card says so instead of "Reports …" with the estimate.
-  const headline = j ? `Reported Q${j.quarter} ${j.date === today ? "today" : short(j.date)}`
-    : d.next?.status === "results-pending" ? `Q${d.next.quarter} results due, figures pending` : undefined;
-  const stat = j ? { label: "EPS ACTUAL", value: j.epsA != null ? epsIn(j.epsA, j.currency) : "—" }
-    : d.next?.status === "results-pending" ? { label: "EPS EST GOING IN", value: d.next.epsE != null ? epsIn(d.next.epsE, d.next.currency) : "—" } : undefined;
-  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: j?.session ?? d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null, cur: d.next?.currency, headline, stat });
+  const rc = reportedCard(d, iso(todayNY()));
+  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
 }
 
 async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -891,7 +885,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
           when: isDated(d.next) ? whenPlain(d.next.date, d.next.session, day) : d.next ? "date not confirmed yet" : "date not announced yet",
           session: d.next?.session ?? "", epsE: d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
-          beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null,
+          beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, ...(reportedCard(d, day) ?? {}),
         });
       }
       const m = (await (await macro(env, ctx)).json()) as MacroResponse;
