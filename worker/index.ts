@@ -26,6 +26,7 @@ import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, trad
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
+import { secureHtml } from "../shared/csp";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -1040,8 +1041,9 @@ export default {
       if (m) return await ticker(m[1].toUpperCase(), env, ctx);
       if (p.startsWith("/api/")) return json({ error: "Not found" }, 0);
       const isPage = req.method === "GET" && !/\.[a-z0-9]{2,12}$/i.test(p);
-      if (isPage) return await page(req, env, ctx);
-      return env.ASSETS.fetch(req);
+      // 0036: every HTML response carries the CSP that blocks Cloudflare's edge-injected analytics beacon.
+      if (isPage) return secureHtml(await page(req, env, ctx));
+      return secureHtml(await env.ASSETS.fetch(req));
     } catch (e) {
       return new Response(JSON.stringify({ error: "We couldn't reach the market data service. Try again in a moment.", detail: String(e) }), { status: 502, headers: { "Content-Type": "application/json" } });
     }

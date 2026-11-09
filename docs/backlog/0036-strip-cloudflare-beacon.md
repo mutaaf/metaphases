@@ -1,12 +1,12 @@
 ---
 id: 0036
 title: Cloudflare Web Analytics is injected into every Metaphases page, including /kids; block it
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: tech-health
 created: 2026-11-02
-pr:
+pr: 76
 by: critic
 ---
 
@@ -33,3 +33,6 @@ Unit: the worker's header helper sets the CSP on HTML only (not JSON or images).
 
 ## Out of scope
 Changing any other zone setting on mutaafaziz.com outside `/metaphases*`.
+
+## Shipped (builder 2026-11-09)
+`shared/csp.ts` builds one policy (`script-src 'self'` + the theme script's hash, `connect-src 'self'`, images from Finnhub's logo hosts, fonts from Google) and `secureHtml()` adds it to every HTML response from the worker. `vite preview` serves the same string, so the whole e2e suite runs under it. `tests/e2e/csp.spec.ts` injects the beacon the way Cloudflare does on `/`, `/kids` and `/kids/start` and checks it's blocked with no other violations. **Operator, still worth doing:** turn off Web Analytics auto-install for `mutaafaziz.com/metaphases*` in the Cloudflare dashboard (Web Analytics → the site → Manage site → exclude the path, or disable automatic setup). The CSP is the guarantee; that removes the wasted bytes in the HTML.
