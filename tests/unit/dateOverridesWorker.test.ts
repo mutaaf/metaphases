@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../../worker/index";
+import { tickerShareTitle } from "../../shared/pending";
 
 // 0013 end to end through the worker: data/date-overrides.json moves ARM to Arm's own date
 // (Wed Nov 4 after the close) on /api/calendar and /api/ticker, which share meta reads.
@@ -98,5 +99,44 @@ describe("company date overrides: WES and PAA (AXON case, Finnhub's Q3 row alrea
     await get("/api/calendar?from=2026-11-02&to=2026-11-06");
     const wes = await get("/api/ticker/WES");
     expect(wes.next).toMatchObject({ date: "2026-11-04", quarter: 3, epsE: 0.9179, revE: 1223424312 });
+  });
+});
+
+// 0052: Ross Stores announced Thu Nov 19 after the close; Finnhub served Wed Nov 18 with no session, and Nasdaq's
+// day calendar (0015's cross-check) lists Nov 19 after hours. The company's date wins on the sheet, which then
+// carries no "two calendars disagree" note, and the share title reads the company's day.
+describe("company date overrides: ROST (Finnhub a day early, Nasdaq agrees with the company)", () => {
+  const rostRow = { symbol: "ROST", date: "2026-11-18", hour: "", quarter: 3, year: 2027, epsEstimate: 1.8819, epsActual: null, revenueEstimate: 6370684186, revenueActual: null };
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2026-11-09T21:00:00Z"));
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      const url = new URL(u);
+      if (url.hostname === "api.nasdaq.com" && url.pathname.endsWith("/calendar/earnings")) {
+        const rows = url.searchParams.get("date") === "2026-11-19"
+          ? [{ symbol: "ROST", name: "Ross Stores", time: "time-after-hours", marketCap: "$50,000,000,000", fiscalQuarterEnding: "Oct/2026", epsForecast: "$1.88", noOfEsts: "12", lastYearRptDt: "11/20/2025", lastYearEPS: "$1.58" }]
+          : null;
+        return new Response(JSON.stringify({ data: { rows } }));
+      }
+      if (url.pathname.endsWith("/calendar/earnings")) return new Response(JSON.stringify({ earningsCalendar: [rostRow] }));
+      return new Response("{}", { status: 404 });
+    }));
+  });
+
+  it("/api/ticker/ROST: next is Thu Nov 19 after the close, company-confirmed, no Nasdaq disagreement", async () => {
+    const r = await get("/api/ticker/ROST");
+    expect(r.next).toMatchObject({ date: "2026-11-19", session: "amc", quarter: 3, year: 2027, epsE: 1.8819 });
+    expect(r.next.confirmed).toMatch(/^https:\/\/finviz\.com\//);
+    expect(r.next.nasdaq).toBeUndefined();
+    expect(r.read.join(" ")).toContain("Thursday, Nov 19 after the close");
+    expect(r.read.join(" ")).not.toMatch(/Nov 18|not yet confirmed/);
+    expect(tickerShareTitle("ROST", "Ross Stores", r.next, r.justReported)).toMatch(/^ROST reports Thu, Nov 19 after the close/);
+  });
+
+  it("/api/calendar: ROST on Nov 19 after the close, nothing on Nov 18, no cross-check flag", async () => {
+    const r = await get("/api/calendar?from=2026-11-16&to=2026-11-20");
+    const rost = r.events.filter((e: any) => e.s === "ROST");
+    expect(rost).toEqual([expect.objectContaining({ d: "2026-11-19", h: "amc", eE: 1.8819 })]);
+    expect(rost[0].o).toMatch(/^https:\/\//);
+    expect(rost[0].x).toBeUndefined();
   });
 });
