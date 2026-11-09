@@ -783,7 +783,9 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
 async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(req.url);
   // Fetch the directory URL, not index.html: the asset layer 307s "index.html" to its directory.
-  const res = await env.ASSETS.fetch(new Request(new URL(`${BASE}/`, url), req));
+  // 0036: unconditionally (no If-None-Match), so the shell is always a full 200 HTML response that carries the
+  // CSP. A 304 has no Content-Type, and would let a pre-CSP cached copy keep running without the policy.
+  const res = await env.ASSETS.fetch(new Request(new URL(`${BASE}/`, url), { method: "GET" }));
   const meta = await shareMeta(url, env, ctx);
   if (!meta) return res;
   const canonical = `${SITE}${url.pathname}${url.search}`;

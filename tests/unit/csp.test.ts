@@ -8,7 +8,8 @@ import { CSP, CSP_DIRECTIVES, THEME_SCRIPT_HASH, secureHtml } from "../../shared
 const HTML = "<!doctype html><html><head><title>x</title></head><body></body></html>";
 const env = {
   FINNHUB_API_KEY: "k", FRED_API_KEY: "k",
-  ASSETS: { fetch: async (r: Request) => new URL(r.url).pathname.endsWith(".png")
+  ASSETS: { fetch: async (r: Request) => r.headers.get("If-None-Match") ? new Response(null, { status: 304 })
+    : new URL(r.url).pathname.endsWith(".png")
     ? new Response("png", { headers: { "Content-Type": "image/png" } })
     : new Response(HTML, { headers: { "Content-Type": "text/html; charset=utf-8" } }) },
 } as any;
@@ -45,6 +46,10 @@ describe("CSP (0036)", () => {
     expect(pageRes.headers.get("Content-Type")).toMatch(/text\/html/);
     expect(pageRes.headers.get("Content-Security-Policy")).toBe(CSP);
     expect(await pageRes.text()).toBe(HTML);
+    // A returning visitor revalidating a pre-CSP copy still gets the full page with the policy, not a bare 304.
+    const reval = await worker.fetch(new Request("https://mutaafaziz.com/metaphases/another-page", { headers: { Accept: "text/html", "If-None-Match": '"old"' } }), env, ctx);
+    expect(reval.status).toBe(200);
+    expect(reval.headers.get("Content-Security-Policy")).toBe(CSP);
     expect((await get("/og.png")).headers.get("Content-Security-Policy")).toBeNull();
     expect((await get("/api/nope")).headers.get("Content-Security-Policy")).toBeNull();
   });
