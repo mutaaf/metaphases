@@ -119,7 +119,11 @@ let nqInFlight = 0, nqPeak = 0;
 let nasdaq: (day: string) => Response | Promise<Response>;
 const fhRow = (symbol: string, date: string, hour = "") => ({ symbol, date, hour, quarter: 1, year: 2027, epsEstimate: 1, epsActual: null, revenueEstimate: 5e9, revenueActual: null });
 // Made-up symbols, so no live entry in data/date-overrides.json can win (LESSONS 2026-11-06).
-const FH_ROWS = [fhRow("QQXA", "2026-11-11"), fhRow("QQXB", "2026-11-18", "bmo"), fhRow("QQXC", "2026-11-12")];
+const FH_ROWS = [fhRow("QQXA", "2026-11-11"), fhRow("QQXB", "2026-11-18", "bmo"), fhRow("QQXC", "2026-11-12"), fhRow("QQXD", "2026-11-09"),
+  { ...fhRow("QQXE", "2026-11-09"), epsEstimate: null, epsActual: 1.1 }]; // no estimate: keeps the 0035 EPS lookup out of these counts
+const store = () => (globalThis as any).caches.default.store as Map<string, string>;
+/** A minute passes: the per-colo builder lock expires. */
+const unlock = () => { for (const k of [...store().keys()]) if (k.includes("nq%3Ax%3Alock")) store().delete(k); };
 
 beforeEach(() => {
   waits = []; nqCalls = []; nqInFlight = 0; nqPeak = 0;
@@ -127,6 +131,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-11-09T15:00:00Z")); // Monday 10 AM ET
   (globalThis as any).caches = { default: new MemCache() };
   nasdaq = (day) => new Response(JSON.stringify(nqDay(
+    day === "2026-11-09" ? [{ symbol: "QQXD", time: "time-pre-market" }, { symbol: "QQXE", time: "time-pre-market" }] :
     day === "2026-11-11" ? [{ symbol: "QQXA", time: "time-after-hours" }] :
     day === "2026-11-17" ? [{ symbol: "QQXB", time: "time-pre-market" }] :
     [{ symbol: "FILLER", time: "time-not-supplied" }],
@@ -156,41 +161,68 @@ const call = async (path: string) => {
   await Promise.all(waits); waits = [];
   return r.json() as Promise<any>;
 };
+const WEEKS = "/api/calendar?from=2026-11-09&to=2026-11-20";
+/** Requests a minute apart until the window has folded (5 builds of 2 days); returns the last calendar. */
+const warm = async () => { let r: any; for (let i = 0; i < 6; i++) { unlock(); r = await call(WEEKS); } return r; };
 
 describe("/api/calendar cross-check (0015)", () => {
-  it("marks agree / differs / unknown and fills a session only on agreement", async () => {
-    const r = await call("/api/calendar?from=2026-11-09&to=2026-11-20");
+  it("marks agree / differs / unknown, fills a session only on agreement, and skips reported rows", async () => {
+    const r = await warm();
     const by = (s: string) => r.events.find((e: EarningsEvent) => e.s === s);
     expect(by("QQXA")).toMatchObject({ d: "2026-11-11", h: "amc", x: "agree" });
     expect(by("QQXB")).toMatchObject({ d: "2026-11-18", h: "bmo", x: "differs", xd: "2026-11-17", xh: "bmo" });
     expect(by("QQXC")).toMatchObject({ d: "2026-11-12", h: "", x: "unknown" });
+    expect(by("QQXE").x).toBeUndefined(); // figures in: the date is settled
     expect(r.warnings).toEqual([]);
     expect(r.unchecked).toBeUndefined();
+    expect(nqCalls.length).toBe(10);
   });
 
-  it("makes at most 10 Nasdaq calls (one per weekday), 3 at a time, then serves them from the cache", async () => {
-    await call("/api/calendar?from=2026-11-09&to=2026-11-13");
-    expect(nqCalls.length).toBe(10);
-    expect(nqPeak).toBeLessThanOrEqual(3);
+  it("fetches at most 2 Nasdaq days per request, one builder per colo per minute, and none once the window is folded", async () => {
+    await call(WEEKS);
+    expect(nqCalls.length).toBe(2);
+    expect(nqPeak).toBeLessThanOrEqual(2);
+    await call(WEEKS); // same minute: the lock holds
+    expect(nqCalls.length).toBe(2);
+    await warm();
+    const n = nqCalls.length;
+    unlock();
     await call("/api/calendar?from=2026-11-16&to=2026-11-20");
-    expect(nqCalls.length).toBe(10);
+    expect(nqCalls.length).toBe(n);
   });
 
-  it("leaves the calendar intact when Nasdaq fails, with no warning (a warning means 'busy' and a retry, 0047)", async () => {
+  it("a cold month view (its weekly chunks fired at once) makes at most a few Nasdaq calls in total", async () => {
+    await Promise.all([["2026-11-09", "2026-11-15"], ["2026-11-16", "2026-11-22"], ["2026-11-23", "2026-11-29"], ["2026-11-30", "2026-12-06"]]
+      .map(([f, t]) => worker.fetch(new Request(`https://mutaafaziz.com/metaphases/api/calendar?from=${f}&to=${t}`), env, ctx)));
+    await Promise.all(waits); waits = [];
+    expect(nqCalls.length).toBeLessThanOrEqual(4); // only chunks overlapping the window may build, 2 days each
+  });
+
+  it("leaves the calendar intact when Nasdaq fails, with no warning, and doesn't ask again for 15 minutes", async () => {
     nasdaq = () => new Response("nope", { status: 503 });
-    const r = await call("/api/calendar?from=2026-11-09&to=2026-11-20");
+    const r = await call(WEEKS);
     const qqxa = r.events.find((e: EarningsEvent) => e.s === "QQXA");
     expect(qqxa).toMatchObject({ d: "2026-11-11", h: "" });
     expect(qqxa.x).toBeUndefined();
     expect(r.warnings).toEqual([]);
     expect(r.unchecked).toBe(10);
+    const first = [...nqCalls];
+    unlock();
+    await call(WEEKS);
+    expect(nqCalls.slice(first.length).some((d) => first.includes(d))).toBe(false); // failed days are remembered
   });
 
-  it("treats an empty Nasdaq day as a failure: nothing there is called 'unknown'", async () => {
-    nasdaq = (day) => new Response(JSON.stringify(day === "2026-11-12" ? { data: { rows: [] } } : nqDay([{ symbol: "FILLER", time: "time-not-supplied" }])));
-    const r = await call("/api/calendar?from=2026-11-09&to=2026-11-20");
-    expect(r.events.find((e: EarningsEvent) => e.s === "QQXC").x).toBeUndefined();
-    expect(r.unchecked).toBe(1);
+  it("never retries a 429 on this optional path", async () => {
+    nasdaq = () => new Response("slow down", { status: 429 });
+    await call(WEEKS);
+    expect(nqCalls.length).toBe(2);
+  });
+
+  it("a well-formed empty day (rows: null) is a real answer, not a failure", async () => {
+    nasdaq = (day) => new Response(JSON.stringify(day === "2026-11-12" ? { data: { asOf: "Thu, Nov 12, 2026", headers: null, rows: null } } : nqDay([{ symbol: "FILLER", time: "time-not-supplied" }])));
+    const r = await warm();
+    expect(r.events.find((e: EarningsEvent) => e.s === "QQXC").x).toBe("unknown");
+    expect(r.unchecked).toBeUndefined();
   });
 
   it("doesn't call Nasdaq for ranges far from the next two weeks", async () => {
@@ -202,7 +234,7 @@ describe("/api/calendar cross-check (0015)", () => {
 
 describe("/api/ticker cross-check (0015)", () => {
   it("names Nasdaq's date on the sheet when the calendar found a disagreement, with no extra upstream calls", async () => {
-    await call("/api/calendar?from=2026-11-09&to=2026-11-20"); // the calendar folds the window into one cached copy
+    await warm();
     const before = nqCalls.length;
     const t = await call("/api/ticker/QQXB");
     expect(t.next).toMatchObject({ date: "2026-11-18", session: "bmo", nasdaq: { date: "2026-11-17", session: "bmo" } });
@@ -210,10 +242,16 @@ describe("/api/ticker cross-check (0015)", () => {
   });
 
   it("fills a blank session when both agree, and says nothing extra", async () => {
-    await call("/api/calendar?from=2026-11-09&to=2026-11-20");
+    await warm();
     const t = await call("/api/ticker/QQXA");
     expect(t.next).toMatchObject({ date: "2026-11-11", session: "amc" });
     expect(t.next.nasdaq).toBeUndefined();
+  });
+
+  it("a filled session feeds the report-day state: a before-open report with no figures at 10 AM is 'results expected'", async () => {
+    await warm();
+    const t = await call("/api/ticker/QQXD");
+    expect(t.next).toMatchObject({ date: "2026-11-09", session: "bmo", status: "results-pending" });
   });
 
   it("without a cached window, the sheet is unchanged and Nasdaq's calendar isn't called", async () => {

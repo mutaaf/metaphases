@@ -80,20 +80,17 @@ export function crossOne(s: string, d: string, h: Session, w: NqWindow): Cross |
   }
   if (list.length) return { x: "differs", xd: list[0].d, ...(list[0].h ? { xh: list[0].h } : {}) };
   // Not on Nasdaq's day, and not elsewhere: only "unknown" when every day in the window was checked.
-  const span = Math.round(dayNum(w.to) - dayNum(w.from)) + 1;
-  let weekdays = 0;
-  for (let i = 0; i < span; i++) { const wd = new Date((dayNum(w.from) + i) * 86400000).getUTCDay(); if (wd !== 0 && wd !== 6) weekdays++; }
-  return w.loaded.length >= weekdays ? { x: "unknown" } : null;
+  return w.loaded.length >= windowDays(w.from).length ? { x: "unknown" } : null;
 }
 
 /**
  * Calendar events with `x`/`xd`/`xh` set and blank sessions filled where both feeds agree. Company-dated
- * rows (`o`, 0013) are already confirmed and past rows have no use for it: both are left alone.
+ * rows (`o`, 0013), closed-day projections (`c`, 0045) and rows with figures in are left alone.
  */
 export function crossCheck(events: EarningsEvent[], w: NqWindow): EarningsEvent[] {
   if (!w.loaded.length) return events;
   return events.map((e) => {
-    if (e.o || e.c) return e;
+    if (e.o || e.c || e.eA != null || e.rA != null) return e; // company-dated, closed-day or already reported: the date is settled
     const c = crossOne(e.s, e.d, e.h, w);
     if (!c) return e;
     return { ...e, h: c.h ?? e.h, x: c.x, ...(c.xd ? { xd: c.xd } : {}), ...(c.xh ? { xh: c.xh } : {}) };

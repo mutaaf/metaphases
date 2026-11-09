@@ -26,6 +26,8 @@ test("the day drawer names Nasdaq's date on a row the two calendars disagree on"
   await expect(axon.locator(".erow-x")).toHaveText("Nasdaq: Thu, Nov 5, after close");
   // Our feed's date isn't silently replaced: AXON stays on Nov 2, among the day's undated-session rows.
   await expect(drawer.locator(".erow-x")).toHaveCount(1);
+  // The whole label is readable at 390px, not clipped to "Nasdaq: Thu, Nov 5, a…".
+  expect(await axon.locator(".erow-x").evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
   await noSideScroll(page);
   await page.screenshot({ path: test.info().outputPath("xcheck-drawer.png") });
 });
@@ -47,7 +49,7 @@ test("the sheet says the date isn't confirmed and names Nasdaq's day", async ({ 
   await page.goto("./t/AXON");
   const card = page.locator(".next-card");
   await expect(card.locator("h3")).toHaveText("Monday, November 2"); // the feed's date stays
-  await expect(card.getByTestId("nc-xcheck")).toHaveText("Date not confirmed. Nasdaq's calendar lists it on Thursday, November 5, after close. The two disagree until the company announces its date.");
+  await expect(card.getByTestId("nc-xcheck")).toHaveText("Two calendars disagree. Nasdaq's calendar lists it on Thursday, November 5, after close. Treat the date as unconfirmed until the company announces it.");
   await noSideScroll(page);
   await page.screenshot({ path: test.info().outputPath("xcheck-sheet.png") });
 });
