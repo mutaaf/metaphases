@@ -39,5 +39,6 @@ export const GLOSSARY: Record<string, { term: string; def: string; eg?: string }
   gdp: { term: "GDP growth", def: "Gross Domestic Product — the total value of everything the US economy produces. Its growth rate is the broadest read on whether the economy is expanding." },
   fomc: { term: "FOMC", def: "The Federal Reserve committee that sets US interest rates. It meets eight times a year." },
   companydate: { term: "Confirmed by the company", def: "Most calendars, including our data feed, often show a projected date until a company announces its own. When the company has published a different date or time, Metaphases shows the company's and links to its announcement." },
+  xcheck: { term: "Unconfirmed date", def: "We compare our data feed's report dates for the next two weeks with Nasdaq's earnings calendar. When the two list a company on different days or times, neither is certain until the company announces its own date, so Metaphases shows both and calls the date unconfirmed." },
   cpi: { term: "CPI", def: "Consumer Price Index — the most-watched measure of inflation." },
 };

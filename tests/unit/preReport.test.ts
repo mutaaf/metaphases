@@ -58,15 +58,18 @@ describe("calendar: pre-report estimates (0035)", () => {
 
   it("an estimate recorded before the print wins once the actual arrives", async () => {
     finnhub = [row("V", "2026-06-02", 3.44, null, 10.6e9)];
-    await get("2026-06-02", "2026-06-02"); // tomorrow: snapshot taken, no Nasdaq call
-    expect(nasdaqCalls).toBe(0);
-    // The day's list expires; Finnhub now shows the actual and a revised estimate.
+    await get("2026-06-02", "2026-06-02"); // tomorrow: snapshot taken, no Nasdaq EPS lookup
     const cache = (globalThis as any).caches.default as MemCache;
+    // Tomorrow is inside the 0015 date cross-check window, which reads Nasdaq's day calendar on its own;
+    // the pre-report EPS lookup (cached as nq:cal) must not have happened.
+    expect([...cache.store.keys()].some((k) => k.includes("nq%3Acal"))).toBe(false);
+    const crossCheckCalls = nasdaqCalls;
+    // The day's list expires; Finnhub now shows the actual and a revised estimate.
     for (const k of [...cache.store.keys()]) if (k.includes("cal%3Av2%3A2026-06-02")) cache.store.delete(k);
     finnhub = [row("V", "2026-06-02", 3.5055, 3.48, 10.75e9, 10.7e9)];
     const r = await get("2026-06-02", "2026-06-02");
     expect(r.events[0]).toMatchObject({ eE: 3.44, rE: 10.6e9, eA: 3.48, pr: "s" });
-    expect(nasdaqCalls).toBe(0);
+    expect(nasdaqCalls).toBe(crossCheckCalls); // no new Nasdaq call at all: the snapshot wins, the cross-check is cached
   });
 
   it("an empty Nasdaq answer isn't cached: the next rebuild asks again", async () => {

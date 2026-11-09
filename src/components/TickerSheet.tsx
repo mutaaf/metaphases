@@ -191,6 +191,9 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                   {data.next.overdue && <span className="muted nc-closed">{data.next.date ? `The data feed expected it on ${fmtLong(data.next.date)}, and there are no results yet.` : "The data feed has no date for this quarter yet, and there are no results yet."} The new date isn't confirmed.</span>}
                   {due && <span className="muted nc-closed">Results were expected {data.next.session ? `${PHASE_LABEL[data.next.session].toLowerCase()} ` : ""}{data.next.date === today ? "today" : `on ${fmtLong(data.next.date)}`}. None are in our data yet.</span>}
                   {!data.next.overdue && !due && <span className="muted"><Term k={data.next.session || "bmo"}>{PHASE_LABEL[data.next.session]}</Term>{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
+                  {data.next.nasdaq && !data.next.overdue && !due && <span className="muted nc-xcheck small" data-testid="nc-xcheck"><Term k="xcheck">Two calendars disagree.</Term> {data.next.nasdaq.date === data.next.date
+                    ? `Nasdaq's calendar lists it ${data.next.nasdaq.session ? PHASE_LABEL[data.next.nasdaq.session].toLowerCase() : "at another time"} that day.`
+                    : `Nasdaq's calendar lists it on ${fmtLong(data.next.nasdaq.date)}${data.next.nasdaq.session ? `, ${PHASE_LABEL[data.next.nasdaq.session].toLowerCase()}` : ""}.`} Treat the date as unconfirmed until the company announces it.</span>}
                   {data.next.confirmed && <span className="nc-confirmed small"><Term k="companydate">Confirmed by the company</Term> · <a href={data.next.confirmed} target="_blank" rel="noopener noreferrer">source</a></span>}
                 </div>
                 <dl className="nc-stats">

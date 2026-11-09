@@ -35,4 +35,6 @@ export const weekOf = (s: string) => { const d = parse(s); const wd = (d.getDay(
 export const daysBetween = (a: string, b: string) => Math.round((parse(b).getTime() - parse(a).getTime()) / 86400000);
 
 export const fmtLong = (s: string) => parse(s).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+/** "Tue, Nov 17" */
+export const fmtDay = (s: string) => parse(s).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 export const fmtShort = (s: string) => `${MON3[parse(s).getMonth()]} ${String(parse(s).getDate()).padStart(2, "0")}`;

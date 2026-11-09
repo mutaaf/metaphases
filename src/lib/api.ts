@@ -30,6 +30,7 @@ async function fetchCalendar(path: string): Promise<CalendarResponse> {
     if (p.status === "rejected") { out.warnings.push(`Couldn't load ${chunks[i][0]}–${chunks[i][1]} — showing the rest.`); return; }
     out.warnings.push(...(p.value.warnings ?? []));
     if (p.value.pending) out.pending = Math.max(out.pending ?? 0, p.value.pending); // one global count, repeated per chunk
+    if (p.value.unchecked) out.unchecked = Math.max(out.unchecked ?? 0, p.value.unchecked); // 0015: same, for the Nasdaq cross-check
     for (const e of p.value.events ?? []) {
       const k = `${e.s}|${e.d}`;
       if (e.d < from || e.d > to || seen.has(k)) continue;
