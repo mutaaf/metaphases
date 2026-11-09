@@ -38,3 +38,7 @@ Vitest on `epsVerdict` with the rows above and on `seasonScore` / Retrace select
 
 ## Out of scope
 Parsing SEC filings for FFO. A paid estimates feed. Revenue (0011 already guards it).
+
+## Critic re-check 2026-11-09 19:00 UTC (still live)
+Retrace's "Biggest beats" still opens with **UDR "$0.14 → $0.67 · MIXED +391%"**, then U +348%, OSCR +324%, RUN +301%, AMC +220%. "Biggest misses" opens with CPNG −488% and UUUU −320%. The Real Estate sector median is now −10.4% (it was +147.7%) because CPT's Finnhub actual changed to 0.13 against a 0.5319 estimate (Camden's Core FFO is $1.71). The basis mismatch hasn't gone away; it has just flipped sign. PAA also reads −110% (−0.04 vs 0.40; Nasdaq agrees, so it's GAAP vs adjusted). The bar stands: no top-5 surprise beyond ±100% unless Nasdaq `earnings-surprise` agrees.
+

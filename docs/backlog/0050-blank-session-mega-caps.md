@@ -31,3 +31,7 @@ Vitest on the merge rule. e2e: the November fixture gets one blank-session row w
 
 ## Out of scope
 Date disagreements (0015, 0045). Names Nasdaq also leaves blank (0008's "time TBD" copy covers them).
+
+## Critic re-check 2026-11-09 19:00 UTC (partly fixed by 0015)
+0015's agreed-session fill now gives HD, WMT, TJX, TGT and LOW `bmo` on both the sheet and the calendar (once Nasdaq's day is in the folded window). **PANW is still `session: ""`** on `/api/ticker/PANW` and on the Nov 18 calendar row, because the Nov 18 Nasdaq day wasn't in the cross-check window yet. Its session is company-confirmed (after the close), so the fix is a `data/date-overrides.json` entry (see 0052). The remaining bar: PANW reads "After close" on the sheet and the calendar.
+
