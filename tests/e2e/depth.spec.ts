@@ -127,3 +127,44 @@ test("a calendar row whose day passed with no figures says so, untinted (0038)",
   await expect(bkr.locator(".res-beat, .res-miss, .res-mixed")).toHaveCount(0);
   await bkr.screenshot({ path: test.info().outputPath("overdue-calendar.png") });
 });
+
+// 0039: the worker decides reported / results-pending (unit-tested in reportedToday.test.ts); here the sheet gets its output shape.
+const nvdaAs = (sym: string) => JSON.parse(readFileSync(new URL("../fixtures/ticker-NVDA.json", import.meta.url), "utf8").replaceAll('"NVDA"', JSON.stringify(sym)));
+
+test("a report that's out today shows the actual and beat, with no preview button (0039)", async ({ page }) => {
+  await page.route("**/api/ticker/PFE", async (r) => {
+    const body = nvdaAs("PFE");
+    body.justReported = { date: "2026-10-31", session: "bmo", quarter: 3, year: 2026, epsE: 0.73, epsA: 0.87, currency: "USD" };
+    body.history = [{ date: "2026-10-31", session: "bmo", period: "Q3 2026", epsE: 0.73, epsA: 0.87, surprisePct: 19.18, move: null }, ...body.history];
+    body.next = { ...body.next, date: "2027-02-02", session: "bmo", quarter: 4, year: 2026 };
+    body.read = ["PFE reported Q3 today (Saturday, Oct 31) before the opening bell: $0.87 a share against $0.73 expected, a beat of 19%."];
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/PFE");
+  const just = page.locator(".just-reported");
+  await expect(just).toContainText("Just reported · Q3 2026");
+  await expect(just).toContainText("$0.87");
+  await expect(just).toContainText("Beat by 19%");
+  await expect(page.locator(".next-card .eyebrow").first()).toContainText("Next report · Q4 2026");
+  await expect(page.getByRole("button", { name: /Write the preview/ })).toHaveCount(0);
+  const w = await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth), document.documentElement.scrollWidth - document.documentElement.clientWidth));
+  expect(w).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `test-results/0039-reported-${test.info().project.name}.png` });
+});
+
+test("a report whose session passed without figures says results are due, never 'expects' (0039)", async ({ page }) => {
+  await page.route("**/api/ticker/CVS", async (r) => {
+    const body = nvdaAs("CVS");
+    body.next = { ...body.next, date: "2026-10-31", session: "bmo", quarter: 3, year: 2026, epsE: 1.67, status: "results-pending" };
+    body.read = ["CVS's Q3 results were expected before the opening bell today (Saturday, Oct 31); none are in our data yet.", "The estimate going in was $1.67 a share."];
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/CVS");
+  const card = page.locator(".next-card");
+  await expect(card.locator(".eyebrow").first()).toContainText("This report · Q3 2026");
+  await expect(card).toContainText("Results were expected before open today. None are in our data yet.");
+  await expect(card).not.toContainText("expects");
+  await expect(card).not.toContainText("· today");
+  await expect(page.getByRole("button", { name: /Write the preview/ })).toHaveCount(0);
+  await page.screenshot({ path: `test-results/0039-pending-${test.info().project.name}.png` });
+});

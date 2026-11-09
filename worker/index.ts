@@ -22,7 +22,8 @@ import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } fro
 import { applyPreReport, nasdaqDayEps, periodKey, pickConsensus, type EstSnapshot } from "../shared/compare";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
-import { isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
+import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
+import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
 import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
 interface Env {
@@ -391,15 +392,17 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const reportedDates = rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null);
   const skip = skippedQuarter(nextE, reportedDates);
   let pending: { quarter: number; year: number; passed: string; hour: Session; eE: number | null; rE: number | null } | null = null;
+  let skipRow: EarningsEvent | null = null;
+  let companyDated = false;
   if (skip) {
-    const row = await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
+    const row = skipRow = await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
     // Only call it pending when the calendar shows the quarter's day passed at least two trading days ago with no
     // figures. A fresher row, a row with figures, or no row at all (this colo never cached it) can just be a feed
     // that's a day behind a normal report, and that must not read as a missed report.
     // A company-announced date for this quarter that has passed means it reported on that day (AXON, Nov 5),
     // whatever the cached Finnhub projection (Nov 2) says: the feeds are only behind.
     const ov = activeOverrides(OVERRIDES, today)[symbol];
-    const companyDated = !!ov && ov.quarter === skip.quarter && ov.year === skip.year;
+    companyDated = !!ov && ov.quarter === skip.quarter && ov.year === skip.year;
     if (!companyDated && row && row.eA == null && row.rA == null && tradingDaysSince(row.d, today) >= 2) {
       pending = { ...skip, passed: row.d, hour: (row.h ?? "") as Session, eE: row.eE ?? null, rE: row.rE ?? null };
     }
@@ -410,6 +413,31 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     if (row && row.eA == null) { nextE.epsEstimate = row.eE; nextE.revenueEstimate = row.rE; }
   }
   // The sheet explains a non-USD basis next to the estimates (next.currency); no partial-data warning needed.
+
+  // 0039: a report that's out (or due, with its session over) is said so the same day. Today's row: Finnhub's
+  // `symbol=` answer, else the calendar route's cached day (whose estimate is already the pre-report bar, 0035).
+  // The day after, `symbol=` has dropped the row (future dates only), so use the skipped quarter's cached row.
+  const nyNow = todayNY();
+  const nowMin = nyNow.getHours() * 60 + nyNow.getMinutes();
+  let outcome: Outcome = null;
+  if (nextE && nextE.date === today) {
+    const row = await passedRow(symbol, nextE, [today]);
+    const snapE = (await readSnap(today))[symbol]?.eE;
+    const day: DayRow = {
+      date: today, hour: nextE.hour || row?.h || "", quarter: nextE.quarter, year: nextE.year,
+      eE: row?.eE ?? snapE ?? nextE.epsEstimate ?? null, eA: nextE.epsActual ?? row?.eA ?? null,
+      rE: row?.rE ?? nextE.revenueEstimate ?? null, rA: nextE.revenueActual ?? row?.rA ?? null,
+    };
+    outcome = reportOutcome(day, today, nowMin);
+  } else if (skip && skipRow && !pending && !companyDated) {
+    outcome = reportOutcome({ date: skipRow.d, hour: skipRow.h ?? "", quarter: skip.quarter, year: skip.year, eE: skipRow.eE ?? null, eA: skipRow.eA ?? null, rE: skipRow.rE ?? null, rA: skipRow.rA ?? null }, today, nowMin);
+  }
+  const reported = outcome?.kind === "reported" ? outcome.row : null;
+  const duePending = outcome?.kind === "results-pending" ? outcome.row : null;
+  // What the sheet calls "next": after a same-day report, the following quarter (if the feed lists one).
+  const upNext = reported && nextE && reported.date === nextE.date
+    ? cal.filter((e) => e.date > today && !(e.quarter === nextE.quarter && e.year === nextE.year)).sort((a, b) => a.date.localeCompare(b.date))[0]
+    : duePending ? undefined : nextE;
 
   // Past prints: Nasdaq gives report dates; Finnhub gives estimate/actual. Join on order (both newest-first).
   // Finnhub figures only fill gaps when they're in dollars too.
@@ -451,6 +479,19 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     history.unshift({ date: lastE.date, session: lastE.hour, period: `Q${lastE.quarter} ${lastE.year}`, epsE: est, epsA: lastE.epsActual, surprisePct: est ? ((lastE.epsActual - est) / Math.abs(est)) * 100 : null, move: b && a ? ((a - b) / b) * 100 : null });
   }
 
+  // 0039: the report that's out heads the history until Nasdaq lists it. Non-dollar figures stay off the
+  // dollar table ("—"); the move waits for a settled post-report close.
+  if (reported && !history.some((h) => Math.abs(daysApart(h.date, reported.date)) <= 3)) {
+    const settled = tradingDaysSince(reported.date, today) >= (reported.hour === "bmo" ? 1 : 2);
+    const b = reported.hour === "bmo" ? closeOn(reported.date, -1) : closeOn(reported.date, 0);
+    const a = reported.hour === "bmo" ? closeOn(reported.date, 0) : closeOn(reported.date, 1);
+    history.unshift({
+      date: reported.date, session: reported.hour as Session, period: `Q${reported.quarter} ${reported.year}`,
+      epsE: usd ? reported.eE : null, epsA: usd ? reported.eA : null, surprisePct: usd ? surprisePct(reported.eE, reported.eA) : null,
+      move: settled && b && a ? ((a - b) / b) * 100 : null,
+    });
+  }
+
   const judged = history.filter((h) => h.epsA != null && h.epsE != null);
   const beats = judged.filter((h) => (h.epsA as number) >= (h.epsE as number)).length;
   const beatRate = judged.length ? { beats, total: judged.length } : null;
@@ -472,29 +513,36 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const name = profile?.name || U[symbol]?.n || symbol;
   const read: string[] = [];
   // A projected date on a closed-market day isn't a date yet (0045): say so instead of stating it.
-  const closed = nextE && !nextE.source && !pending ? closedDay(nextE.date) : null;
+  const closed = upNext && !upNext.source && !pending ? closedDay(upNext.date) : null;
   const longDay = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
-  if (pending) {
+  const out = reported || duePending;
+  if (reported) read.push(reportedLine(name, { date: reported.date, session: reported.hour, quarter: reported.quarter, epsE: reported.eE, epsA: reported.eA }, today, (v) => epsIn(v, currency)));
+  if (duePending) {
+    read.push(pendingLine(name, { date: duePending.date, session: duePending.hour, quarter: duePending.quarter }, today));
+    if (duePending.eE != null) read.push(`The estimate going in was ${epsIn(duePending.eE, currency)} a share.`);
+  } else if (pending) {
     read.push(`${name}'s Q${pending.quarter} report date is not confirmed yet: the data feed expected it on ${longDay(pending.passed)} and has no results yet.`);
-  } else if (nextE && closed) {
-    read.push(`${name}'s Q${nextE.quarter} report date is not confirmed yet: the data feed projects ${new Date(nextE.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}, when the market is closed (${closed}).`);
-  } else if (nextE) {
-    const when = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "(time not yet confirmed)" }[nextE.hour as Session] ?? "";
-    read.push(`${name} reports Q${nextE.quarter} on ${new Date(nextE.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })} ${when}.`);
+  } else if (upNext && closed) {
+    read.push(`${name}'s Q${upNext.quarter} report date is not confirmed yet: the data feed projects ${longDay(upNext.date)}, when the market is closed (${closed}).`);
+  } else if (upNext) {
+    const when = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "(time not yet confirmed)" }[upNext.hour as Session] ?? "";
+    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${when}.`.replace(" .", "."));
   }
-  const estLine = readEstimate(name, pending ? pending.eE : nextE?.epsEstimate, currency, history[0]?.epsA);
+  const estLine = duePending ? null : readEstimate(name, pending ? pending.eE : upNext?.epsEstimate, currency, history[0]?.epsA);
   if (estLine) read.push(estLine);
   if (beatRate) read.push(`It has beaten the estimate in ${beats} of its last ${judged.length} reports.`);
-  if (expectedMove != null) read.push(`The stock has moved about ±${expectedMove.toFixed(1)}% on a typical report — that's the size of swing to be ready for.`);
-  if (setup.grade) read.push(`Into the print it's in ${/^[aeiou]/i.test(setup.trend) ? "an" : "a"} ${setup.trend.toLowerCase()}${setup.rsi != null ? ` with RSI ${setup.rsi.toFixed(0)}` : ""}.`);
+  if (expectedMove != null) read.push(`The stock has moved about ±${expectedMove.toFixed(1)}% on a typical report${out ? "." : " — that's the size of swing to be ready for."}`);
+  if (setup.grade && !out) read.push(`Into the print it's in ${/^[aeiou]/i.test(setup.trend) ? "an" : "a"} ${setup.trend.toLowerCase()}${setup.rsi != null ? ` with RSI ${setup.rsi.toFixed(0)}` : ""}.`);
   if (compass.grade) read.push(`As a long-term holding it grades ${compass.grade} on Compass quality.`);
 
   const body: TickerResponse = {
     symbol,
     profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, marketCap: profile.marketCapitalization, currency: typeof profile.currency === "string" ? profile.currency : "USD", exchange: profile.exchange, ipo: profile.ipo } : null,
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
-    next: pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
-      : nextE ? { date: nextE.date, session: (nextE.hour || "") as Session, quarter: nextE.quarter, year: nextE.year, epsE: nextE.epsEstimate, revE: nextE.revenueEstimate, currency, ...(nextE.source ? { confirmed: nextE.source } : {}), ...(closed ? { closed } : {}) } : null,
+    next: duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
+      : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
+      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}) } : null,
+    ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
@@ -627,14 +675,8 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
     try {
       const d = await tickerData(sym, env, ctx);
       const name = d.profile?.name ?? U[sym]?.n ?? sym;
-      const title = tickerShareTitle(sym, name, d.next);
-      const bits = [
-        d.beatRate ? `Beat ${d.beatRate.beats} of its last ${d.beatRate.total}` : null,
-        d.expectedMove != null ? `typical move ±${d.expectedMove.toFixed(1)}%` : null,
-        d.setup.grade ? `setup ${d.setup.grade}` : null,
-        d.compass.grade ? `Compass quality ${d.compass.grade}` : null,
-      ].filter(Boolean);
-      const desc = `${name}${d.next?.epsE != null ? ` — Street expects ${epsIn(d.next.epsE, d.next.currency)} EPS` : ""}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
+      const title = tickerShareTitle(sym, name, d.next, d.justReported);
+      const desc = tickerShareDesc(name, d);
       return { title, desc, image: `${SITE}${BASE}/og/t/${sym}.png` };
     } catch { return { title: `${sym} earnings · Metaphases`, desc: PAGES["/"].desc }; }
   }
@@ -798,7 +840,9 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
 async function cardFor(sym: string, env: Env, ctx: ExecutionContext): Promise<string> {
   const d = await tickerData(sym, env, ctx);
   const when = isDated(d.next) ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
-  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null, cur: d.next?.currency });
+  // 0039: once it's out (or due), the card says so instead of "Reports …" with the estimate.
+  const rc = reportedCard(d, iso(todayNY()));
+  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
 }
 
 async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -841,7 +885,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
           when: isDated(d.next) ? whenPlain(d.next.date, d.next.session, day) : d.next ? "date not confirmed yet" : "date not announced yet",
           session: d.next?.session ?? "", epsE: d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
-          beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null,
+          beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, ...(reportedCard(d, day) ?? {}),
         });
       }
       const m = (await (await macro(env, ctx)).json()) as MacroResponse;

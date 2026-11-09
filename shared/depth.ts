@@ -159,7 +159,7 @@ export function seasonScore(events: EarningsEvent[], isMember: (s: string) => bo
 }
 
 // ── Share card (SVG; the worker rasterizes it to PNG) ──────────────────
-export interface CardData { symbol: string; name: string; when: string | null; session: Session; move: number | null; beats: number | null; total: number | null; epsE: number | null; cur?: string }
+export interface CardData { symbol: string; name: string; when: string | null; session: Session; move: number | null; beats: number | null; total: number | null; epsE: number | null; cur?: string; /** 0039: replaces the "Reports …" line once the report is out or due. */ headline?: string; /** Replaces the estimate stat (e.g. the actual). */ stat?: { label: string; value: string } }
 const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 function phaseGlyph(h: Session, cx: number, cy: number, r: number, fill: string) {
@@ -184,9 +184,9 @@ export function cardSvg(d: CardData): string {
 <text x="120" y="102" font-family="Martian Mono" font-size="18" letter-spacing="4" fill="#111114">METAPHASES · EARNINGS, PHASE BY PHASE</text>
 <text x="72" y="252" font-family="Schibsted Grotesk" font-weight="900" font-size="${symSize}" letter-spacing="-5" fill="#111114">${xml(d.symbol)}</text>
 <text x="80" y="312" font-family="Schibsted Grotesk" font-weight="700" font-size="38" fill="#3b3a37">${xml(name)}</text>
-<text x="80" y="392" font-family="Instrument Serif" font-style="italic" font-size="54" fill="#2346d8">${xml(d.when ? `Reports ${d.when}, ${sess}` : "No report date yet")}</text>
+<text x="80" y="392" font-family="Instrument Serif" font-style="italic" font-size="54" fill="#2346d8">${xml(d.headline ?? (d.when ? `Reports ${d.when}, ${sess}` : "No report date yet"))}</text>
 <line x1="76" y1="440" x2="1124" y2="440" stroke="#c6c0b1" stroke-width="2"/>
-${stat(80, "STREET EPS EST", d.epsE != null ? epsIn(d.epsE, d.cur) : "—")}
+${d.stat ? stat(80, d.stat.label, d.stat.value) : stat(80, "STREET EPS EST", d.epsE != null ? epsIn(d.epsE, d.cur) : "—")}
 ${stat(440, "TYPICAL MOVE", d.move != null ? `±${d.move.toFixed(1)}%` : "—")}
 ${stat(780, "BEAT RECORD", d.beats != null && d.total ? `${d.beats} of ${d.total}` : "—")}
 ${phaseGlyph(d.session, 1030, 205, 80, "#2346d8")}
