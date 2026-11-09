@@ -1,12 +1,12 @@
 ---
 id: 0039
 title: Once a company has reported, the sheet, The Read and the share card say so the same day
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-03
-pr:
+pr: 74
 by: critic
 ---
 

@@ -1,4 +1,5 @@
 import { HOLIDAYS } from "./market";
+import { epsIn } from "./currency";
 const HOLIDAY_SET: ReadonlySet<string> = new Set(HOLIDAYS.map((h) => h.date));
 
 /**
@@ -55,8 +56,8 @@ export function lookbackDays(today: string, notBefore: string, n = LOOKBACK_DAYS
 }
 
 /** True when `next` names a real upcoming date (not a closed-day projection or an overdue quarter). */
-export const isDated = (n: { closed?: string; overdue?: true; date: string } | null | undefined): n is { closed?: undefined; overdue?: undefined; date: string } =>
-  !!n && !n.closed && !n.overdue && !!n.date;
+export const isDated = (n: { closed?: string; overdue?: true; status?: string; date: string } | null | undefined): n is { closed?: undefined; overdue?: undefined; status?: undefined; date: string } =>
+  !!n && !n.closed && !n.overdue && !n.status && !!n.date;
 
 /** Trading days strictly after `day` and up to `today` (weekdays that aren't NYSE holidays). */
 export function tradingDaysSince(day: string, today: string, holidays: ReadonlySet<string> = HOLIDAY_SET): number {
@@ -79,7 +80,11 @@ export const noResultYet = (e: { d: string; eA: number | null; rA: number | null
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
 /** The `/t/:sym` share title: never a date beyond an unreported quarter (0038) or on a closed day (0045). */
-export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; closed?: string; overdue?: true } | null | undefined): string {
+export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; closed?: string; overdue?: true; status?: string } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string } | null): string {
+  // 0039: a report that's out leads the title, whatever comes next.
+  if (just) return just.epsA == null ? `${sym} reported Q${just.quarter} · Metaphases`
+    : `${sym} reported Q${just.quarter}: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? ` vs ${epsIn(just.epsE, just.currency)} expected` : ""} · Metaphases`;
+  if (next?.status === "results-pending") return `${sym}'s Q${next.quarter} results are due: figures not in yet · Metaphases`;
   if (isDated(next)) {
     const when = new Date(next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
     return `${sym} reports ${when} ${SESSION_WORDS[(next as { session: string }).session] ?? ""} · Metaphases`.replace("  ", " ");
