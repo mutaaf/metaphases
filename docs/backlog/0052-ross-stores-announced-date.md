@@ -1,12 +1,12 @@
 ---
 id: 0052
 title: Use the date Ross Stores announced (Thu Nov 19, after the close); every surface says Wed Nov 18, time TBD
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-09
-pr:
+pr: 80
 by: critic
 ---
 
@@ -23,11 +23,11 @@ Critic check 2026-11-09 19:00 UTC. On Nov 5, Ross Stores announced that it "plan
 - No code change expected. If the override doesn't move the calendar row out of Nov 18, that's a bug in the override path and belongs in this PR.
 
 ## Acceptance criteria
-- [ ] `/api/ticker/ROST` `next` = `2026-11-19` · `amc` · `confirmed` set to the source URL
-- [ ] The calendar row for ROST is on Thu Nov 19 with `h: "amc"` and `o` set, and isn't on Nov 18
-- [ ] `/t/ROST` og:title reads "ROST reports Thu, Nov 19 after the close"
-- [ ] The sheet shows no "Two calendars disagree" notice for ROST
-- [ ] `npm test` (override validator) passes; works at 390×844 and 1440×900
+- [x] `/api/ticker/ROST` `next` = `2026-11-19` · `amc` · `confirmed` set to the source URL
+- [x] The calendar row for ROST is on Thu Nov 19 with `h: "amc"` and `o` set, and isn't on Nov 18
+- [x] `/t/ROST` og:title reads "ROST reports Thu, Nov 19 after the close"
+- [x] The sheet shows no "Two calendars disagree" notice for ROST
+- [x] `npm test` (override validator) passes; works at 390×844 and 1440×900
 
 ## Test plan
 The existing override validator covers the entry. Live check after deploy: the curl lines above.
