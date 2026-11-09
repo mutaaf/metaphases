@@ -6,7 +6,7 @@ import { missingDays } from "../lib/partial";
 import { co, curOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { noResultYet } from "../../shared/pending";
-import { addDays, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
+import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
 import { actions, useStore } from "../lib/store";
@@ -140,6 +140,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
       <span className="erow-id">
         <b>{e.s}</b>
         <span className="muted">{nameOf(e.s)}</span>
+        {e.x === "differs" && e.xd && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">Nasdaq: {e.xd === e.d ? (e.xh ? PHASE_LABEL[e.xh].toLowerCase() : "another time") : `${fmtDay(e.xd)}${e.xh ? `, ${PHASE_LABEL[e.xh].toLowerCase()}` : ""}`}</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}
       <span className="erow-num"><span className="eyebrow">EPS est</span>{epsIn(e.eE, cur)}</span>
@@ -174,6 +175,10 @@ export function DayDrawer({ day, events, macro, onClose }: { day: string; events
           </div>
         </header>
         {macro.map((m) => <Notice key={m.key}><b>{m.name}.</b> {m.blurb}</Notice>)}
+        {(() => {
+          const n = events.filter((e) => e.x === "differs").length;
+          return n > 0 && <Notice><Term k="xcheck">{n === 1 ? "One date here isn't confirmed" : `${n} dates here aren't confirmed`}</Term>: Nasdaq's calendar lists {n === 1 ? "it" : "them"} on another day or time, marked “Nasdaq” below. Our feed and Nasdaq disagree, so check the company's own announcement.</Notice>;
+        })()}
         {groupBySession(events).map((g) => (
           <section key={g.h} className="sess">
             <h3 className="sess-head"><Phase h={g.h} size={14} /> {PHASE_LABEL[g.h]} <span className="muted">· {g.list.length}</span></h3>

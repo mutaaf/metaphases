@@ -102,6 +102,7 @@ button.chip:hover { border-color: var(--ink); }
 .erow-id { display: grid; min-width: 0; }
 .erow-id b { font-size: 14px; }
 .erow-id .muted { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.erow-x { font: 500 10.5px var(--mono); letter-spacing: .04em; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .erow-num { display: grid; font: 500 13px var(--mono); text-align: right; }
 .erow-res { text-align: right; }
 .erow .tile { border-radius: 8px; }

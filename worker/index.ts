@@ -24,6 +24,7 @@ import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
+import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 
 interface Env {
@@ -202,6 +203,44 @@ async function preReportDay(day: string, events: EarningsEvent[], today: string,
   return out;
 }
 
+// ── 0015: cross-check the next 14 days against Nasdaq's per-day calendar ──
+const HOLIDAY_DAYS = new Set(HOLIDAYS.map((h) => h.date));
+/** Keep what the calendar can show: tracked names, plus anything big enough to pass its size gate. */
+const keepNq = (s: string, cap: number) => s in U || cap >= XCHECK_MIN_CAP;
+/** The folded window, so the sheet can read it in one cache lookup (written once every day in it loaded). */
+const NQX_IDX = (today: string) => CAL(`nq:x:idx:v1:${today}`);
+
+/** One Nasdaq day as symbol → session, slimmed before caching (6 h). An empty answer on a trading day is a failure, not "nobody reports". */
+function nasdaqSessions(day: string, ctx: ExecutionContext): Promise<NqDay> {
+  return cached(`nq:x:v1:${day}`, 21600, ctx, async () => {
+    const body = await getJson<any>(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, UA, 4000);
+    if (!body?.data?.rows?.length && !HOLIDAY_DAYS.has(day)) throw new Error("nasdaq day calendar empty");
+    return nasdaqDaySessions(body, keepNq);
+  });
+}
+
+/** The window's Nasdaq listings: the folded copy if this colo has one, else each day (cached, at most 3 calls at once). */
+async function nasdaqWindow(today: string, ctx: ExecutionContext): Promise<NqWindow> {
+  try {
+    const hit = await caches.default.match(NQX_IDX(today));
+    if (hit) return (await hit.json()) as NqWindow;
+  } catch { /* fall through to the days */ }
+  const days = windowDays(today);
+  const got = await pool(days, 3, (d) => nasdaqSessions(d, ctx));
+  const loaded: Record<string, NqDay> = {};
+  got.forEach((r, i) => { if (r.status === "fulfilled") loaded[days[i]] = r.value; });
+  const w: NqWindow = { from: today, to: windowEnd(today), loaded: Object.keys(loaded), idx: buildIndex(loaded) };
+  if (w.loaded.length === days.length) {
+    ctx.waitUntil(caches.default.put(NQX_IDX(today), new Response(JSON.stringify(w), { headers: { "Cache-Control": "public, max-age=3600", "Content-Type": "application/json" } })).catch(() => {}));
+  }
+  return w;
+}
+
+/** The folded window from the cache only (the sheet path: no upstream calls). */
+async function cachedNasdaqWindow(today: string): Promise<NqWindow | null> {
+  try { const hit = await caches.default.match(NQX_IDX(today)); return hit ? ((await hit.json()) as NqWindow) : null; } catch { return null; }
+}
+
 async function fetchCalendarDay(day: string, env: Env): Promise<EarningsEvent[]> {
   const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${day}&to=${day}&token=${env.FINNHUB_API_KEY}`);
   return toEvents(data.earningsCalendar);
@@ -301,8 +340,17 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     // A progress count, not a warning (0047): nothing failed, so the client mustn't say "busy" or retry.
     pending = unfetched(doc, SUPP_SYMBOLS);
   }
-  const fixed = flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U));
-  const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings, ...(pending ? { pending } : {}) };
+  let fixed = flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U));
+  // 0015: only ranges that reach the next 14 days (or a month past them, for a projected date Nasdaq lists sooner).
+  // A Nasdaq failure leaves the events as Finnhub has them. It isn't a calendar failure, so it's not a warning:
+  // warnings make the client say "busy" and retry (0047). `unchecked` counts the days that couldn't be compared.
+  let unchecked = 0;
+  if (to >= today && from <= addDays(windowEnd(today), XCHECK_REACH)) {
+    const w = await nasdaqWindow(today, ctx).catch(() => null);
+    if (w) fixed = crossCheck(fixed, w);
+    unchecked = windowDays(today).length - (w?.loaded.length ?? 0);
+  }
+  const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings, ...(pending ? { pending } : {}), ...(unchecked ? { unchecked } : {}) };
   return json(body, 600);
 }
 
@@ -535,13 +583,23 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   if (setup.grade && !out) read.push(`Into the print it's in ${/^[aeiou]/i.test(setup.trend) ? "an" : "a"} ${setup.trend.toLowerCase()}${setup.rsi != null ? ` with RSI ${setup.rsi.toFixed(0)}` : ""}.`);
   if (compass.grade) read.push(`As a long-term holding it grades ${compass.grade} on Compass quality.`);
 
+  // 0015: the calendar's Nasdaq cross-check, read from the cache only (no upstream calls on the sheet path).
+  let nqNext: { date: string; session: Session } | undefined;
+  let nqSession: Session | undefined;
+  if (upNext && !duePending && !pending && !upNext.source && !closed) {
+    const w = await cachedNasdaqWindow(today);
+    const c = w ? crossOne(symbol, upNext.date, (upNext.hour || "") as Session, w) : null;
+    if (c?.x === "differs" && c.xd) nqNext = { date: c.xd, session: c.xh ?? "" };
+    if (c?.h) nqSession = c.h;
+  }
+
   const body: TickerResponse = {
     symbol,
     profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, marketCap: profile.marketCapitalization, currency: typeof profile.currency === "string" ? profile.currency : "USD", exchange: profile.exchange, ipo: profile.ipo } : null,
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
     next: duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
-      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}) } : null,
+      : upNext ? { date: upNext.date, session: (upNext.hour || nqSession || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
