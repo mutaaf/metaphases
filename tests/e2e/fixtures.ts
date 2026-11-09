@@ -54,7 +54,14 @@ export const test = base.extend<{ lens: "trader" | "everyday" | "kids" | "unset"
     });
     // Logos come from a third-party CDN; keep tests hermetic.
     await page.route("https://static2.finnhub.io/**", (r) => r.fulfill({ status: 404, body: "" }));
+    // 0036: the app runs under the production CSP (vite preview serves shared/csp.ts). Any violation by the app
+    // itself fails the test that caused it. Tests that inject a blocked script on purpose opt out.
+    await page.addInitScript(() => { (window as any).__cspViolations = []; document.addEventListener("securitypolicyviolation", (e) => (window as any).__cspViolations.push(`${e.violatedDirective} ${e.blockedURI}`)); });
     await use(page);
+    if (!test.info().annotations.some((a) => a.type === "csp-violation-expected") && !page.isClosed()) {
+      const v = await page.evaluate(() => (window as any).__cspViolations ?? []).catch(() => []);
+      expect(v, "CSP violations").toEqual([]);
+    }
   },
 });
 export { expect };
