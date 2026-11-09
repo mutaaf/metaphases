@@ -41,6 +41,7 @@ test.describe("no analytics beacon (0036)", () => {
     test.describe(path, () => {
       test.use({ lens });
       test(`the injected beacon is blocked and the app itself breaks no rule`, async ({ page }) => {
+        test.info().annotations.push({ type: "csp-violation-expected", description: "injects the beacon on purpose" });
         const hits = await watch(page);
         await page.goto(path);
         await expect(page.locator("#root")).not.toBeEmpty();
