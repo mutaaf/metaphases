@@ -134,7 +134,7 @@ export default function App() {
         </footer>
       </div>
       <footer className="colophon">
-        <span className="eyebrow">Charted in Texas by <a href="https://mutaafaziz.com">Mutaaf Aziz</a> · grades are explained, never advice · <a href={href("/about")} onClick={(e) => { e.preventDefault(); navigate("/about"); }}>sibling of Market Digest &amp; Compass</a></span>
+        <span className="eyebrow">Charted in Texas by <a href="https://mutaafaziz.com">Mutaaf Aziz</a> · grades are explained, never advice · <a href={href("/about")} onClick={(e) => { e.preventDefault(); navigate("/about"); }}>sibling of Market Digest &amp; Compass</a> · <a href={href("/guide/")}>Guide</a></span>
         <LensSwitch />
         <span className="eyebrow">{ny.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }).toUpperCase()}</span>
       </footer>
