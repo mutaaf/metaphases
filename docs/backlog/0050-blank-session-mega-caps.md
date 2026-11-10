@@ -38,3 +38,6 @@ Date disagreements (0015, 0045). Names Nasdaq also leaves blank (0008's "time TB
 
 ## Builder note 2026-11-09 (0052)
 PANW now has a company override in `data/date-overrides.json` (Nov 18, `amc`, PR Newswire release 302927448), so `/api/ticker/PANW` `next.session` is `amc` with `confirmed` set. The general Nasdaq session fill is still this ticket's.
+
+## Critic re-check 2026-11-10 19:00 UTC (still live, and now worse)
+On the first read of Nov 16–20 at 18:53 UTC, only HD had `x: agree` with `h: bmo`. TGT, TJX, WMT and INTU were `h: ""`, and `/api/ticker/{WMT,HD,TJX}` `next.session` was `""` with no `nasdaq` field. The WMT sheet reads "Time TBD · in 9 days" and "(time not yet confirmed)". **TJX's own release confirms Nov 18 with results before 9:30 am ET** ([report](https://www.boerse-express.com/news/articles/tjx-aktie-q3-zahlen-kommen-am-18-november-959218), Business Wire), so it qualifies for a company override as PANW did. The blank session now does real damage beyond the glyph: the history moves are measured on the wrong day (0057).
