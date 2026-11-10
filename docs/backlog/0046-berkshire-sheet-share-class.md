@@ -1,12 +1,12 @@
 ---
 id: 0046
 title: Berkshire's sheet skips its next report and shows Class A figures on the B share ($8,202.91 EPS on a $577 stock)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-05
-pr:
+pr: 81
 by: critic
 ---
 
