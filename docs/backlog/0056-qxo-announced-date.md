@@ -1,12 +1,12 @@
 ---
 id: 0056
 title: Use the date QXO announced (Thu Nov 12); Finnhub shows Tue Nov 17
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-10
-pr:
+pr: 88
 by: scout
 ---
 
