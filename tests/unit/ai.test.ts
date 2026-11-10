@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { buildMessages, factsFor, SYSTEM, trimToBudget } from "../../worker/ai/prompts";
-import { buildRequest, deltaFrom, describeError, modelsRequest, pickModel } from "../../worker/ai/providers";
+import { buildRequest, deltaFrom, describeError, modelsRequest, pickModel, streamChat } from "../../worker/ai/providers";
 import { handleAi } from "../../worker/ai";
 import { parseSse } from "../../src/lib/sse";
 import { exposureContext, retraceContext, tickerContext, weekContext } from "../../src/lib/aiContext";
@@ -190,5 +190,23 @@ describe("keys never leak", () => {
 
   it("describeError is key-free for every status", () => {
     for (const s of [400, 401, 402, 403, 404, 429, 500, 503]) expect(describeError("openai", { status: s, message: SECRET })).not.toContain(SECRET);
+  });
+});
+
+describe("the free brain through Prompter", () => {
+  it("says plainly when today's shared allowance is used up", () => {
+    const err = new Error("Prompter: today's shared AI allowance for metaphases is used up. It resets at 00:00 UTC.");
+    expect(describeError("edge", err)).toMatch(/resting until 00:00 UTC/);
+  });
+
+  it("passes no AbortSignal across the binding, and still times out", async () => {
+    let args: unknown[] = [];
+    const ai = { run: async (...a: unknown[]) => { args = a; return new ReadableStream<Uint8Array>({ pull() { /* never answers */ } }); } };
+    const ctl = new AbortController();
+    const it = streamChat({ provider: "edge", model: "@cf/google/gemma-4-26b-a4b-it", messages: [{ role: "user", content: "hi" }], ai: ai as never, signal: ctl.signal });
+    const pending = it.next();
+    setTimeout(() => ctl.abort(), 10);
+    await expect(pending).rejects.toThrow(/timed out/);
+    expect(args.length).toBe(2);
   });
 });

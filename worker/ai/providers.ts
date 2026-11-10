@@ -124,14 +124,31 @@ async function* sseText(body: ReadableStream<Uint8Array>): AsyncGenerator<string
 
 interface AiBinding { run(model: string, input: unknown, opts?: unknown): Promise<unknown> }
 
+function abortable(src: ReadableStream<Uint8Array>, signal: AbortSignal): ReadableStream<Uint8Array> {
+  const reader = src.getReader();
+  const timedOut = () => Object.assign(new Error("timed out"), { name: "AbortError" });
+  signal.addEventListener("abort", () => { reader.cancel().catch(() => {}); }, { once: true });
+  return new ReadableStream<Uint8Array>({
+    async pull(c) {
+      const { done, value } = await reader.read();
+      if (signal.aborted) c.error(timedOut());
+      else if (done) c.close();
+      else c.enqueue(value);
+    },
+    cancel(reason) { return reader.cancel(reason); },
+  });
+}
+
 export async function* streamChat(opts: { provider: ProviderId; key?: string; model: string; messages: ChatMessage[]; maxTokens?: number; ai?: AiBinding; signal?: AbortSignal }): AsyncGenerator<string> {
   const maxTokens = opts.maxTokens ?? 900;
   if (opts.provider === "edge") {
     if (!opts.ai) throw new ProviderError(503, "edge brain unavailable");
     const input: Record<string, unknown> = { messages: opts.messages, stream: true, max_tokens: maxTokens };
     if (/gemma-4|qwen3|glm/.test(opts.model)) input.chat_template_kwargs = { enable_thinking: false };
-    const res = (await opts.ai.run(opts.model, input, { signal: opts.signal })) as ReadableStream<Uint8Array>;
-    yield* sseText(res);
+    // opts.ai is Prompter (github.com/mutaaf/prompter), the shared AI gateway. An AbortSignal can't cross a
+    // service binding, so the timeout cancels the stream on this side instead.
+    const res = (await opts.ai.run(opts.model, input)) as ReadableStream<Uint8Array>;
+    yield* sseText(opts.signal ? abortable(res, opts.signal) : res);
     return;
   }
   const { url, init } = buildRequest(opts.provider, opts.key ?? "", opts.model, opts.messages, maxTokens);
@@ -142,6 +159,7 @@ export async function* streamChat(opts: { provider: ProviderId; key?: string; mo
 
 /** A short, key-free message for the reader when a provider call fails. */
 export function describeError(provider: ProviderId, err: unknown): string {
+  if (/^Prompter: .*used up/.test(String((err as { message?: string })?.message))) return "The free brain is resting until 00:00 UTC. Add your own key in AI settings to keep going.";
   const label = PROVIDERS[provider]?.label ?? provider;
   const status = (err as { status?: number })?.status;
   if (status === 401 || status === 403) return `${label} didn't accept that key. Check it in AI settings.`;
