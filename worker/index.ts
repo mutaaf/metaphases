@@ -19,13 +19,14 @@ import { handleAi } from "./ai";
 import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
-import { applyPreReport, nasdaqDayEps, periodKey, pickConsensus, type EstSnapshot } from "../shared/compare";
+import { applyPreReport, nasdaqDayEps, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
+import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
-import { aliasMap, commitSupp, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
+import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
 
 interface Env {
@@ -110,7 +111,7 @@ function toEvents(rows: any[]): EarningsEvent[] {
     const tracked = sym in U;
     if (!tracked && !((e.revenueEstimate ?? 0) >= BIG_REVENUE || (e.revenueActual ?? 0) >= BIG_REVENUE)) continue;
     if (!tracked && /[.\-]/.test(sym)) continue; // skip foreign share classes without logos
-    out.push({ s: sym, d: e.date, h: (e.hour || "") as Session, q: e.quarter, y: e.year, eE: e.epsEstimate, eA: e.epsActual, rE: e.revenueEstimate, rA: e.revenueActual, t: tracked ? 1 : 0 });
+    out.push({ s: sym, d: e.date, h: (e.hour || "") as Session, q: e.quarter, y: e.year, eE: shareEps(sym, e.epsEstimate), eA: shareEps(sym, e.epsActual), rE: e.revenueEstimate, rA: e.revenueActual, t: tracked ? 1 : 0 });
   }
   return out;
 }
@@ -122,7 +123,7 @@ const SUPP_LOCK = CAL("cal:supp:lock:v1");
 const SUPP_BACK = 7, SUPP_AHEAD = 120;
 
 async function readSupp(): Promise<SuppDoc> {
-  try { const hit = await caches.default.match(SUPP_KEY); return hit ? ((await hit.json()) as SuppDoc) : {}; } catch { return {}; }
+  try { const hit = await caches.default.match(SUPP_KEY); return hit ? dropUnscaled((await hit.json()) as SuppDoc) : {}; } catch { return {}; }
 }
 
 /**
@@ -386,7 +387,7 @@ async function candles(symbol: string, range: string, ctx: ExecutionContext): Pr
     let lastErr: unknown;
     for (const h of hosts) {
       try {
-        const d = await getJson<any>(`https://${h}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`, UA);
+        const d = await getJson<any>(`https://${h}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol(symbol))}?range=${range}&interval=1d`, UA);
         const r = d.chart.result[0];
         const q = r.indicators.quote[0];
         const out: Candles = { t: [], o: [], h: [], l: [], c: [] };
@@ -442,6 +443,12 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     settle("Price history unavailable — setup grade skipped.", candles(symbol, "2y", ctx)),
   ]);
 
+  // 0046: per-share figures in the tracked share's unit (BRK.B: Finnhub's are per Class A share).
+  const listOf = (v: unknown): any[] => (Array.isArray(v) ? v : []);
+  for (const e of listOf(upcoming?.earningsCalendar)) { e.epsEstimate = shareEps(symbol, e.epsEstimate); e.epsActual = shareEps(symbol, e.epsActual); }
+  for (const f of listOf(surprises)) { f.estimate = shareEps(symbol, f.estimate); f.actual = shareEps(symbol, f.actual); }
+  const epsSeries: unknown = metric?.series?.quarterly?.eps;
+  const quarterly = Array.isArray(epsSeries) ? { ...metric.series.quarterly, eps: epsSeries.map((p) => ({ ...p, v: shareEps(symbol, p.v) })) } : metric?.series?.quarterly;
   const cal: any[] = applyToRows(symbol, upcoming?.earningsCalendar ?? [], OVERRIDES, today);
   const nextE = cal.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
   const lastE = cal.filter((e) => e.date < today).sort((a, b) => b.date.localeCompare(a.date))[0];
@@ -451,7 +458,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) nextE.hour = c.h; }
   const habit: Session = (nextE?.hour || lastE?.hour || "") as Session;
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
-  const lastSnap = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
+  const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
+  const lastSnap = sameEpsUnit(symbol, lastSnapRaw, lastE?.epsEstimate) ? lastSnapRaw : null;
 
   // Finnhub's estimates for foreign filers are in the reporting currency; Nasdaq's history is USD.
   const rows: any[] = nasdaq?.data?.earningsSurpriseTable?.rows ?? [];
@@ -498,7 +506,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   let outcome: Outcome = null;
   if (nextE && nextE.date === today) {
     const row = await passedRow(symbol, nextE, [today]);
-    const snapE = (await readSnap(today))[symbol]?.eE;
+    const snapRaw = (await readSnap(today))[symbol]?.eE;
+    const snapE = sameEpsUnit(symbol, snapRaw, nextE.epsEstimate ?? row?.eE) ? snapRaw : undefined;
     const day: DayRow = {
       date: today, hour: nextE.hour || row?.h || "", quarter: nextE.quarter, year: nextE.year,
       eE: row?.eE ?? snapE ?? nextE.epsEstimate ?? null, eA: nextE.epsActual ?? row?.eA ?? null,
@@ -545,7 +554,13 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   });
   // Fall back to Finnhub's four quarters if Nasdaq was unreachable.
   if (!history.length && surprises?.length && usd) {
-    for (const f of surprises.slice(0, 4)) history.push({ date: f.period, session: "", period: f.period, epsE: f.estimate, epsA: f.actual, surprisePct: f.surprisePercent, move: null });
+    // Finnhub gives the quarter, not the day it was reported (0046): never show a quarter-end as a report date.
+    // The quarter the calendar dated comes in just below, with its date; the rest are labelled by quarter only.
+    for (const f of surprises.slice(0, 4)) {
+      if (lastE && lastE.epsActual != null && lastE.quarter === f.quarter && lastE.year === f.year) continue;
+      const label = f.quarter && f.year ? `Q${f.quarter} ${f.year}` : `Quarter to ${String(f.period).slice(0, 7)}`; // never a bare YYYY-MM-DD
+      history.push({ date: label, session: "", period: label, epsE: f.estimate, epsA: f.actual, surprisePct: f.surprisePercent, move: null });
+    }
   }
   // A print reported in the last ~40 days might be on Finnhub's calendar before Nasdaq's table catches up.
   if (usd && lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date)) {
@@ -629,7 +644,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
-    quarters: quartersFrom(metric?.series?.quarterly, profile?.shareOutstanding ?? null),
+    quarters: quartersFrom(quarterly, profile?.shareOutstanding ?? null),
     read, warnings,
   };
   return body;
@@ -827,7 +842,7 @@ async function kidsCandles(url: URL, ctx: ExecutionContext): Promise<Response> {
   const allowed = new Set(KID_COMPANIES.map((c) => c.s));
   const syms = Array.from(new Set((url.searchParams.get("s") ?? "").toUpperCase().split(/[,\s]+/))).filter((s) => allowed.has(s)).slice(0, 8);
   const results = await pool(syms, 3, (sym) => cached<any>(`ykc:${sym}`, 21600, ctx, async () => {
-    const d = await getJson<any>(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=1y&interval=1d`, UA);
+    const d = await getJson<any>(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol(sym))}?range=1y&interval=1d`, UA);
     const r = d.chart.result[0], q = r.indicators.quote[0];
     const out = { s: sym, d: [] as string[], o: [] as number[], h: [] as number[], l: [] as number[], c: [] as number[], v: [] as number[] };
     const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -847,7 +862,7 @@ async function kidsCandles(url: URL, ctx: ExecutionContext): Promise<Response> {
 // tier's 60/min budget. The explanation is computed by shared/kidsWhy.ts; it never invents news.
 async function kidsDaily(sym: string, ctx: ExecutionContext): Promise<DailySeries & { div: { date: string; amount: number }[] }> {
   return cached(`ykw:${sym}`, 1800, ctx, async () => {
-    const d = await getJson<any>(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=3mo&interval=1d&events=div`, UA);
+    const d = await getJson<any>(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol(sym))}?range=3mo&interval=1d&events=div`, UA);
     const r = d.chart.result[0], q = r.indicators.quote[0];
     const out = { d: [] as string[], c: [] as number[], div: [] as { date: string; amount: number }[] };
     r.timestamp.forEach((t: number, i: number) => { if (q.close[i] != null) { out.d.push(nyDate(t)); out.c.push(Math.round(q.close[i] * 100) / 100); } });
@@ -912,7 +927,7 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
     const sym = syms[i];
     for (const e of applyToRows(sym, r.value?.earningsCalendar ?? [], OVERRIDES, today)) {
       if (e.date < today) continue;
-      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: e.epsEstimate ?? null, cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}) });
+      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}) });
     }
   });
   items.sort((a, b) => a.date.localeCompare(b.date));

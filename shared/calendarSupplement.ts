@@ -6,12 +6,14 @@
 //   2. a supplement: for the ~64 tracked foreign/dotted names, the `symbol=` rows are kept in one small
 //      cached document, refreshed a few symbols per request, and merged in when the range feed lacks them.
 import type { EarningsEvent, Session } from "./types";
+import { SHARE_CLASS, shareEps } from "./shareClass";
 
 export interface UniverseEntry { n: string; mc: number; c?: string; ec?: string; logo?: string }
 export type Universe = Record<string, UniverseEntry>;
 
 /** One symbol's upcoming rows from `symbol=`, already shaped as calendar events. */
-export interface SuppEntry { at: number; rows: EarningsEvent[] }
+/** `u: 1` once its EPS is in the tracked share's unit (0046); older BRK.B entries hold Class A figures. */
+export interface SuppEntry { at: number; rows: EarningsEvent[]; u?: 1 }
 export type SuppDoc = Record<string, SuppEntry>;
 
 /** How long one symbol's `symbol=` answer is trusted before it's refreshed (12 h, per the ticket). */
@@ -66,7 +68,17 @@ export function refreshEntry(prev: SuppEntry | undefined, fresh: EarningsEvent[]
   const cut = new Date(Date.parse(today + "T12:00:00Z") - SUPP_KEEP_PAST_DAYS * 86400000).toISOString().slice(0, 10);
   const dates = new Set(fresh.map((r) => r.d));
   const kept = (prev?.rows ?? []).filter((r) => r.d < today && r.d >= cut && !dates.has(r.d));
-  return { at: now - Math.floor(jitter * 3600 * 1000), rows: [...kept, ...fresh].sort((a, b) => a.d.localeCompare(b.d)) };
+  // `kept` comes from `prev`, so it's only in the new unit when `prev` was (dropUnscaled removes the rest).
+  return { at: now - Math.floor(jitter * 3600 * 1000), rows: [...kept, ...fresh].sort((a, b) => a.d.localeCompare(b.d)), u: 1 };
+}
+
+/** A cached doc without entries written before 0046's share-class scaling, so they are fetched again first. */
+export function dropUnscaled(doc: SuppDoc): SuppDoc {
+  const bad = Object.keys(SHARE_CLASS).filter((s) => doc[s] && !doc[s].u);
+  if (!bad.length) return doc;
+  const out = { ...doc };
+  for (const s of bad) delete out[s];
+  return out;
 }
 
 /** How many supplement names have never been fetched here: their calendar rows may be missing for now. */
@@ -75,7 +87,7 @@ export const unfetched = (doc: SuppDoc, symbols: string[]) => symbols.filter((s)
 /** A raw Finnhub row as a tracked calendar event under `sym`. */
 export const rowToEvent = (e: any, sym: string): EarningsEvent => ({
   s: sym, d: e.date, h: (e.hour || "") as Session, q: e.quarter, y: e.year,
-  eE: e.epsEstimate ?? null, eA: e.epsActual ?? null, rE: e.revenueEstimate ?? null, rA: e.revenueActual ?? null, t: 1,
+  eE: shareEps(sym, e.epsEstimate ?? null), eA: shareEps(sym, e.epsActual ?? null), rE: e.revenueEstimate ?? null, rA: e.revenueActual ?? null, t: 1,
 });
 
 /** Finnhub's own listing for a tracked symbol, from its logo file name (TM → 7203.T, NWS → NWSA). */

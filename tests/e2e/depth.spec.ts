@@ -168,3 +168,34 @@ test("a report whose session passed without figures says results are due, never 
   await expect(page.getByRole("button", { name: /Write the preview/ })).toHaveCount(0);
   await page.screenshot({ path: `test-results/0039-pending-${test.info().project.name}.png` });
 });
+
+// 0046: the worker scales Berkshire's Class A figures to the B share and labels Finnhub-only quarters by quarter
+// (unit-tested in shareClass.test.ts); here the sheet gets its output shape.
+test("BRK.B: B-share EPS, and quarters with no known report day read as quarters, not dates (0046)", async ({ page }) => {
+  await page.route("**/api/ticker/BRK.B", async (r) => {
+    const body = nvdaAs("BRK.B");
+    body.profile = { ...body.profile, name: "Berkshire Hathaway Inc" };
+    body.next = { date: "2027-02-26", session: "", quarter: 4, year: 2026, epsE: 5.4686, revE: 99243363400, currency: "USD" };
+    body.history = [
+      { date: "2026-11-07", session: "bmo", period: "Q3 2026", epsE: 6.1692, epsA: 5.9397, surprisePct: -3.72, move: null },
+      { date: "Q2 2026", session: "", period: "Q2 2026", epsE: 5.063, epsA: 6.0255, surprisePct: 19.01, move: null },
+      { date: "Q1 2026", session: "", period: "Q1 2026", epsE: 5.3857, epsA: 5.2596, surprisePct: -2.34, move: null },
+      { date: "Q4 2025", session: "", period: "Q4 2025", epsE: 5.6212, epsA: 4.7288, surprisePct: -15.88, move: null },
+    ];
+    body.read = ["Berkshire Hathaway Inc reports Q4 on Friday, Feb 26 (time not yet confirmed).", "Wall Street expects $5.47 a share, versus $5.94 last quarter."];
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/BRK.B");
+  await expect(page.locator(".nc-stats").first()).toContainText("$5.47");
+  const rows = page.locator(".rx-table tbody tr");
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(0).locator("td").first()).toContainText("Nov 7 ’26");
+  await expect(rows.nth(1).locator("td").first()).toHaveText(/Q2 2026/);
+  const table = await page.locator(".rx-table").innerText();
+  expect(table).not.toMatch(/Jun 30|Mar 31|Dec 31/);
+  expect(table).not.toMatch(/\$\d,?\d{3}\./);
+  const w = await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth), document.documentElement.scrollWidth - document.documentElement.clientWidth));
+  expect(w).toBeLessThanOrEqual(0);
+  await page.locator(".reactions").scrollIntoViewIfNeeded();
+  await page.locator(".reactions").screenshot({ path: test.info().outputPath("brk-reactions.png") });
+});

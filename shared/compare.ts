@@ -7,6 +7,7 @@
 // colour it, don't count it in any beat rate, and say so.
 import { isUsd, type Currency } from "./currency";
 import type { EarningsEvent } from "./types";
+import { SHARE_CLASS } from "./shareClass";
 
 /** Largest |actual / estimate − 1| we treat as the same basis. Tuned on Oct 26–30 2026: 4 of 182 rows exceed it (HIG −27.6%, VLO +17.5%, BE +13.1%, SPCX +12.3%). */
 export const REV_BASIS_MAX = 0.12;
@@ -112,6 +113,17 @@ export type EstSnapshot = Record<string, { eE: number | null; rE: number | null 
  * After it: swap in the snapshot (`pr: "s"`), else Nasdaq's pre-report EPS consensus when it agrees on
  * basis (`pr: "n"`). `usd(s)` guards Nasdaq's dollar figures against home-currency estimates.
  */
+/**
+ * Two figures for one quarter's EPS in the same unit (0046). Only share-class symbols are checked: a figure cached
+ * before the rescale is `div`× off. Every other symbol passes (a tiny EPS really can be revised 0.01 → 0.12).
+ */
+export const sameEpsUnit = (symbol: string, a: number | null | undefined, b: number | null | undefined) => {
+  const c = SHARE_CLASS[symbol];
+  if (!c || a == null || b == null || a === 0 || b === 0) return true;
+  const r = Math.abs(a / b);
+  return r < Math.sqrt(c.div) && 1 / r < Math.sqrt(c.div);
+};
+
 export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasdaqEps: Record<string, number> = {}, usd: (s: string) => boolean = () => true, record = true): { events: EarningsEvent[]; updates: EstSnapshot } {
   const updates: EstSnapshot = {};
   const out = events.map((e) => {
@@ -124,8 +136,9 @@ export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasda
       return e;
     }
     const s = snap[e.s];
-    // Only a complete snapshot (every figure the row has) counts as the pre-report bar.
-    if (s && (s.eE != null || s.rE != null) && (s.eE != null || e.eE == null) && (s.rE != null || e.rE == null)) return { ...e, eE: s.eE, rE: s.rE, pr: "s" as const };
+    // Only a complete snapshot (every figure the row has) counts as the pre-report bar, and only in the row's
+    // unit: a snapshot recorded before a share-class rescale (0046, BRK.B) is 1,500× off, not drift.
+    if (s && (s.eE != null || s.rE != null) && (s.eE != null || e.eE == null) && (s.rE != null || e.rE == null) && sameEpsUnit(e.s, s.eE, e.eE)) return { ...e, eE: s.eE, rE: s.rE, pr: "s" as const };
     const n = nasdaqEps[e.s];
     if (n != null && usd(e.s) && sameEpsBasis(n, e.eE)) return { ...e, eE: n, pr: "n" as const };
     return e;
