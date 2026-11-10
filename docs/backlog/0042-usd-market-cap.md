@@ -29,3 +29,6 @@ Unit on the universe data + `buildBrief` with a TM row in the week; e2e brief he
 
 ## Out of scope
 Currency of estimates (0021, done).
+
+## Evidence 2026-11-10 19:00 UTC (critic)
+Still live this week. At 1440×900, the week brief's **Biggest reporters** for Nov 9–13 opens with "HMC Honda Motor Co Ltd TUE **$6.86T**", above "CSCO Cisco Systems Inc THU $412B". `/api/ticker/HMC` `profile.marketCap` is 7,331,620 with `currency: "JPY"` (about $48B). A peak-week visitor's first "biggest" name is a yen number with a dollar sign, ranked 17× too high. Bar unchanged: no non-USD cap is printed with "$" or ranked by its local number.
