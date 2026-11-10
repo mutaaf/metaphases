@@ -1,12 +1,12 @@
 ---
 id: 0043
 title: A sheet missing its date or history is never edge-cached for 5 minutes or used for a share card
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-04
-pr:
+pr: 83
 by: critic
 ---
 
@@ -20,10 +20,10 @@ Critique 2026-11-04 19:00 #3. During the critic's 119-sheet sweep at 19:00 UTC (
 - The share route (`worker/og.ts`) uses the last good copy, never a sheet whose `next` failed to load.
 
 ## Acceptance criteria
-- [ ] Vitest: `buildTicker` with the `symbol=` calendar call mocked to 429 → the response is cached with TTL ≤ 30 s; with a stale good copy present, `next` comes from it and `warnings` names it as earlier data
-- [ ] Vitest: a sheet with no warnings is still cached 300 s (no regression in upstream call volume)
-- [ ] `/t/SYM` og:title is never the bare "(SYM) earnings" fallback while a good copy less than 24 h old exists
-- [ ] Both cache layers obey the short TTL: the `json(…, 300)` response header is ≤ 30 s too when the sheet is degraded
+- [x] Vitest: `buildTicker` with the `symbol=` calendar call mocked to 429 → the response is cached with TTL ≤ 30 s; with a stale good copy present, `next` comes from it and `warnings` names it as earlier data
+- [x] Vitest: a sheet with no warnings is still cached 300 s (no regression in upstream call volume)
+- [x] `/t/SYM` og:title is never the bare "(SYM) earnings" fallback while a good copy less than 24 h old exists
+- [x] Both cache layers obey the short TTL: the `json(…, 300)` response header is ≤ 30 s too when the sheet is degraded
 - [ ] Critic re-check: rerun the 119-sheet sweep at 4 concurrent. Re-fetching any degraded sheet 60 s later returns full data, or the stale copy with its warning
 
 ## Test plan
@@ -31,3 +31,6 @@ Critique 2026-11-04 19:00 #3. During the critic's 119-sheet sweep at 19:00 UTC (
 
 ## Out of scope
 Raising Finnhub limits or adding hosts. This only changes what gets cached.
+
+## Shipped (builder, 2026-11-10)
+`shared/sheetCache.ts` + `tickerEntry` in `worker/index.ts`. A sheet whose build lost "Upcoming date unavailable." or "Earnings history unavailable." is cached 30 s in both layers (edge copy and response `max-age`) and never becomes the last good copy. A good build writes `tk:stale:v2:SYM` (24 h); a degraded build is replaced by it, marked "This is an earlier read from 9:00 AM ET; the market data service is busy right now." An earlier day's copy stands in only while its report is still ahead, and a copy from today with the report today only until that session has passed (it would predate the 0039 report-day state otherwise). A build that lost only its history keeps its own date and report state and borrows just the past reports ("Past reports are an earlier read from …"). `/t/SYM` HTML follows the sheet's TTL, and `/og/t/SYM.(svg|png)` from a degraded sheet or stand-in is served with `max-age=30`, never under the 6 h keys; a degraded PNG is kept 30 s under its own key so an unfurl burst renders it once (keys bumped to v4 so cards cached degraded before this deploy go away). Tests: `tests/unit/tickerCache.test.ts` (worker-level, 429 on the `symbol=` calendar and `stock/earnings`).

@@ -28,6 +28,7 @@ import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surp
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
+import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -414,13 +415,41 @@ function slimMetric(raw: any) {
   return { metric: raw?.metric ?? {}, series: { quarterly } };
 }
 
-/** The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON. */
+/**
+ * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
+ * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
+ * (`tk:stale:v2:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
+ */
+async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
+  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v3:${symbol}`)}`);
+  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v2:${symbol}`)}`);
+  const hit = await caches.default.match(key);
+  if (hit) { const data = (await hit.json()) as TickerResponse; return { data, ttl: sheetTtl(data) }; }
+  const built = await buildTicker(symbol, env, ctx);
+  const today = iso(todayNY());
+  let data = built;
+  if (isDegraded(built)) {
+    const old = await caches.default.match(staleKey).then((r) => (r ? (r.json() as Promise<StaleSheet>) : null)).catch(() => null);
+    const ny = todayNY();
+    const nowMin = ny.getHours() * 60 + ny.getMinutes();
+    // Only the past reports failed: keep the fresh date and report-day state, borrow the history.
+    if (!built.warnings.includes("Upcoming date unavailable.")) { if (staleUsable(old, today, nowMin, "history")) data = borrowHistory(built, old, today); }
+    else if (staleUsable(old, today, nowMin)) data = standIn(old, today);
+  } else {
+    const s: StaleSheet = { at: Date.now(), day: today, data: built };
+    ctx.waitUntil(caches.default.put(staleKey, new Response(JSON.stringify(s), { headers: { "Cache-Control": `public, max-age=${SHEET_STALE_TTL}`, "Content-Type": "application/json" } })).catch(() => {}));
+  }
+  const ttl = sheetTtl(data);
+  ctx.waitUntil(caches.default.put(key, new Response(JSON.stringify(data), { headers: { "Cache-Control": `public, max-age=${ttl}`, "Content-Type": "application/json" } })).catch(() => {}));
+  return { data, ttl };
+}
 async function tickerData(symbol: string, env: Env, ctx: ExecutionContext): Promise<TickerResponse> {
-  return cached<TickerResponse>(`tk:v3:${symbol}`, 300, ctx, () => buildTicker(symbol, env, ctx));
+  return (await tickerEntry(symbol, env, ctx)).data;
 }
 
 async function ticker(symbol: string, env: Env, ctx: ExecutionContext): Promise<Response> {
-  return json(await tickerData(symbol, env, ctx), 300);
+  const { data, ttl } = await tickerEntry(symbol, env, ctx);
+  return json(data, ttl);
 }
 
 async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Promise<TickerResponse> {
@@ -765,18 +794,19 @@ const PAGES: Record<string, { title: string; desc: string; image?: string; kids?
   "/about": { title: "Where Metaphases comes from · Metaphases", desc: "A calmer earnings calendar with a memory: the best ideas from Market Digest and Compass, free, explained, never advice. Data, lineage and how the agents keep it running." },
 };
 
-async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ title: string; desc: string; image?: string; kids?: boolean } | null> {
+async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ title: string; desc: string; image?: string; kids?: boolean; ttl?: number } | null> {
   const path = url.pathname.slice(BASE.length) || "/";
   const t = path.match(/^\/t\/([A-Za-z.\-]{1,10})$/)?.[1] ?? url.searchParams.get("t");
   if (t) {
     const sym = t.toUpperCase();
     try {
-      const d = await tickerData(sym, env, ctx);
+      const { data: d, ttl } = await tickerEntry(sym, env, ctx);
       const name = d.profile?.name ?? U[sym]?.n ?? sym;
       const title = tickerShareTitle(sym, name, d.next, d.justReported);
       const desc = tickerShareDesc(name, d);
-      return { title, desc, image: `${SITE}${BASE}/og/t/${sym}.png` };
-    } catch { return { title: `${sym} earnings · Metaphases`, desc: PAGES["/"].desc }; }
+      // 0043: an unfurl built from a degraded sheet (or a stand-in) is cached no longer than the sheet itself.
+      return { title, desc, image: `${SITE}${BASE}/og/t/${sym}.png`, ttl };
+    } catch { return { title: `${sym} earnings · Metaphases`, desc: PAGES["/"].desc, ttl: SHEET_DEGRADED_TTL }; }
   }
   const day = url.searchParams.get("day");
   if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
@@ -817,7 +847,7 @@ async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Resp
     .on('link[rel="icon"]', { element(el) { if (meta.kids) el.setAttribute("href", el.getAttribute("type") === "image/png" ? `${BASE}/kids-icon-512.png` : `${BASE}/kids-icon.svg`); } })
     .on('link[rel="apple-touch-icon"]', { element(el) { if (meta.kids) el.setAttribute("href", `${BASE}/kids-apple-touch-icon.png`); } })
     .on('meta[name="apple-mobile-web-app-title"]', { element(el) { if (meta.kids) el.setAttribute("content", "Moon Club"); } })
-    .transform(new Response(res.body, { status: 200, headers: (() => { const h = new Headers(res.headers); h.set("Content-Type", "text/html; charset=utf-8"); h.set("Cache-Control", "public, max-age=300"); return h; })() }));
+    .transform(new Response(res.body, { status: 200, headers: (() => { const h = new Headers(res.headers); h.set("Content-Type", "text/html; charset=utf-8"); h.set("Cache-Control", `public, max-age=${Math.min(300, meta.ttl ?? 300)}`); return h; })() }));
 }
 
 // ── /api/quotes?s=AAPL,DIS: batched live prices (Kids piggy bank). Cheap on purpose: each symbol is
@@ -937,8 +967,12 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
 }
 
 // ── /og/t/:sym.(svg|png): per-ticker share card ─────────────────────────
-async function cardFor(sym: string, env: Env, ctx: ExecutionContext): Promise<string> {
+/** The card, and whether it was drawn from a degraded sheet or a stand-in (0043: such a card is never kept for 6 hours). */
+async function cardFor(sym: string, env: Env, ctx: ExecutionContext): Promise<{ svg: string; degraded: boolean }> {
   const d = await tickerData(sym, env, ctx);
+  return { svg: cardFromSheet(sym, d), degraded: sheetTtl(d) < SHEET_TTL };
+}
+function cardFromSheet(sym: string, d: TickerResponse): string {
   const when = isDated(d.next) ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
   // 0039: once it's out (or due), the card says so instead of "Reports …" with the estimate.
   const rc = reportedCard(d, iso(todayNY()));
@@ -949,15 +983,21 @@ async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, c
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const svg = await cached(`og:svg:v3:${sym}:${day}`, 21600, ctx, () => cardFor(sym, env, ctx));
-    if (fmt === "svg") return new Response(svg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=21600" } });
-    const key = new Request(`https://cache.metaphases.internal/og-png-v3-${sym}-${day}`);
-    const hit = await caches.default.match(key);
-    if (hit) return hit;
+    const key = new Request(`https://cache.metaphases.internal/og-png-v4-${sym}-${day}`);
+    // A card drawn while degraded is kept 30 s under its own key, so an unfurl burst renders it once, not per request.
+    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v4-${sym}-${day}-d`);
+    if (fmt === "png") { const hit = (await caches.default.match(key)) ?? (await caches.default.match(shortKey)); if (hit) return hit; }
+    // 0043: a card drawn while the sheet's date or history failed to load is served briefly and never cached.
+    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v4:${sym}:${day}`)}`);
+    const svgHit = await caches.default.match(svgKey);
+    const { svg, degraded } = svgHit ? { svg: await svgHit.text(), degraded: false } : await cardFor(sym, env, ctx);
+    const age = degraded ? SHEET_DEGRADED_TTL : 21600;
+    if (!svgHit && !degraded) ctx.waitUntil(caches.default.put(svgKey, new Response(svg, { headers: { "Cache-Control": "public, max-age=21600" } })).catch(() => {}));
+    if (fmt === "svg") return new Response(svg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": `public, max-age=${age}` } });
     const { renderPng } = await import("./og");
     const png = await renderPng(svg, ctx);
-    const res = new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=21600" } });
-    ctx.waitUntil(caches.default.put(key, res.clone()));
+    const res = new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": `public, max-age=${age}` } });
+    ctx.waitUntil(caches.default.put(degraded ? shortKey : key, res.clone()).catch(() => {}));
     return res;
   } catch {
     return fallback();
