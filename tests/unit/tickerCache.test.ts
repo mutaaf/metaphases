@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../../worker/index";
-import { isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_TTL, type StaleSheet } from "../../shared/sheetCache";
+import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_TTL, type StaleSheet } from "../../shared/sheetCache";
 import type { TickerResponse } from "../../shared/types";
+
+// resvg/wasm doesn't load in Node: stand in a renderer that counts renders.
+let renders = 0;
+vi.mock("../../worker/og", () => ({ renderPng: async () => { renders++; return new Uint8Array([137, 80, 78, 71]); } }));
 
 // 0043: a sheet that lost its upcoming date or its earnings history to a Finnhub rate limit is never edge-cached
 // for 5 minutes or used for a share card. Shape recorded from production on 2026-11-10 06:56 UTC (NVDA, a week
@@ -38,7 +42,7 @@ let limited = new Set<string>();
 let finnhubCalls = 0;
 
 beforeEach(() => {
-  pending = []; limited = new Set(); finnhubCalls = 0;
+  pending = []; limited = new Set(); finnhubCalls = 0; renders = 0;
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-11-10T14:00:00Z"));
   cache = new MemCache();
@@ -161,6 +165,34 @@ describe("a rate-limited build", () => {
   }, 20000);
 });
 
+describe("only the past reports failed", () => {
+  it("the sheet keeps its fresh date and borrows the history from the last good copy", async () => {
+    await sheet();
+    cache.expire();
+    limited = new Set(["stock/earnings"]);
+    // Nasdaq down too, so the build has no history at all.
+    const nq = (globalThis.fetch as any);
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => (new URL(u).hostname === "api.nasdaq.com" && u.includes("earnings-surprise") ? new Response("busy", { status: 503 }) : nq(u))));
+    const { r, d } = await sheet();
+    expect(d.next).toMatchObject({ date: "2026-11-18", session: "amc" });
+    expect(d.history.length).toBe(2);
+    expect(d.warnings[0]).toMatch(/^Past reports are an earlier read from 9:00 AM ET;/);
+    expect(d.warnings).not.toContain("Earnings history unavailable.");
+    expect(maxAge(r)).toBe(SHEET_DEGRADED_TTL);
+  }, 20000);
+});
+
+describe("the PNG share card from a degraded sheet", () => {
+  it("renders once per 30 s, not on every unfurl", async () => {
+    limited = new Set(["calendar/earnings"]);
+    const a = await call(`/og/t/${SYM}.png`);
+    expect(maxAge(a)).toBeLessThanOrEqual(30);
+    await call(`/og/t/${SYM}.png`);
+    expect(renders).toBe(1);
+    expect([...cache.store.keys()].some((k) => k.endsWith(`og-png-v4-${SYM}-2026-11-10`))).toBe(false); // never the 6 h key
+  }, 20000);
+});
+
 describe("sheetCache rules", () => {
   const base = { warnings: [], next: { date: "2026-11-18", session: "amc", quarter: 3, year: 2027, epsE: 1.25, revE: null } } as unknown as TickerResponse;
   const copy = (day: string, data: Partial<TickerResponse> = {}): StaleSheet => ({ at: Date.parse(`${day}T14:00:00Z`), day, data: { ...base, ...data } });
@@ -173,13 +205,41 @@ describe("sheetCache rules", () => {
     expect(sheetTtl(standIn(copy("2026-11-10"), "2026-11-10"))).toBe(SHEET_DEGRADED_TTL);
   });
   it("a copy from today stands in; an older one only while its report is still ahead", () => {
-    expect(staleUsable(copy("2026-11-10"), "2026-11-10")).toBe(true);
-    expect(staleUsable(copy("2026-11-09"), "2026-11-10")).toBe(true);
+    const am = 9 * 60;
+    expect(staleUsable(copy("2026-11-10"), "2026-11-10", am)).toBe(true);
+    expect(staleUsable(copy("2026-11-09"), "2026-11-10", am)).toBe(true);
     // Yesterday's copy said "reports today": it predates the report-day state, so it can't stand in.
-    expect(staleUsable(copy("2026-11-09", { next: { ...base.next!, date: "2026-11-10" } }), "2026-11-10")).toBe(false);
-    expect(staleUsable(copy("2026-11-09", { next: null }), "2026-11-10")).toBe(false);
-    expect(staleUsable(copy("2026-11-10", { warnings: ["Upcoming date unavailable."] }), "2026-11-10")).toBe(false);
-    expect(staleUsable(null, "2026-11-10")).toBe(false);
+    expect(staleUsable(copy("2026-11-09", { next: { ...base.next!, date: "2026-11-10" } }), "2026-11-10", am)).toBe(false);
+    expect(staleUsable(copy("2026-11-09", { next: null }), "2026-11-10", am)).toBe(false);
+    expect(staleUsable(copy("2026-11-10", { warnings: ["Upcoming date unavailable."] }), "2026-11-10", am)).toBe(false);
+    expect(staleUsable(null, "2026-11-10", am)).toBe(false);
+  });
+  it("a copy from this morning that has the report today stops standing in once the session has passed", () => {
+    const amcToday = copy("2026-11-10", { next: { ...base.next!, date: "2026-11-10", session: "amc" } });
+    expect(staleUsable(amcToday, "2026-11-10", 9 * 60)).toBe(true);
+    expect(staleUsable(amcToday, "2026-11-10", 16 * 60 + 30)).toBe(true);
+    expect(staleUsable(amcToday, "2026-11-10", 17 * 60)).toBe(false); // results are normally out: it'd say "expects"
+    const bmoToday = copy("2026-11-10", { next: { ...base.next!, date: "2026-11-10", session: "bmo" } });
+    expect(staleUsable(bmoToday, "2026-11-10", 10 * 60)).toBe(false);
+    const unknown = copy("2026-11-10", { next: { ...base.next!, date: "2026-11-10", session: "" } });
+    expect(staleUsable(unknown, "2026-11-10", 9 * 60)).toBe(false);
+    // A copy that already has the print is still right after the session.
+    const just = copy("2026-11-10", { next: null, justReported: { date: "2026-11-10", session: "bmo", quarter: 3, year: 2027, epsE: 1.2, epsA: 1.3 } });
+    expect(staleUsable(just, "2026-11-10", 18 * 60)).toBe(true);
+  });
+  it("a build that only lost its history keeps its own date and report state, and borrows the past reports", () => {
+    const hist = [{ date: "2026-08-26", session: "amc", period: "Jul 2026", epsE: 1.01, epsA: 1.05, surprisePct: 3.96, move: 3.1 }];
+    const old = copy("2026-11-09", { history: hist as any, beatRate: { beats: 4, total: 4 }, expectedMove: 4.8, next: { ...base.next!, date: "2026-11-10" } });
+    const built = { ...base, next: null, justReported: { date: "2026-11-10", session: "bmo", quarter: 3, year: 2027, epsE: 1.2, epsA: 1.3 }, history: [], beatRate: null, expectedMove: null, warnings: ["Earnings history unavailable."] } as unknown as TickerResponse;
+    expect(staleUsable(old, "2026-11-10", 18 * 60, "history")).toBe(true);
+    const out = borrowHistory(built, old, "2026-11-10");
+    expect(out.justReported).toEqual(built.justReported);
+    expect(out.next).toBeNull();
+    expect(out.history).toEqual(hist);
+    expect(out.beatRate).toEqual({ beats: 4, total: 4 });
+    expect(out.warnings[0]).toBe("Past reports are an earlier read from 2026-11-09, 9:00 AM ET; the market data service is busy right now.");
+    expect(isDegraded(out)).toBe(false);
+    expect(sheetTtl(out)).toBe(SHEET_DEGRADED_TTL);
   });
   it("an earlier day's copy says which day", () => {
     expect(standIn(copy("2026-11-09"), "2026-11-10").warnings[0]).toBe("This is an earlier read from 2026-11-09, 9:00 AM ET; the market data service is busy right now.");

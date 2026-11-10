@@ -28,7 +28,7 @@ import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surp
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
-import { isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
+import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -430,7 +430,11 @@ async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Pro
   let data = built;
   if (isDegraded(built)) {
     const old = await caches.default.match(staleKey).then((r) => (r ? (r.json() as Promise<StaleSheet>) : null)).catch(() => null);
-    if (staleUsable(old, today)) data = standIn(old, today);
+    const ny = todayNY();
+    const nowMin = ny.getHours() * 60 + ny.getMinutes();
+    // Only the past reports failed: keep the fresh date and report-day state, borrow the history.
+    if (!built.warnings.includes("Upcoming date unavailable.")) { if (staleUsable(old, today, nowMin, "history")) data = borrowHistory(built, old, today); }
+    else if (staleUsable(old, today, nowMin)) data = standIn(old, today);
   } else {
     const s: StaleSheet = { at: Date.now(), day: today, data: built };
     ctx.waitUntil(caches.default.put(staleKey, new Response(JSON.stringify(s), { headers: { "Cache-Control": `public, max-age=${SHEET_STALE_TTL}`, "Content-Type": "application/json" } })).catch(() => {}));
@@ -980,7 +984,9 @@ async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, c
   try {
     const day = iso(todayNY());
     const key = new Request(`https://cache.metaphases.internal/og-png-v4-${sym}-${day}`);
-    if (fmt === "png") { const hit = await caches.default.match(key); if (hit) return hit; }
+    // A card drawn while degraded is kept 30 s under its own key, so an unfurl burst renders it once, not per request.
+    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v4-${sym}-${day}-d`);
+    if (fmt === "png") { const hit = (await caches.default.match(key)) ?? (await caches.default.match(shortKey)); if (hit) return hit; }
     // 0043: a card drawn while the sheet's date or history failed to load is served briefly and never cached.
     const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v4:${sym}:${day}`)}`);
     const svgHit = await caches.default.match(svgKey);
@@ -991,7 +997,7 @@ async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, c
     const { renderPng } = await import("./og");
     const png = await renderPng(svg, ctx);
     const res = new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": `public, max-age=${age}` } });
-    if (!degraded) ctx.waitUntil(caches.default.put(key, res.clone()));
+    ctx.waitUntil(caches.default.put(degraded ? shortKey : key, res.clone()).catch(() => {}));
     return res;
   } catch {
     return fallback();
