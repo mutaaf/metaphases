@@ -4,6 +4,8 @@
 
 → **[mutaafaziz.com/metaphases](https://mutaafaziz.com/metaphases/)**
 
+New here? Read the **[guide](https://mutaafaziz.com/metaphases/guide/)**: how to read the calendar, how the grades work, and why none of it is advice.
+
 ## What's inside
 
 | Surface | What it does | Borrowed from |

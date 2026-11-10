@@ -1097,6 +1097,9 @@ export default {
       const m = p.match(/^\/api\/ticker\/([A-Za-z.\-]{1,10})$/);
       if (m) return await ticker(m[1].toUpperCase(), env, ctx);
       if (p.startsWith("/api/")) return json({ error: "Not found" }, 0);
+      // The guide is a real static page (public/guide/index.html), readable without JS; the SPA shell must not catch it.
+      if (p === "/guide" || p === "/guide/index.html") return Response.redirect(`${url.origin}${BASE}/guide/`, 301);
+      if (p === "/guide/") return secureHtml(await env.ASSETS.fetch(new Request(new URL(`${BASE}/guide/`, url), { method: "GET" })));
       const isPage = req.method === "GET" && !/\.[a-z0-9]{2,12}$/i.test(p);
       // 0036: every HTML response carries the CSP that blocks Cloudflare's edge-injected analytics beacon.
       if (isPage) return secureHtml(await page(req, env, ctx));
