@@ -7,7 +7,7 @@ import { HOLIDAYS } from "./market";
 
 export interface DateOverride {
   date: string; // YYYY-MM-DD, the company's announced release date
-  hour?: Exclude<Session, "">; // the company's announced session; left out when the company names none (0056), so the feed's session stands (usually "", "session unknown")
+  hour?: Exclude<Session, "">; // the company's announced session; left out when the company names none (0056): the row is then "session unknown", never the feed's guess for its projected day
   quarter: number; // Finnhub's quarter label for this report (used to find and replace its row)
   year: number;
   source: string; // https URL of the company's announcement (or a wire copy of it)
@@ -64,7 +64,7 @@ export function applyToEvents(events: EarningsEvent[], all: DateOverrides, from:
     if (wd === 0 || wd === 6) continue;
     const base = found.get(s);
     out.push(base
-      ? { ...base, d: o.date, h: o.hour ?? base.h ?? "", o: o.source }
+      ? { ...base, d: o.date, h: o.hour ?? "", o: o.source }
       : { s, d: o.date, h: o.hour ?? "", q: o.quarter, y: o.year, eE: null, eA: null, rE: null, rA: null, t: tracked(s) ? 1 : 0, o: o.source });
   }
   return out;
@@ -79,7 +79,7 @@ export function applyToRows(symbol: string, rows: any[], all: DateOverrides, tod
   const rest = rows.filter((r) => !mine.includes(r));
   const base = mine.find((r) => r.date === o.date) ?? mine.find((r) => r.epsActual != null) ?? mine.find((r) => r.epsEstimate != null) ?? mine[0];
   const fixed = base
-    ? { ...base, date: o.date, hour: o.hour ?? base.hour ?? "", source: o.source }
+    ? { ...base, date: o.date, hour: o.hour ?? "", source: o.source }
     : { symbol, date: o.date, hour: o.hour ?? "", quarter: o.quarter, year: o.year, epsEstimate: null, epsActual: null, revenueEstimate: null, revenueActual: null, source: o.source };
   return [...rest, fixed];
 }

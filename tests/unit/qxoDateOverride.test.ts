@@ -42,6 +42,13 @@ describe("0056 QXO on its announced date", () => {
     expect(applyToRows("QXO", [], FILE, today)).toEqual([expect.objectContaining({ date: "2026-11-12", hour: "", quarter: 3, year: 2026, epsEstimate: null })]);
   });
 
+  it("a feed session on Finnhub's projected day is never shown under the company's date", () => {
+    const rows = applyToRows("QXO", [{ symbol: "QXO", date: "2026-11-17", hour: "amc", quarter: 3, year: 2026, epsEstimate: 0.136 }], FILE, today);
+    expect(rows).toEqual([expect.objectContaining({ date: "2026-11-12", hour: "" })]);
+    const ev = { s: "QXO", d: "2026-11-17", h: "amc" as const, q: 3, y: 2026, eE: 0.136, eA: null, rE: null, rA: null, t: 0 as const };
+    expect(applyToEvents([ev], FILE, "2026-11-09", "2026-11-20", today).filter((e) => e.s === "QXO")).toEqual([expect.objectContaining({ d: "2026-11-12", h: "" })]);
+  });
+
   it("QXO calendar: exactly one row, on Nov 12, none on Nov 17", () => {
     expect(events.filter((e) => e.s === "QXO").map((e) => e.d)).toEqual(["2026-11-17"]); // the recorded Finnhub projection
     const out = applyToEvents(events, FILE, "2026-11-10", "2026-11-20", today).filter((e) => e.s === "QXO");
