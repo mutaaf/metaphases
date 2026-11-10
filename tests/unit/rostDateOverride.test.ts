@@ -15,8 +15,10 @@ const today = "2026-11-09";
 const events = ((calendar as any).events ?? calendar) as EarningsEvent[];
 
 describe("0052 company dates over Finnhub's projection", () => {
-  it("the override file still passes its gate today", () => {
-    expect(validateOverrides(overridesFile, today)).toEqual([]);
+  it("the ROST and PANW entries pass the gate on the day they were added", () => {
+    // Only this ticket's entries: entries checked after this frozen day would read as "checked in the future".
+    // The whole file is gated on the real date in dateOverrides.test.ts.
+    expect(validateOverrides({ ROST: FILE.ROST, PANW: FILE.PANW }, today)).toEqual([]);
   });
 
   it("ROST sheet: next report is Thu Nov 19 after the close, estimates kept, source set", () => {

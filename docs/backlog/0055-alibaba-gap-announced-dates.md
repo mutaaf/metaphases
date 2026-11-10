@@ -1,12 +1,12 @@
 ---
 id: 0055
 title: Use the dates Alibaba (Thu Nov 19) and Gap (Thu Nov 19, after the close) announced; the sheet says Dec 1 and Wed Nov 18
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-10
-pr:
+pr: 85
 by: critic
 ---
 
@@ -39,3 +39,6 @@ The override validator covers the entries. Add a worker test for the cross-month
 
 ## Out of scope
 Taking Nasdaq's date over Finnhub's without a company notice (PDD Nov 16 vs Nasdaq Nov 17, WSM Nov 17 vs Nov 18, CPRT and SQM have no notice yet; 0015 flags them).
+
+## Shipped (PR #85)
+BABA and GAP overrides; the cross-month drop is proven through the worker (`overrideCrossMonth.test.ts`). The generic rule in "What" bullet 3 (a sheet date the calendar doesn't show, for a symbol with **no** override, when the `symbol=` date sits outside 0015's Nasdaq window) is not covered here; it needs its own ticket if the critic sees it recur.
