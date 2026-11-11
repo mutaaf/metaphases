@@ -151,7 +151,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
     : data?.next?.closed || data?.next?.overdue
     ? `${name}: report date not confirmed yet — earnings track record, quality grade and setup.`
     : data?.next
-    ? `${name} reports ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}${data.next.nasdaq ? " (date unconfirmed)" : ""} — ${data.beatRate ? `beat ${data.beatRate.beats} of its last ${data.beatRate.total}` : "see the setup"}${data.expectedMove ? `, typical move ±${data.expectedMove.toFixed(1)}%` : ""}.`
+    ? `${name} reports ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}${data.next.nasdaq ? (data.next.nasdaq.date === data.next.date ? " (time unconfirmed)" : " (date unconfirmed)") : ""} — ${data.beatRate ? `beat ${data.beatRate.beats} of its last ${data.beatRate.total}` : "see the setup"}${data.expectedMove ? `, typical move ±${data.expectedMove.toFixed(1)}%` : ""}.`
     : `${name}: earnings track record, quality grade and setup.`;
   const doShare = () => share(`${symbol} on Metaphases`, shareText, `${location.origin}${BASE}/t/${symbol}`, () => { setCopied(true); setTimeout(() => setCopied(false), 1800); });
 

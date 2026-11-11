@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { windowDays } from "../../shared/crossCheck";
+import { windowDays, withDay } from "../../shared/crossCheck";
 import { tickerShareTitle } from "../../shared/pending";
 import { tickerShareDesc } from "../../shared/reported";
 import worker from "../../worker/index";
@@ -66,7 +66,7 @@ describe("0059: the sheet reads a partly loaded Nasdaq window", () => {
     expect(t.read.join(" ")).toMatch(/Monday, Nov 16 before the opening bell, but that's unconfirmed: Nasdaq's calendar lists Tuesday, Nov 17/);
     const title = tickerShareTitle("QQYP", "Qqyp Holdings", t.next);
     expect(title).toBe("QQYP reports Mon, Nov 16 (unconfirmed; Nasdaq lists Tue, Nov 17) · Metaphases");
-    expect(tickerShareDesc("Qqyp Holdings", t)).toMatch(/^Qqyp Holdings — Report date unconfirmed: Nasdaq lists Tue, Nov 17/);
+    expect(tickerShareDesc("Qqyp Holdings", t)).toMatch(/^Qqyp Holdings — report date unconfirmed \(the feed says Mon, Nov 16; Nasdaq lists Tue, Nov 17\); Street expects/);
     expect(nqCalls).toEqual([]); // the sheet path reads the cache; Finnhub's session is set, so no on-demand day
   });
 
@@ -108,5 +108,52 @@ describe("0059: share title when Nasdaq lists the same day in another session", 
   it("drops the feed's session and says the time is unconfirmed", () => {
     expect(tickerShareTitle("QQYS", "Qqys", { date: "2026-11-17", session: "amc", quarter: 3, nasdaq: { date: "2026-11-17", session: "bmo" } }))
       .toBe("QQYS reports Tue, Nov 17, time unconfirmed · Metaphases");
+  });
+});
+
+describe("0059 self-review: the card, slow answers, and the same-day case", () => {
+  it("the share card image never draws a contested date as fact", async () => {
+    const days = windowDays(TODAY);
+    cacheDays(Object.fromEntries(days.map((d) => [d, d === "2026-11-17" ? { QQYP: "bmo" } : { FILLER: "" }])));
+    const r = await worker.fetch(new Request("https://mutaafaziz.com/metaphases/og/t/QQYP.svg"), env, ctx);
+    await Promise.all(waits); waits = [];
+    const svg = await r.text();
+    expect(svg).toContain("Reports Mon, Nov 16, date unconfirmed");
+    expect(svg).not.toContain("before the open");
+  });
+
+  it("a slow Nasdaq answer on the sheet isn't remembered as a failure, so the background fill can still load that day", async () => {
+    nasdaqDay = () => { throw Object.assign(new Error("timed out"), { name: "TimeoutError" }); };
+    const t = await sheet("QQYW");
+    expect(t.next).toMatchObject({ date: "2026-11-19", session: "" });
+    expect(cache.store.get(CAL("nq:x:fail:v1"))).toBeUndefined();
+  });
+
+  it("a refused Nasdaq answer on the sheet is remembered for 15 minutes", async () => {
+    nasdaqDay = () => new Response("busy", { status: 503 });
+    await sheet("QQYW");
+    expect(JSON.parse(cache.store.get(CAL("nq:x:fail:v1"))!)["2026-11-19"]).toBeGreaterThan(Date.now());
+  });
+
+  it("same day, other session: the Read names Nasdaq's session and the description says the time is unconfirmed", async () => {
+    cacheDays({ "2026-11-16": { QQYP: "amc" } });
+    const t = await sheet("QQYP");
+    expect(t.next).toMatchObject({ date: "2026-11-16", session: "bmo", nasdaq: { date: "2026-11-16", session: "amc" } });
+    expect(t.read.join(" ")).toContain("Monday, Nov 16 before the opening bell, but that's unconfirmed: Nasdaq's calendar lists it after the close that day.");
+    expect(tickerShareTitle("QQYP", "Q", t.next)).toBe("QQYP reports Mon, Nov 16, time unconfirmed · Metaphases");
+    expect(tickerShareDesc("Q", t)).toMatch(/^Q — report time unconfirmed \(the feed and Nasdaq list Mon, Nov 16 in different sessions\)/);
+  });
+});
+
+describe("withDay", () => {
+  it("adds a window day (sorted), ignores a day outside the window or already loaded, and starts a window from null", () => {
+    const w = withDay(null, TODAY, "2026-11-12", { A: "bmo" })!;
+    expect(w).toMatchObject({ from: TODAY, loaded: ["2026-11-12"], idx: { A: [{ d: "2026-11-12", h: "bmo" }] } });
+    const w2 = withDay(w, TODAY, "2026-11-10", { A: "" })!;
+    expect(w2.loaded).toEqual(["2026-11-10", "2026-11-12"]);
+    expect(w2.idx.A.map((x) => x.d)).toEqual(["2026-11-10", "2026-11-12"]);
+    expect(withDay(w2, TODAY, "2026-11-12", { B: "amc" })).toBe(w2);
+    expect(withDay(w2, TODAY, "2026-12-01", { B: "amc" })).toBe(w2);
+    expect(withDay(null, TODAY, "2026-11-14", { B: "amc" })).toBeNull(); // a Saturday isn't a window day
   });
 });

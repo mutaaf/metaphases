@@ -94,6 +94,6 @@ export function tickerShareDesc(name: string, d: Pick<TickerResponse, "next" | "
     : d.next?.epsE != null && !d.next.epsBasis ? ` — Street expects ${epsIn(d.next.epsE, d.next.currency)} EPS` : "";
   // 0059: a date the two calendars disagree on is said to be unconfirmed (overdue / closed rows never carry one).
   const nq = !j && d.next?.nasdaq && !d.next.status && !d.next.overdue && !d.next.closed ? d.next.nasdaq : null;
-  const unconfirmed = nq ? ` — ${nq.date === d.next!.date ? "Report time unconfirmed: Nasdaq lists another session" : `Report date unconfirmed: Nasdaq lists ${shortDay(nq.date)}`}` : "";
-  return `${name}${unconfirmed}${lead}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
+  const unconfirmed = nq ? ` — ${nq.date === d.next!.date ? `report time unconfirmed (the feed and Nasdaq list ${shortDay(nq.date)} in different sessions)` : `report date unconfirmed (the feed says ${shortDay(d.next!.date)}; Nasdaq lists ${shortDay(nq.date)})`}` : "";
+  return `${name}${unconfirmed}${unconfirmed && lead ? `;${lead.replace(/^ —/, "")}` : lead}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
 }

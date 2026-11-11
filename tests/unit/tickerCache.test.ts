@@ -189,7 +189,7 @@ describe("the PNG share card from a degraded sheet", () => {
     expect(maxAge(a)).toBeLessThanOrEqual(30);
     await call(`/og/t/${SYM}.png`);
     expect(renders).toBe(1);
-    expect([...cache.store.keys()].some((k) => k.endsWith(`og-png-v5-${SYM}-2026-11-10`))).toBe(false); // never the 6 h key
+    expect([...cache.store.keys()].some((k) => k.endsWith(`og-png-v6-${SYM}-2026-11-10`))).toBe(false); // never the 6 h key
   }, 20000);
 });
 

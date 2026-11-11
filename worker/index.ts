@@ -255,7 +255,10 @@ async function nasdaqDayOnDemand(day: string, today: string, ctx: ExecutionConte
     const v = await fetchNasdaqDay(day);
     ctx.waitUntil(putJson(NQX_DAY(day), v, Object.keys(v).length ? 21600 : 3600));
     return v;
-  } catch {
+  } catch (e) {
+    // 0059: a slow answer (over the sheet's 2.5 s) isn't remembered as a failure, so the 4 s background fill can
+    // still load that day; a refusal or a malformed answer is.
+    if ((e as Error)?.name === "TimeoutError" || (e as Error)?.name === "AbortError") return null;
     // Re-read and merge, so another day's remembered failure survives (0047).
     ctx.waitUntil((async () => putJson(NQX_FAIL, { ...((await readJson<Record<string, number>>(NQX_FAIL)) ?? {}), [day]: Date.now() + 15 * 60_000 }, 900))());
     return null;
@@ -284,14 +287,17 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
     const failed = (await readJson<Record<string, number>>(NQX_FAIL)) ?? {};
     const now = Date.now();
     const take = missing.filter((d) => !(failed[d] > now)).slice(0, NQX_PER_BUILD);
-    const got = await pool(take, 2, (d) => fetchNasdaqDay(d, NQX_BUILD_TIMEOUT));
-    let newFail = false;
-    got.forEach((r, i) => {
-      const d = take[i];
-      if (r.status === "fulfilled") { loaded[d] = r.value; ctx.waitUntil(putJson(NQX_DAY(d), r.value, Object.keys(r.value).length ? 21600 : 3600)); }
-      else { failed[d] = now + 15 * 60_000; newFail = true; }
-    });
-    if (newFail) ctx.waitUntil(putJson(NQX_FAIL, failed, 900));
+    // 0059: the fill runs after the response (its 4 s timeout never delays the calendar); the next read has the days.
+    if (take.length) ctx.waitUntil((async () => {
+      const got = await pool(take, 2, (d) => fetchNasdaqDay(d, NQX_BUILD_TIMEOUT));
+      const fresh: Record<string, number> = {};
+      await Promise.all(got.map(async (r, i) => {
+        if (r.status === "fulfilled") await putJson(NQX_DAY(take[i]), r.value, Object.keys(r.value).length ? 21600 : 3600);
+        else fresh[take[i]] = now + 15 * 60_000;
+      }));
+      // Re-read and merge, so another request's remembered failure survives (0047).
+      if (Object.keys(fresh).length) await putJson(NQX_FAIL, { ...((await readJson<Record<string, number>>(NQX_FAIL)) ?? {}), ...fresh }, 900);
+    })().catch(() => {}));
   }
   if (!Object.keys(loaded).length) return null;
   const w: NqWindow = { from: today, to: windowEnd(today), loaded: Object.keys(loaded).sort(), idx: buildIndex(loaded) };
@@ -517,7 +523,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // 0015/0059: the calendar's Nasdaq cross-check, from the cached days (folded or not: one slow day must not
   // blind every sheet). A blank session both feeds agree on is filled before the report-day state (0039) is
   // worked out from it.
-  const xcheck = !!nextE && !nextE.source && nextE.epsActual == null;
+  // The rows the calendar's crossCheck compares: no company date, no figures in, not projected onto a closed day.
+  const xcheck = !!nextE && !nextE.source && nextE.epsActual == null && nextE.revenueActual == null && !closedDay(nextE.date);
   let nqWin = xcheck ? await nasdaqWindow(today, ctx, false).catch(() => null) : null;
   // 0057: the habit past reports are measured with. A company-dated row already carries its own session (or
   // none). Unless the window already loaded that day: read the one Nasdaq day the next report is on, on demand (one
@@ -1037,19 +1044,22 @@ function cardFromSheet(sym: string, d: TickerResponse): string {
   const when = isDated(d.next) ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
   // 0039: once it's out (or due), the card says so instead of "Reports …" with the estimate.
   const rc = reportedCard(d, iso(todayNY()));
-  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
+  // 0059: a date (or time) Nasdaq lists differently is never drawn as fact: no session glyph, and the headline says so.
+  const nq = !rc && when ? d.next?.nasdaq : undefined;
+  const contested = nq ? { headline: `Reports ${when}, ${nq.date === d.next!.date ? "time" : "date"} unconfirmed`, session: "" as Session } : {};
+  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", ...contested, move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
 }
 
 async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const key = new Request(`https://cache.metaphases.internal/og-png-v5-${sym}-${day}`);
+    const key = new Request(`https://cache.metaphases.internal/og-png-v6-${sym}-${day}`);
     // A card drawn while degraded is kept 30 s under its own key, so an unfurl burst renders it once, not per request.
-    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v5-${sym}-${day}-d`);
+    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v6-${sym}-${day}-d`);
     if (fmt === "png") { const hit = (await caches.default.match(key)) ?? (await caches.default.match(shortKey)); if (hit) return hit; }
     // 0043: a card drawn while the sheet's date or history failed to load is served briefly and never cached.
-    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v5:${sym}:${day}`)}`);
+    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v6:${sym}:${day}`)}`);
     const svgHit = await caches.default.match(svgKey);
     const { svg, degraded } = svgHit ? { svg: await svgHit.text(), degraded: false } : await cardFor(sym, env, ctx);
     const age = degraded ? SHEET_DEGRADED_TTL : 21600;
