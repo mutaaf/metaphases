@@ -222,6 +222,17 @@ export function judgeReaction<T extends { epsE: number | null; epsA: number | nu
   return h;
 }
 
+/**
+ * 0049: evidence that a REIT's feed estimate is on another basis from what it reports (FFO vs net income a share):
+ * one of its last two reports couldn't be judged, or the upcoming estimate is outside EPS_BAND of the latest actual
+ * (UDR: $0.14 for Q4 against Q3's $0.67 FFO, while Q3 itself was judged against Nasdaq's $0.64 and carries no flag).
+ */
+export function reitEstimateOffBasis(history: { epsA: number | null; basis?: "differs" }[], nextEpsE: number | null | undefined): boolean {
+  if (history.slice(0, 2).some((h) => h.basis)) return true;
+  const last = history.find((h) => h.epsA != null)?.epsA;
+  return fin(nextEpsE) && fin(last) && Math.abs(last) >= EPS_NEAR_ZERO && !epsInBand(last, nextEpsE);
+}
+
 /** Brokers and listing sites in the Real Estate sector report ordinary EPS; the rest are REITs, which report FFO. */
 const NOT_REIT = new Set(["CBRE", "CSGP", "OPEN", "Z", "ZG", "RDFN", "COMP", "JLL", "CWK"]);
 /** A REIT: its own per-share measure is FFO, so a GAAP EPS estimate isn't the bar it reports against. */

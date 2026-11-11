@@ -93,8 +93,8 @@ describe("a healthy sheet (no regression in upstream call volume)", () => {
     expect(isDegraded(d)).toBe(false); // Yahoo 404s here, so only "Price history unavailable" remains
     expect(d.next).toMatchObject({ date: "2026-11-18", session: "amc" });
     expect(maxAge(r)).toBe(300);
-    expect(cache.maxAge(`tk:v5:${SYM}`)).toBe(300);
-    expect(cache.maxAge(`tk:stale:v4:${SYM}`)).toBe(86400);
+    expect(cache.maxAge(`tk:v6:${SYM}`)).toBe(300);
+    expect(cache.maxAge(`tk:stale:v5:${SYM}`)).toBe(86400);
     const calls = finnhubCalls;
     await sheet();
     expect(finnhubCalls).toBe(calls); // the second open is a cache hit
@@ -108,8 +108,8 @@ describe("a rate-limited build", () => {
     expect(d.next).toBeNull();
     expect(d.warnings).toEqual(expect.arrayContaining(["Upcoming date unavailable.", "Earnings history unavailable."]));
     expect(maxAge(r)).toBeLessThanOrEqual(30);
-    expect(cache.maxAge(`tk:v5:${SYM}`)).toBeLessThanOrEqual(30);
-    expect(cache.store.has(KEY(`tk:stale:v4:${SYM}`))).toBe(false); // a degraded sheet is never the last good copy
+    expect(cache.maxAge(`tk:v6:${SYM}`)).toBeLessThanOrEqual(30);
+    expect(cache.store.has(KEY(`tk:stale:v5:${SYM}`))).toBe(false); // a degraded sheet is never the last good copy
   }, 20000);
 
   it("with a good copy from earlier today: next and history come from it, and warnings name it as an earlier read", async () => {
@@ -123,7 +123,7 @@ describe("a rate-limited build", () => {
     expect(d.warnings[0]).toBe("This is an earlier read from 9:00 AM ET; the market data service is busy right now.");
     expect(d.warnings).not.toContain("Upcoming date unavailable.");
     expect(maxAge(r)).toBe(SHEET_DEGRADED_TTL);
-    expect(cache.maxAge(`tk:v5:${SYM}`)).toBe(SHEET_DEGRADED_TTL);
+    expect(cache.maxAge(`tk:v6:${SYM}`)).toBe(SHEET_DEGRADED_TTL);
     // …and once Finnhub answers again (30 s later), the full sheet is back.
     cache.expire(); limited = new Set();
     const back = await sheet();
