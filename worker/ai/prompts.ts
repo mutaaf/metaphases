@@ -87,7 +87,7 @@ function tickerFacts(t: Obj): string[] {
 function eventLine(e: Obj): string {
   const c = cur3(e.cur);
   if (!isUsd(c)) return `${clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""} EPS est ${epsIn(e.eE, c)}${e.eA != null ? ` actual ${epsIn(e.eA, c)}` : ""}${e.rE ? ` rev est ${moneyIn(e.rE, c)}` : ""}${e.rA && !e.revNC ? ` rev actual ${moneyIn(e.rA, c)}` : ""} (figures in ${c || "local currency"}, not USD)${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}`;
-  return `${clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""}${e.mc ? ` mcap ${money(e.mc * 1e6)}` : ""} EPS est ${n(e.eE)}${e.eA != null ? ` actual ${n(e.eA)}` : ""}${e.rE ? ` rev est ${money(e.rE)}` : ""}${e.rA && !e.revNC ? ` rev actual ${money(e.rA)}` : ""}${e.revNC ? " (reported revenue is on a different basis from the estimate; don't call it a revenue beat or miss)" : ""}${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}`;
+  return `${clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""}${e.mc ? ` mcap ${money(e.mc * 1e6)}` : ""} EPS est ${n(e.eE)}${e.eA != null ? ` actual ${n(e.eA)}` : ""}${e.rE ? ` rev est ${money(e.rE)}` : ""}${e.rA && !e.revNC ? ` rev actual ${money(e.rA)}` : ""}${e.revNC ? " (reported revenue is on a different basis from the estimate; don't call it a revenue beat or miss)" : ""}${e.epsNC ? " (reported EPS is on a different basis from the estimate, e.g. FFO vs net income; don't call it an EPS beat or miss)" : ""}${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}`;
 }
 
 function macroLines(m: Obj | undefined): string[] {
@@ -117,7 +117,7 @@ function exposureFacts(c: Obj): string[] {
 
 function retraceFacts(c: Obj): string[] {
   const L: string[] = [];
-  if (c.month) L.push(`Month: ${clip(c.month, 20)}. ${c.reported} tracked companies reported. EPS beat rate ${n(c.epsBeatPct, 0)}%, revenue beat rate ${n(c.revBeatPct, 0)}%${c.revExcluded ? ` (${n(c.revExcluded, 0)} reports left out: revenue on a different basis from the estimate)` : ""}, median EPS surprise ${n(c.medianSurprise, 1)}%. Beat both lines: ${c.beat}, mixed: ${c.mixed}, missed both: ${c.miss}.`);
+  if (c.month) L.push(`Month: ${clip(c.month, 20)}. ${c.reported} tracked companies reported. EPS beat rate ${n(c.epsBeatPct, 0)}%${c.epsExcluded ? ` (${n(c.epsExcluded, 0)} reports left out: EPS on a different basis from the estimate)` : ""}, revenue beat rate ${n(c.revBeatPct, 0)}%${c.revExcluded ? ` (${n(c.revExcluded, 0)} reports left out: revenue on a different basis from the estimate)` : ""}, median EPS surprise ${n(c.medianSurprise, 1)}%. Beat both lines: ${c.beat}, mixed: ${c.mixed}, missed both: ${c.miss}.`);
   for (const s of c.sectors ?? []) L.push(`Sector ${clip(s.sector, 30)}: ${s.n} reports, ${n(s.beatPct, 0)}% beat both, median surprise ${n(s.median, 1)}%.`);
   for (const e of c.topBeats ?? []) L.push(`Top beat: ${eventLine(e)}`);
   for (const e of c.topMisses ?? []) L.push(`Top miss: ${eventLine(e)}`);

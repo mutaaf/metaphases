@@ -1,3 +1,4 @@
+import { epsVerdict } from "../../shared/compare";
 import { useEffect, useRef, useState } from "react";
 import type { Factor, Reaction, TickerResponse } from "../../shared/types";
 import { useTicker } from "../lib/api";
@@ -17,8 +18,10 @@ import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spa
 
 /** 0039: a report that's out, said plainly before the next one. */
 function JustReported({ j, today }: { j: NonNullable<TickerResponse["justReported"]>; today: string }) {
-  const s = j.epsA != null && j.epsE != null && j.epsE !== 0 ? ((j.epsA - j.epsE) / Math.abs(j.epsE)) * 100 : null;
-  const verdict = s == null ? null : Math.abs(s) < 0.5 ? "In line with the estimate" : s > 0 ? `Beat by ${s.toFixed(0)}%` : `Missed by ${Math.abs(s).toFixed(0)}%`;
+  // 0049: one EPS judgment everywhere; an actual on another basis from its estimate isn't a beat or a miss.
+  const jv = epsVerdict({ eA: j.epsA, eE: j.epsE });
+  const s = jv.pct;
+  const verdict = jv.v === "not-comparable" ? "Different basis" : jv.v && s == null ? (jv.v === "beat" ? "Above the estimate" : "Below the estimate") : s == null ? null : Math.abs(s) < 0.5 ? "In line with the estimate" : s > 0 ? `Beat by ${s.toFixed(0)}%` : `Missed by ${Math.abs(s).toFixed(0)}%`;
   return (
     <section className="just-reported" aria-label={`Reported Q${j.quarter} ${j.year}`}>
       <span className="eyebrow">Just reported · Q{j.quarter} {j.year}</span>
@@ -28,6 +31,7 @@ function JustReported({ j, today }: { j: NonNullable<TickerResponse["justReporte
         <div><dt><Term k="consensus">Expected</Term></dt><dd>{epsIn(j.epsE, j.currency)}</dd></div>
         <div><dt><Term k="surprise">Result</Term></dt><dd className={s == null || Math.abs(s) < 0.5 ? "" : s > 0 ? "pos" : "neg"}>{verdict ?? (j.epsA == null ? "Figures not in yet" : "—")}</dd></div>
       </dl>
+      {jv.v === "not-comparable" && <p className="muted small rx-basis" data-testid="jr-basis"><Term k="epsbasis">EPS basis differs from the estimate</Term> (for example FFO or adjusted earnings against net income), so we don't call it a beat or a miss.</p>}
     </section>
   );
 }
@@ -65,7 +69,7 @@ function Reactions({ history, expected, usd }: { history: Reaction[]; expected: 
       <div className="rx-chart" role="img" aria-label="Stock price reaction to recent reports">
         {expected != null && <><span className="rx-band" style={{ height: `${(expected / max) * 50}%`, bottom: "50%" }} /><span className="rx-band" style={{ height: `${(expected / max) * 50}%`, top: "50%" }} /></>}
         {rows.map((r) => {
-          const beat = r.epsA != null && r.epsE != null ? r.epsA >= r.epsE : null;
+          const beat = r.epsA != null && r.epsE != null && !r.basis ? r.epsA >= r.epsE : null;
           const h = r.move == null ? 0 : (Math.abs(r.move) / max) * 50;
           return (
             <div key={r.date} className="rx-col" title={`${r.period}: ${r.move == null ? (r.session ? "no price data" : "report time unknown, so no move") : pct(r.move)} · EPS ${eps(r.epsA)} vs ${eps(r.epsE)}`}>
@@ -84,12 +88,13 @@ function Reactions({ history, expected, usd }: { history: Reaction[]; expected: 
             <tr key={r.date}>
               <td><Phase h={r.session} size={10} /> {r.date.length === 10 ? `${new Date(r.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} ’${r.date.slice(2, 4)}` : r.period}</td>
               <td>{eps(r.epsE)} → <b>{eps(r.epsA)}</b></td>
-              <td className={r.surprisePct == null ? "" : r.surprisePct >= 0 ? "pos" : "neg"}>{pct(r.surprisePct)}</td>
+              <td className={r.surprisePct == null ? "" : r.surprisePct >= 0 ? "pos" : "neg"}>{r.basis ? <span className="muted" title="The actual isn't on the same basis as the estimate">basis differs</span> : pct(r.surprisePct)}</td>
               <td className={r.move == null ? "" : r.move >= 0 ? "pos" : "neg"}>{pct(r.move)}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      {history.some((r) => r.basis) && <p className="muted small rx-basis" data-testid="rx-epsbasis">"basis differs": <Term k="epsbasis">EPS basis differs from the estimate</Term> (for example FFO against net income, or a per-ADR figure against a per-share one), so that quarter isn't a beat or a miss and isn't in the beat record.</p>}
       {history.some((r) => r.move == null && !r.session && r.date.length === 10) && <p className="muted small rx-basis">"—" means no feed says whether that report came before the open or after the close, so we don't guess which day it moved.</p>}
       <p className="muted small rx-basis">{usd && "Estimates use the calendar's consensus wherever we have it for that quarter. "}Actuals are <Term k="adjustedeps">adjusted EPS</Term>, the figure analysts forecast, so they can differ from the profit in the company's filings.</p>
     </div>
@@ -198,10 +203,11 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                   {data.next.confirmed && <span className="nc-confirmed small"><Term k="companydate">Confirmed by the company</Term> · <a href={data.next.confirmed} target="_blank" rel="noopener noreferrer">source</a></span>}
                 </div>
                 <dl className="nc-stats">
-                  <div><dt><Term k="consensus">EPS est</Term></dt><dd>{epsIn(data.next.epsE, estCur)}</dd></div>
+                  <div><dt><Term k="consensus">EPS est</Term></dt><dd>{data.next.epsBasis ? "—" : epsIn(data.next.epsE, estCur)}</dd></div>
                   <div><dt><Term k="revenue">Revenue est</Term></dt><dd>{moneyIn(data.next.revE, estCur)}</dd></div>
                   <div><dt><Term k="expectedmove">Typical move</Term></dt><dd>{data.expectedMove != null ? `±${data.expectedMove.toFixed(1)}%` : "—"}</dd></div>
                 </dl>
+                {data.next.epsBasis && <p className="nc-cur muted small" data-testid="nc-ffo">A <Term k="epsbasis">REIT</Term> reports funds from operations (FFO) a share. The feed's estimate is net income a share, a different measure, so we don't show it as the bar.</p>}
                 {!isUsd(estCur) && <p className="nc-cur muted small">Estimates are in <Term k="reportingcurrency">{currencyName(estCur)}</Term>, not US dollars, and so are the quarterly figures from its filings. The reaction table below is in US dollars.</p>}
               </section>
             )}

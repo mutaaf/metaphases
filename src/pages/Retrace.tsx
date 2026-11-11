@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCalendar } from "../lib/api";
 import { co, curOf, resultOf, surprise } from "../lib/data";
+import { epsJudged, epsVerdict } from "../../shared/compare";
 import { revenueBeatRate } from "../../shared/compare";
 import { MONTHS, parse, todayISO } from "../lib/dates";
 import { pct } from "../lib/format";
@@ -23,7 +24,11 @@ export default function RetracePage() {
 
   const done = (data?.events ?? []).filter((e) => e.eA != null && e.t);
   const by = (k: string) => done.filter((e) => resultOf(e) === k).length;
-  const epsBeat = done.filter((e) => e.eE != null && (e.eA as number) >= e.eE).length;
+  // 0049: an EPS on another basis from its estimate (REIT FFO vs GAAP) is neither a beat nor counted.
+  const epsV = done.map((e) => epsVerdict(e));
+  const epsJ = epsV.filter(epsJudged);
+  const epsBeat = epsJ.filter((j) => j.v === "beat").length;
+  const epsNC = epsV.filter((j) => j.v === "not-comparable").length;
   const rev = revenueBeatRate(done, curOf);
   const sur = done.map(surprise).filter((x): x is number => x != null && Math.abs(x) < 500);
   const median = sur.length ? [...sur].sort((a, b) => a - b)[Math.floor(sur.length / 2)] : null;
@@ -70,7 +75,7 @@ export default function RetracePage() {
           {offset === 0 && <SeasonScoreboard />}
           <div className="stat-row">
             <div className="stat"><span className="eyebrow">Reported</span><b>{done.length}</b></div>
-            <div className="stat"><span className="eyebrow"><Term k="eps">EPS</Term> beat rate</span><b>{Math.round((epsBeat / done.length) * 100)}%</b></div>
+            <div className="stat"><span className="eyebrow"><Term k="eps">EPS</Term> beat rate</span><b>{epsJ.length ? `${Math.round((epsBeat / epsJ.length) * 100)}%` : "—"}</b>{epsNC > 0 && <small className="muted eps-excluded" data-testid="eps-excluded">{epsNC} <Term k="epsbasis">can't compare</Term></small>}</div>
             <div className="stat"><span className="eyebrow"><Term k="revenue">Revenue</Term> beat rate</span><b>{rev.pct != null ? `${Math.round(rev.pct)}%` : "—"}</b>{rev.excluded > 0 && <small className="muted rev-excluded">{rev.excluded} <Term k="revbasis">can't compare</Term></small>}</div>
             <div className="stat"><span className="eyebrow">Median <Term k="surprise">surprise</Term></span><b>{pct(median)}</b></div>
           </div>

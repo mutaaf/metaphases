@@ -85,4 +85,4 @@
   .qt-grid, .qt-labels { gap: 4px; }
   .qt-labels span:nth-child(odd) { visibility: hidden; }
 }
-.rev-excluded { font: 500 11px/1.3 var(--mono); letter-spacing: .02em; }
+.rev-excluded, .eps-excluded { font: 500 11px/1.3 var(--mono); letter-spacing: .02em; }
