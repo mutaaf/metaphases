@@ -236,6 +236,32 @@ async function fetchNasdaqDay(day: string): Promise<NqDay> {
   return nasdaqDaySessions(body, keepNq);
 }
 
+/** How far ahead a next report's Nasdaq day is read on demand (later days rarely carry a session). */
+const NQ_ON_DEMAND_REACH = 45;
+/**
+ * 0057: one upcoming Nasdaq day, read on demand (the habit past moves are measured with), so it never waits
+ * for the 0015 window to reach that date. Shares the window's day cache and failure memory: one call per day
+ * per colo every 6 h, none for 15 minutes after a failure, and never throws (null = Nasdaq can't say). No
+ * promise is shared across requests (a cancelled request must not strand another); the cache absorbs repeats.
+ */
+async function nasdaqDayOnDemand(day: string, today: string, ctx: ExecutionContext): Promise<NqDay | null> {
+  // Nasdaq wipes a past day's sessions (LESSONS 2026-11-11), and far-off days rarely carry one.
+  if (day < today || day > addDays(today, NQ_ON_DEMAND_REACH)) return null;
+  const hit = await readJson<NqDay>(NQX_DAY(day));
+  if (hit) return hit;
+  const failed = (await readJson<Record<string, number>>(NQX_FAIL)) ?? {};
+  if (failed[day] > Date.now()) return null;
+  try {
+    const v = await fetchNasdaqDay(day);
+    ctx.waitUntil(putJson(NQX_DAY(day), v, Object.keys(v).length ? 21600 : 3600));
+    return v;
+  } catch {
+    // Re-read and merge, so another day's remembered failure survives (0047).
+    ctx.waitUntil((async () => putJson(NQX_FAIL, { ...((await readJson<Record<string, number>>(NQX_FAIL)) ?? {}), [day]: Date.now() + 15 * 60_000 }, 900))());
+    return null;
+  }
+}
+
 /**
  * The window's Nasdaq listings. The folded copy when this colo has one; otherwise, only when `build` is set,
  * the cached days plus up to NQX_PER_BUILD fetched ones (if this request takes the per-colo lock). Returns
@@ -487,9 +513,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // session both feeds agree on is filled before the report-day state (0039) is worked out from it.
   const nqWin = nextE && !nextE.source && nextE.epsActual == null ? await nasdaqWindow(today, ctx, false).catch(() => null) : null;
   if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) nextE.hour = c.h; }
-  // 0057: the habit past reports are measured with. No cross-check window in this colo: read the one Nasdaq day
-  // the next report is on, from the cache only (never an upstream call on the sheet path).
-  const nqNextHour = nextE && !nextE.source && !nextE.hour && !nqWin ? (await readJson<NqDay>(NQX_DAY(nextE.date)))?.[symbol] : undefined;
+  // 0057: the habit past reports are measured with. A company-dated row already carries its own session (or
+  // none). Unless the window already loaded that day: read the one Nasdaq day the next report is on, on demand (one
+  // shared, cached call per day), so the habit never waits for the window to reach that date.
+  const inWin = !!nqWin && nqWin.loaded.includes(nextE?.date ?? ""); // the window already answered for that day
+  const nqNextHour = nextE && !nextE.source && !nextE.hour && !inWin ? (await nasdaqDayOnDemand(nextE.date, today, ctx))?.[symbol] : undefined;
   const habit: Session = sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
   const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
@@ -934,11 +962,12 @@ async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Respo
     // after the close), so a report isn't credited with a move that came before it.
     settle("We couldn't see when it reports.", cached<any>(`fh:why-hour:${s}:${today}`, 86400, ctx, () => getJson(`${FH}/calendar/earnings?symbol=${s}&from=${addDays(today, -40)}&to=${addDays(today, 120)}&token=${env.FINNHUB_API_KEY}`))),
   ]);
-  const cal: any[] = fhCal?.earningsCalendar ?? [];
-  // 0057: the same habit as the sheet (Finnhub's next, Nasdaq's cached listing for that date, Finnhub's last).
+  // Company-announced dates and sessions first, as on the sheet (0013/0050).
+  const cal: any[] = applyToRows(s, fhCal?.earningsCalendar ?? [], OVERRIDES, today);
+  // 0057: the same habit as the sheet (Finnhub's next, Nasdaq's listing for that date, Finnhub's last).
   const up = cal.filter((e) => e.date >= today).sort((x, y) => x.date.localeCompare(y.date))[0];
   const last = cal.filter((e) => e.date < today).sort((x, y) => y.date.localeCompare(x.date))[0];
-  const nqUp = up && !up.hour ? (await readJson<NqDay>(NQX_DAY(up.date)))?.[s] : undefined;
+  const nqUp = up && !up.source && !up.hour ? (await nasdaqDayOnDemand(up.date, today, ctx))?.[s] : undefined;
   const habit = sessionHabit(up?.hour, nqUp, last?.hour);
   const num = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[$,]/g, "")); return Number.isFinite(n) ? n : null; };
   const reports = ((nq?.data?.earningsSurpriseTable?.rows ?? []) as any[]).map((r) => {
