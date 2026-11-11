@@ -148,4 +148,29 @@ describe("/api/ticker habit from Nasdaq's day for the next report, read on deman
     await sheet();
     expect(dayCalls()).toHaveLength(1); // no retry for 15 minutes
   });
+
+  const preMarket = (date: string) => new Response(JSON.stringify({ data: { rows: date === "2026-11-19" ? [{ symbol: SYM, time: "time-pre-market", marketCap: "$600,000,000,000" }] : [] } }));
+
+  it("a folded window that hasn't loaded the report's day doesn't block the read (no colo-dependent '—')", async () => {
+    cache.store.set(CAL("nq:x:idx:v1:2026-11-11"), JSON.stringify({ from: "2026-11-11", to: "2026-11-24", loaded: ["2026-11-11", "2026-11-12"], idx: {} }));
+    stub(preMarket);
+    const r = await sheet();
+    expect(r.history[0].move).toBeCloseTo(6, 4);
+    expect(dayCalls()).toHaveLength(1);
+  });
+
+  it("a folded window that loaded the day and doesn't list the company: no extra call, move '—'", async () => {
+    cache.store.set(CAL("nq:x:idx:v1:2026-11-11"), JSON.stringify({ from: "2026-11-11", to: "2026-11-24", loaded: ["2026-11-19"], idx: {} }));
+    stub(preMarket);
+    const r = await sheet();
+    expect(r.history[0].move).toBeNull();
+    expect(dayCalls()).toHaveLength(0);
+  });
+
+  it("a next report more than 45 days out: no on-demand call", async () => {
+    vi.setSystemTime(new Date("2026-09-20T16:00:00Z"));
+    stub(preMarket);
+    await sheet();
+    expect(dayCalls()).toHaveLength(0);
+  });
 });
