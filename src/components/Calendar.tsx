@@ -3,7 +3,7 @@ import type { EarningsEvent, MacroEvent } from "../../shared/types";
 import { EARLY_CLOSE, HOLIDAYS } from "../../shared/market";
 import { useCalendar, useMacro, prefetchTicker } from "../lib/api";
 import { missingDays } from "../lib/partial";
-import { co, curOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
+import { co, curOf, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { noResultYet } from "../../shared/pending";
 import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
@@ -143,10 +143,10 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         {e.x === "differs" && e.xd && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">Nasdaq: {e.xd === e.d ? (e.xh ? PHASE_LABEL[e.xh].toLowerCase() : "another time") : `${fmtDay(e.xd)}${e.xh ? `, ${PHASE_LABEL[e.xh].toLowerCase()}` : ""}`}</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}
-      <span className="erow-num"><span className="eyebrow">EPS est</span>{epsIn(e.eE, cur)}</span>
+      {(() => { const j = e.eA != null ? epsOf(e) : null; return j?.via ? <span className="erow-num" title="The data feed's estimate is on another basis from the actual (e.g. net income vs FFO), so this is Nasdaq's forecast on the actual's basis."><span className="eyebrow">Nasdaq est</span>{epsIn(j.est, cur)}</span> : <span className="erow-num"><span className="eyebrow">EPS est</span>{epsIn(e.eE, cur)}</span>; })()}
       <span className="erow-num"><span className="eyebrow">{e.eA != null ? "Actual" : "Rev est"}</span>{e.eA != null ? epsIn(e.eA, cur) : moneyIn(e.rE, cur)}</span>
       <span className="erow-res">
-        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : PHASE_LABEL[e.h]}</span>}
+        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : PHASE_LABEL[e.h]}</span>}
       </span>
     </button>
   );

@@ -1,4 +1,5 @@
 import { epsIn } from "./currency";
+import { epsVerdict } from "./compare";
 import type { TickerResponse } from "./types";
 
 /**
@@ -10,7 +11,7 @@ import type { TickerResponse } from "./types";
  */
 
 /** A report day's row, from Finnhub's `symbol=` calendar or the calendar route's cached day. */
-export interface DayRow { date: string; hour: string; quarter: number; year: number; eE: number | null; eA: number | null; rE: number | null; rA: number | null }
+export interface DayRow { date: string; hour: string; quarter: number; year: number; eE: number | null; eA: number | null; rE: number | null; rA: number | null; /** 0049: the calendar row's Nasdaq figure on the actual's basis. */ nE?: number }
 
 export type Outcome = { kind: "reported"; row: DayRow } | { kind: "results-pending"; row: DayRow } | null;
 
@@ -42,7 +43,7 @@ export const JUST_DAYS = 3;
 export function reportedCard(d: Pick<TickerResponse, "next" | "justReported">, today: string): { headline: string; stat: { label: string; value: string } } | null {
   const j = d.justReported;
   if (j) return { headline: `Reported Q${j.quarter} ${j.date === today ? "today" : shortDay(j.date)}`, stat: { label: "EPS ACTUAL", value: j.epsA != null ? epsIn(j.epsA, j.currency) : "—" } };
-  if (d.next?.status === "results-pending") return { headline: `Q${d.next.quarter} results expected, none in yet`, stat: { label: "EPS EST GOING IN", value: d.next.epsE != null ? epsIn(d.next.epsE, d.next.currency) : "—" } };
+  if (d.next?.status === "results-pending") return { headline: `Q${d.next.quarter} results expected, none in yet`, stat: { label: "EPS EST GOING IN", value: d.next.epsE != null && !d.next.epsBasis ? epsIn(d.next.epsE, d.next.currency) : "—" } };
   return null;
 }
 
@@ -55,14 +56,19 @@ const longDay = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en
 const onDay = (d: string, today: string) => (d === today ? `today (${longDay(d)})` : `on ${longDay(d)}`);
 
 /** The Read's opening line for a just-reported quarter, in the past tense. `fmt` formats an EPS in its currency. */
-export function reportedLine(name: string, r: { date: string; session: string; quarter: number; epsE: number | null; epsA: number | null }, today: string, fmt: (v: number) => string): string {
+export function reportedLine(name: string, r: { date: string; session: string; quarter: number; epsE: number | null; epsA: number | null; nE?: number; reit?: boolean }, today: string, fmt: (v: number) => string): string {
   const when = [onDay(r.date, today), WHEN[r.session] ?? ""].filter(Boolean).join(" ");
   const head = `${name} reported Q${r.quarter} ${when}`;
   if (r.epsA == null) return `${head}; the per-share result isn't in our data yet.`;
-  const s = surprisePct(r.epsE, r.epsA);
-  if (r.epsE == null || s == null) return `${head}: ${fmt(r.epsA)} a share.`;
+  const j = epsVerdict({ eA: r.epsA, eE: r.epsE, nE: r.nE, reit: r.reit });
+  // 0049: an actual on another basis from its estimate (FFO vs net income, adjusted vs GAAP) is neither a beat nor a miss.
+  if (j.v === "not-comparable") return `${head}: ${fmt(r.epsA)} a share. That figure isn't on the same basis as the ${fmt(r.epsE as number)} estimate (for example FFO or adjusted earnings against net income), so we don't call it a beat or a miss.`;
+  const s = j.pct;
+  if (r.epsE == null || j.v == null) return `${head}: ${fmt(r.epsA)} a share.`;
+  const est = j.est ?? r.epsE;
+  if (s == null) return `${head}: ${fmt(r.epsA)} a share against ${fmt(est)} expected, ${j.v === "beat" ? "above" : "below"} the estimate.`;
   const verdict = Math.abs(s) < 0.5 ? "in line with the estimate" : s > 0 ? `a beat of ${Math.abs(s).toFixed(0)}%` : `a miss of ${Math.abs(s).toFixed(0)}%`;
-  return `${head}: ${fmt(r.epsA)} a share against ${fmt(r.epsE)} expected, ${verdict}.`;
+  return `${head}: ${fmt(r.epsA)} a share against ${fmt(est)} expected${j.via ? " (Nasdaq's forecast on the same basis)" : ""}, ${verdict}.`;
 }
 
 /** The Read's opening line while the session has passed and the figures haven't arrived. Never future tense. */
@@ -83,8 +89,8 @@ export function tickerShareDesc(name: string, d: Pick<TickerResponse, "next" | "
   ].filter(Boolean);
   const j = d.justReported;
   const lead = j
-    ? ` — Reported Q${j.quarter} on ${shortDay(j.date)}${j.epsA != null ? `: ${epsIn(j.epsA, j.currency)} EPS${j.epsE != null ? ` vs ${epsIn(j.epsE, j.currency)} expected` : ""}` : ""}`
-    : d.next?.status === "results-pending" ? ` — Q${d.next.quarter} results expected, none in our data yet${d.next.epsE != null ? ` (estimate going in ${epsIn(d.next.epsE, d.next.currency)} EPS)` : ""}`
-    : d.next?.epsE != null ? ` — Street expects ${epsIn(d.next.epsE, d.next.currency)} EPS` : "";
+    ? ` — Reported Q${j.quarter} on ${shortDay(j.date)}${j.epsA != null ? `: ${epsIn(j.epsA, j.currency)} EPS${(() => { const v = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, reit: j.reit }); return v.est != null && v.v !== "not-comparable" ? ` vs ${epsIn(v.est, j.currency)} expected` : ""; })()}` : ""}`
+    : d.next?.status === "results-pending" ? ` — Q${d.next.quarter} results expected, none in our data yet${d.next.epsE != null && !d.next.epsBasis ? ` (estimate going in ${epsIn(d.next.epsE, d.next.currency)} EPS)` : ""}`
+    : d.next?.epsE != null && !d.next.epsBasis ? ` — Street expects ${epsIn(d.next.epsE, d.next.currency)} EPS` : "";
   return `${name}${lead}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
 }

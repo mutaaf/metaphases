@@ -1,12 +1,12 @@
 ---
 id: 0049
 title: Never call an EPS a +377% beat when the actual and the estimate are different measures (REIT FFO vs GAAP EPS, per-ADR vs per-share)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-06
-pr:
+pr: 91
 by: critic
 ---
 

@@ -124,6 +124,16 @@ export const sameEpsUnit = (symbol: string, a: number | null | undefined, b: num
   return r < Math.sqrt(c.div) && 1 / r < Math.sqrt(c.div);
 };
 
+/** 0049: a reported row whose EPS is on another basis from its estimate carries Nasdaq's figure (`nE`) when that matches the actual's basis. */
+function withNasdaqBasis(e: EarningsEvent, n: number | undefined, usd: (s: string) => boolean): EarningsEvent {
+  if (n == null || e.eA == null || e.eE == null || !usd(e.s) || sameEpsBasis(e.eA, e.eE) || sameEpsBasis(e.eE, n) || !sameEpsBasis(e.eA, n)) return e;
+  return { ...e, nE: n };
+}
+
+/** 0049: a reported row on a different EPS basis from its estimate, which Nasdaq's day calendar may settle. */
+export const needsEpsBasis = (e: Pick<EarningsEvent, "eA" | "eE">, snapE?: number | null) =>
+  e.eA != null && (snapE ?? e.eE) != null && !sameEpsBasis(e.eA, snapE ?? e.eE);
+
 export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasdaqEps: Record<string, number> = {}, usd: (s: string) => boolean = () => true, record = true): { events: EarningsEvent[]; updates: EstSnapshot } {
   const updates: EstSnapshot = {};
   const out = events.map((e) => {
@@ -138,10 +148,10 @@ export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasda
     const s = snap[e.s];
     // Only a complete snapshot (every figure the row has) counts as the pre-report bar, and only in the row's
     // unit: a snapshot recorded before a share-class rescale (0046, BRK.B) is 1,500× off, not drift.
-    if (s && (s.eE != null || s.rE != null) && (s.eE != null || e.eE == null) && (s.rE != null || e.rE == null) && sameEpsUnit(e.s, s.eE, e.eE)) return { ...e, eE: s.eE, rE: s.rE, pr: "s" as const };
+    if (s && (s.eE != null || s.rE != null) && (s.eE != null || e.eE == null) && (s.rE != null || e.rE == null) && sameEpsUnit(e.s, s.eE, e.eE)) return withNasdaqBasis({ ...e, eE: s.eE, rE: s.rE, pr: "s" as const }, nasdaqEps[e.s], usd);
     const n = nasdaqEps[e.s];
     if (n != null && usd(e.s) && sameEpsBasis(n, e.eE)) return { ...e, eE: n, pr: "n" as const };
-    return e;
+    return withNasdaqBasis(e, n, usd);
   });
   return { events: out, updates };
 }
@@ -155,3 +165,65 @@ export function nasdaqDayEps(body: any): Record<string, number> {
   }
   return out;
 }
+
+// ── 0049: an EPS actual on the estimate's basis ─────────────────────────
+// Finnhub's EPS estimate and actual aren't always the same measure: a REIT's actual is FFO while the
+// estimate is GAAP net income per share (UDR "$0.14 → $0.65, +377%" was an in-line quarter), an ADR's
+// actual can be per ADR against a per-share estimate (TM, 10×), and a GAAP actual can sit against an
+// adjusted consensus (UBER $0.25 vs $0.94). Those rows led Retrace's "biggest" lists. Outside EPS_BAND we
+// judge against Nasdaq's pre-report consensus if it is on the actual's basis, else not at all.
+
+/** actual / estimate inside this range counts as the same basis. Tuned on Oct 19–Nov 10 2026: 34 of 482 tracked rows fall outside, nearly all basis mixes (UDR, CPT, TM, EIX, UBER) or near-zero estimates. */
+export const EPS_BAND: readonly [number, number] = [0.5, 2];
+/** Both figures within this of zero: the direction is meaningful, a percentage of the base isn't. */
+export const EPS_NEAR_ZERO = 0.1;
+
+export interface EpsJudgment {
+  /** null = nothing to judge yet. */
+  v: "beat" | "miss" | "not-comparable" | null;
+  /** The estimate it was judged against. */
+  est: number | null;
+  /** Signed surprise in % of `est`; null when not judged or when both figures are near zero. */
+  pct: number | null;
+  /** Judged against Nasdaq's consensus because Finnhub's estimate is on another basis. */
+  via?: "nasdaq";
+}
+
+const fin = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
+/** Same sign and actual/estimate inside EPS_BAND. */
+export const epsInBand = (a: number | null | undefined, e: number | null | undefined) =>
+  fin(a) && fin(e) && e !== 0 && Math.sign(a) === Math.sign(e) && a / e >= EPS_BAND[0] && a / e <= EPS_BAND[1];
+const judge = (a: number, e: number, pct = true): EpsJudgment => ({ v: a >= e ? "beat" : "miss", est: e, pct: pct && e !== 0 ? ((a - e) / Math.abs(e)) * 100 : null });
+
+/**
+ * One EPS judgment for every surface. `nE`: Nasdaq's pre-report consensus for the same quarter, when known.
+ * `reit`: a REIT, whose actual is often FFO against a GAAP estimate even inside EPS_BAND (PSA $2.42 → $4.34
+ * Core FFO, "+80%"), so it only counts as the same basis within EPS_BASIS_MAX.
+ */
+export function epsVerdict(e: { eA: number | null | undefined; eE: number | null | undefined; nE?: number | null; reit?: boolean }): EpsJudgment {
+  const { eA, eE, nE } = e;
+  if (!fin(eA) || !fin(eE)) return { v: null, est: fin(eE) ? eE : null, pct: null };
+  // Nasdaq's figure on the actual's basis wins over a Finnhub estimate that's well apart from both (UDR, PSA).
+  if (fin(nE) && sameEpsBasis(eA, nE) && !sameEpsBasis(eE, nE) && !sameEpsBasis(eA, eE)) return { ...judge(eA, nE), via: "nasdaq" };
+  const tiny = Math.abs(eE) < EPS_NEAR_ZERO;
+  if (e.reit ? sameEpsBasis(eA, eE) : epsInBand(eA, eE)) return judge(eA, eE, !tiny);
+  if (tiny && Math.abs(eA) < EPS_NEAR_ZERO) return judge(eA, eE, false);
+  return { v: "not-comparable", est: eE, pct: null };
+}
+
+export const epsJudged = (j: EpsJudgment) => j.v === "beat" || j.v === "miss";
+
+/** A sheet history row through epsVerdict: a basis mix loses its surprise and says so; a Nasdaq-judged row takes Nasdaq's estimate. */
+export function judgeReaction<T extends { epsE: number | null; epsA: number | null; surprisePct: number | null }>(h: T, nE?: number | null, reit?: boolean): T & { basis?: "differs" } {
+  const j = epsVerdict({ eA: h.epsA, eE: h.epsE, nE, reit });
+  if (j.v === "not-comparable") return { ...h, surprisePct: null, basis: "differs" as const };
+  if (j.via) return { ...h, epsE: j.est, surprisePct: j.pct };
+  if (j.v && j.pct == null) return { ...h, surprisePct: null };
+  return h;
+}
+
+/** Brokers and listing sites in the Real Estate sector report ordinary EPS; the rest are REITs, which report FFO. */
+const NOT_REIT = new Set(["CBRE", "CSGP", "OPEN", "Z", "ZG", "RDFN", "COMP", "JLL", "CWK"]);
+/** A REIT: its own per-share measure is FFO, so a GAAP EPS estimate isn't the bar it reports against. */
+export const isReit = (symbol: string, sector: string | null | undefined, industry?: string | null) =>
+  !NOT_REIT.has(symbol) && (sector === "Real Estate" || /\bREIT\b/.test(industry ?? ""));

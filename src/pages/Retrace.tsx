@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCalendar } from "../lib/api";
-import { co, curOf, resultOf, surprise } from "../lib/data";
+import { co, curOf, epsOf, resultOf, surprise } from "../lib/data";
+import { epsJudged } from "../../shared/compare";
 import { revenueBeatRate } from "../../shared/compare";
 import { MONTHS, parse, todayISO } from "../lib/dates";
 import { pct } from "../lib/format";
@@ -23,14 +24,19 @@ export default function RetracePage() {
 
   const done = (data?.events ?? []).filter((e) => e.eA != null && e.t);
   const by = (k: string) => done.filter((e) => resultOf(e) === k).length;
-  const epsBeat = done.filter((e) => e.eE != null && (e.eA as number) >= e.eE).length;
+  // 0049: an EPS on another basis from its estimate (REIT FFO vs GAAP) is neither a beat nor counted.
+  const epsV = done.map(epsOf);
+  const epsJ = epsV.filter(epsJudged);
+  const epsBeat = epsJ.filter((j) => j.v === "beat").length;
+  const epsNC = epsV.filter((j) => j.v === "not-comparable").length;
   const rev = revenueBeatRate(done, curOf);
   const sur = done.map(surprise).filter((x): x is number => x != null && Math.abs(x) < 500);
   const median = sur.length ? [...sur].sort((a, b) => a - b)[Math.floor(sur.length / 2)] : null;
   const sectors = useMemo(() => {
-    const s: Record<string, { n: number; beat: number; surprises: number[]; med: number }> = {};
-    for (const e of done) { const k = co(e.s)?.sec || "Other"; (s[k] ??= { n: 0, beat: 0, surprises: [], med: 0 }); s[k].n++; if (resultOf(e) === "beat") s[k].beat++; const x = surprise(e); if (x != null) s[k].surprises.push(x); }
-    for (const v of Object.values(s)) { const xs = v.surprises.sort((a, b) => a - b); v.med = xs.length ? xs[Math.floor(xs.length / 2)] : 0; }
+    // Only judged reports count (0049): a basis mix is neither a "beat both" nor a surprise.
+    const s: Record<string, { n: number; beat: number; surprises: number[]; med: number | null }> = {};
+    for (const e of done) { if (resultOf(e) == null) continue; const k = co(e.s)?.sec || "Other"; (s[k] ??= { n: 0, beat: 0, surprises: [], med: null }); s[k].n++; if (resultOf(e) === "beat") s[k].beat++; const x = surprise(e); if (x != null) s[k].surprises.push(x); }
+    for (const v of Object.values(s)) { const xs = v.surprises.sort((a, b) => a - b); v.med = xs.length ? xs[Math.floor(xs.length / 2)] : null; }
     return Object.entries(s).filter(([, v]) => v.n >= 2).sort((a, b) => b[1].beat / b[1].n - a[1].beat / a[1].n);
   }, [data]);
   const ranked = [...done].filter((e) => surprise(e) != null && Math.abs(surprise(e)!) < 500).sort((a, b) => surprise(b)! - surprise(a)!);
@@ -70,7 +76,7 @@ export default function RetracePage() {
           {offset === 0 && <SeasonScoreboard />}
           <div className="stat-row">
             <div className="stat"><span className="eyebrow">Reported</span><b>{done.length}</b></div>
-            <div className="stat"><span className="eyebrow"><Term k="eps">EPS</Term> beat rate</span><b>{Math.round((epsBeat / done.length) * 100)}%</b></div>
+            <div className="stat"><span className="eyebrow"><Term k="eps">EPS</Term> beat rate</span><b>{epsJ.length ? `${Math.round((epsBeat / epsJ.length) * 100)}%` : "—"}</b>{epsNC > 0 && <small className="muted eps-excluded" data-testid="eps-excluded">{epsNC} <Term k="epsbasis">can't compare</Term></small>}</div>
             <div className="stat"><span className="eyebrow"><Term k="revenue">Revenue</Term> beat rate</span><b>{rev.pct != null ? `${Math.round(rev.pct)}%` : "—"}</b>{rev.excluded > 0 && <small className="muted rev-excluded">{rev.excluded} <Term k="revbasis">can't compare</Term></small>}</div>
             <div className="stat"><span className="eyebrow">Median <Term k="surprise">surprise</Term></span><b>{pct(median)}</b></div>
           </div>
@@ -89,7 +95,7 @@ export default function RetracePage() {
               <h4 className="eyebrow">By sector</h4>
               <table className="rx-table">
                 <thead><tr><th>Sector</th><th>Reports</th><th>Beat both</th><th>Median surprise</th></tr></thead>
-                <tbody>{sectors.map(([k, v]) => <tr key={k}><td>{k}</td><td>{v.n}</td><td>{Math.round((v.beat / v.n) * 100)}%</td><td className={v.med >= 0 ? "pos" : "neg"}>{pct(v.med)}</td></tr>)}</tbody>
+                <tbody>{sectors.map(([k, v]) => <tr key={k}><td>{k}</td><td>{v.n}</td><td>{Math.round((v.beat / v.n) * 100)}%</td><td className={v.med == null ? "" : v.med >= 0 ? "pos" : "neg"}>{v.med == null ? "—" : pct(v.med)}</td></tr>)}</tbody>
               </table>
             </section>
             <section className="card">

@@ -20,7 +20,7 @@ import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { reactionMove, sessionHabit } from "../shared/reaction";
-import { applyPreReport, nasdaqDayEps, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
+import { applyPreReport, isReit, judgeReaction, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
@@ -43,7 +43,7 @@ interface Env {
 
 const BASE = "/metaphases";
 const SITE = "https://mutaafaziz.com";
-const U = universe as Record<string, { n: string; mc: number; c?: string; ec?: string }>;
+const U = universe as Record<string, { n: string; mc: number; c?: string; ec?: string; sec?: string }>;
 const FH = "https://finnhub.io/api/v1";
 /** Company-announced dates that beat Finnhub's projection (0013). */
 const OVERRIDES = overridesFile as unknown as DateOverrides;
@@ -194,7 +194,8 @@ const usdEstimates = (s: string) => s in U && isUsd(U[s].ec ?? "USD");
  */
 async function preReportDay(day: string, events: EarningsEvent[], today: string, ctx: ExecutionContext): Promise<EarningsEvent[]> {
   const snap = await readSnap(day);
-  const needNq = events.some((e) => (e.eA != null || e.rA != null) && !snap[e.s] && e.eE != null);
+  // Also for a reported row whose EPS is on another basis from its estimate (0049): Nasdaq's figure may settle it.
+  const needNq = events.some((e) => ((e.eA != null || e.rA != null) && !snap[e.s] && e.eE != null) || (usdEstimates(e.s) && needsEpsBasis(e, snap[e.s]?.eE)));
   const nq = needNq ? await nasdaqDay(day, today, ctx).catch(() => ({})) : {};
   const { events: out, updates } = applyPreReport(events, snap, nq, usdEstimates, day > today);
   if (Object.keys(updates).length) {
@@ -419,11 +420,11 @@ function slimMetric(raw: any) {
 /**
  * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
  * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
- * (`tk:stale:v3:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
+ * (`tk:stale:v4:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
  */
 async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
-  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v4:${symbol}`)}`);
-  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v3:${symbol}`)}`);
+  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v5:${symbol}`)}`);
+  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v4:${symbol}`)}`);
   const hit = await caches.default.match(key);
   if (hit) { const data = (await hit.json()) as TickerResponse; return { data, ttl: sheetTtl(data) }; }
   const built = await buildTicker(symbol, env, ctx);
@@ -502,6 +503,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     usdEps: rows.slice(0, 4).map((r) => (typeof r.eps === "number" ? r.eps : parseFloat(r.eps))),
   });
   const usd = isUsd(currency);
+  // 0049: a REIT's actual is often FFO against a GAAP estimate, so its EPS only counts as the same basis within EPS_BASIS_MAX.
+  const reit = isReit(symbol, U[symbol]?.sec ?? profile?.finnhubIndustry);
 
   // 0038: a quarter whose projected date passed without a result has dropped off `symbol=` (future dates
   // only), so `nextE` may be the quarter after it. Keep the unreported quarter as the next report instead,
@@ -545,10 +548,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       date: today, hour: nextE.hour || row?.h || "", quarter: nextE.quarter, year: nextE.year,
       eE: row?.eE ?? snapE ?? nextE.epsEstimate ?? null, eA: nextE.epsActual ?? row?.eA ?? null,
       rE: row?.rE ?? nextE.revenueEstimate ?? null, rA: nextE.revenueActual ?? row?.rA ?? null,
+      ...(row?.nE != null ? { nE: row.nE } : {}),
     };
     outcome = reportOutcome(day, today, nowMin);
   } else if (skip && skipRow && !pending && !companyDated) {
-    outcome = reportOutcome({ date: skipRow.d, hour: skipRow.h ?? "", quarter: skip.quarter, year: skip.year, eE: skipRow.eE ?? null, eA: skipRow.eA ?? null, rE: skipRow.rE ?? null, rA: skipRow.rA ?? null }, today, nowMin);
+    outcome = reportOutcome({ date: skipRow.d, hour: skipRow.h ?? "", quarter: skip.quarter, year: skip.year, eE: skipRow.eE ?? null, eA: skipRow.eA ?? null, rE: skipRow.rE ?? null, rA: skipRow.rA ?? null, ...(skipRow.nE != null ? { nE: skipRow.nE } : {}) }, today, nowMin);
   }
   const reported = outcome?.kind === "reported" ? outcome.row : null;
   const duePending = outcome?.kind === "results-pending" ? outcome.row : null;
@@ -584,7 +588,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const session: Session = lastE && lastE.date === date ? ownSession(lastE) : habit;
     const move = reactionMove(session, date, closeOn);
     const pick = pickConsensus({ estimate: r.consensusForecast, actual: r.eps, surprisePct: r.percentageSurprise }, f, lastE && lastE.date === date ? lastSnap : null);
-    history.push({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move });
+    // 0049: an actual on another basis from its estimate gets no surprise; Nasdaq's consensus stands in when it matches.
+    const nE = typeof r.consensusForecast === "number" ? r.consensusForecast : parseFloat(r.consensusForecast);
+    history.push(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit));
   });
   // Fall back to Finnhub's four quarters if Nasdaq was unreachable.
   if (!history.length && surprises?.length && usd) {
@@ -593,14 +599,14 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     for (const f of surprises.slice(0, 4)) {
       if (lastE && lastE.epsActual != null && lastE.quarter === f.quarter && lastE.year === f.year) continue;
       const label = f.quarter && f.year ? `Q${f.quarter} ${f.year}` : `Quarter to ${String(f.period).slice(0, 7)}`; // never a bare YYYY-MM-DD
-      history.push({ date: label, session: "", period: label, epsE: f.estimate, epsA: f.actual, surprisePct: f.surprisePercent, move: null });
+      history.push(judgeReaction({ date: label, session: "", period: label, epsE: f.estimate, epsA: f.actual, surprisePct: f.surprisePercent, move: null } as Reaction, null, reit));
     }
   }
   // A print reported in the last ~40 days might be on Finnhub's calendar before Nasdaq's table catches up.
   if (usd && lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date)) {
     const session: Session = ownSession(lastE);
     const est = lastSnap ?? lastE.epsEstimate;
-    history.unshift({ date: lastE.date, session, period: `Q${lastE.quarter} ${lastE.year}`, epsE: est, epsA: lastE.epsActual, surprisePct: est ? ((lastE.epsActual - est) / Math.abs(est)) * 100 : null, move: reactionMove(session, lastE.date, closeOn) });
+    history.unshift(judgeReaction({ date: lastE.date, session, period: `Q${lastE.quarter} ${lastE.year}`, epsE: est, epsA: lastE.epsActual, surprisePct: est ? ((lastE.epsActual - est) / Math.abs(est)) * 100 : null, move: reactionMove(session, lastE.date, closeOn) } as Reaction, null, reit));
   }
 
   // 0039: the report that's out heads the history until Nasdaq lists it. Non-dollar figures stay off the
@@ -609,14 +615,14 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // A company-dated report with no stated session stays unknown, whatever the cached feed row says (LESSONS 2026-11-10).
     const rs: Session = nextE?.source && !nextE.hour && reported.date === nextE.date ? "" : ownSession(reported);
     const settled = tradingDaysSince(reported.date, today) >= (rs === "bmo" || rs === "dmh" ? 1 : 2);
-    history.unshift({
+    history.unshift(judgeReaction({
       date: reported.date, session: rs, period: `Q${reported.quarter} ${reported.year}`,
       epsE: usd ? reported.eE : null, epsA: usd ? reported.eA : null, surprisePct: usd ? surprisePct(reported.eE, reported.eA) : null,
       move: settled ? reactionMove(rs, reported.date, closeOn) : null,
-    });
+    } as Reaction, usd ? reported.nE : null, reit));
   }
 
-  const judged = history.filter((h) => h.epsA != null && h.epsE != null);
+  const judged = history.filter((h) => h.epsA != null && h.epsE != null && !h.basis);
   const beats = judged.filter((h) => (h.epsA as number) >= (h.epsE as number)).length;
   const beatRate = judged.length ? { beats, total: judged.length } : null;
   const moves = history.map((h) => h.move).filter((m): m is number => m != null);
@@ -635,15 +641,18 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   }
 
   const name = profile?.name || U[symbol]?.n || symbol;
+  // 0049: a REIT whose recent results were on another basis from the feed's estimate (FFO vs net income): its
+  // upcoming estimate isn't quoted as the bar. Only on evidence: plenty of REITs' feed figures match (PLD, CCI).
+  const ffo = reit && history.slice(0, 2).some((h) => h.basis);
   const read: string[] = [];
   // A projected date on a closed-market day isn't a date yet (0045): say so instead of stating it.
   const closed = upNext && !upNext.source && !pending ? closedDay(upNext.date) : null;
   const longDay = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
   const out = reported || duePending;
-  if (reported) read.push(reportedLine(name, { date: reported.date, session: reported.hour, quarter: reported.quarter, epsE: reported.eE, epsA: reported.eA }, today, (v) => epsIn(v, currency)));
+  if (reported) read.push(reportedLine(name, { date: reported.date, session: reported.hour, quarter: reported.quarter, epsE: reported.eE, epsA: reported.eA, nE: usd ? reported.nE : undefined, reit }, today, (v) => epsIn(v, currency)));
   if (duePending) {
     read.push(pendingLine(name, { date: duePending.date, session: duePending.hour, quarter: duePending.quarter }, today));
-    if (duePending.eE != null) read.push(`The estimate going in was ${epsIn(duePending.eE, currency)} a share.`);
+    if (duePending.eE != null && !ffo) read.push(`The estimate going in was ${epsIn(duePending.eE, currency)} a share.`);
   } else if (pending) {
     read.push(`${name}'s Q${pending.quarter} report date is not confirmed yet: the data feed expected it on ${longDay(pending.passed)} and has no results yet.`);
   } else if (upNext && closed) {
@@ -652,7 +661,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const when = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "(time not yet confirmed)" }[upNext.hour as Session] ?? "";
     read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${when}.`.replace(" .", "."));
   }
-  const estLine = duePending ? null : readEstimate(name, pending ? pending.eE : upNext?.epsEstimate, currency, history[0]?.epsA);
+  const estLine = duePending ? null
+    : ffo ? ((pending ? pending.eE : upNext?.epsEstimate) != null ? `${name} is a REIT whose recent results came in on a different measure from the feed's estimate (usually funds from operations against net income a share), so we don't quote the estimate as the bar.` : null)
+    : readEstimate(name, pending ? pending.eE : upNext?.epsEstimate, currency, history[0]?.epsA);
   if (estLine) read.push(estLine);
   if (beatRate) read.push(`It has beaten the estimate in ${beats} of its last ${judged.length} reports.`);
   if (expectedMove != null) read.push(`The stock has moved about ±${expectedMove.toFixed(1)}% on a typical report${out ? "." : " — that's the size of swing to be ready for."}`);
@@ -673,13 +684,14 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     next: duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
       : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}) } : null,
-    ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency } } : {}),
+    ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
     quarters: quartersFrom(quarterly, profile?.shareOutstanding ?? null),
     read, warnings,
   };
+  if (ffo && body.next) body.next.epsBasis = "ffo";
   return body;
 }
 
@@ -984,7 +996,7 @@ function cardFromSheet(sym: string, d: TickerResponse): string {
   const when = isDated(d.next) ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
   // 0039: once it's out (or due), the card says so instead of "Reports …" with the estimate.
   const rc = reportedCard(d, iso(todayNY()));
-  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
+  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
 }
 
 async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -1032,7 +1044,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
         return storyTickerSvg({
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
           when: isDated(d.next) ? whenPlain(d.next.date, d.next.session, day) : d.next ? "date not confirmed yet" : "date not announced yet",
-          session: d.next?.session ?? "", epsE: d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
+          session: d.next?.session ?? "", epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
           beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, ...(reportedCard(d, day) ?? {}),
         });
       }

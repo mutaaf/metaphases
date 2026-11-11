@@ -2,7 +2,7 @@
 // quarterly series and the share-card SVG. Shared by the worker and the client, and unit-tested.
 import type { EarningsEvent, Quarter, Reaction, Session } from "./types";
 import { epsIn } from "./currency";
-import { revenueBeatRate } from "./compare";
+import { epsJudged, epsVerdict, revenueBeatRate } from "./compare";
 
 // ── Chart ──────────────────────────────────────────────────────────────
 /** Evenly downsample to at most `max` items, always keeping the first and last. */
@@ -134,23 +134,23 @@ export function buildIcs(items: IcsItem[], stamp: Date): string {
 export interface Season { members: number; reported: number; reportedPct: number; epsBeatPct: number | null; revBeatPct: number | null; /** Reports left out of revBeatPct: revenue and estimate on different bases. */ revExcluded: number; medianSurprise: number | null; from: string; to: string; enough: boolean }
 
 /** Aggregate S&P 500 members' reported results inside [from, to] (latest report per company). */
-export function seasonScore(events: EarningsEvent[], isMember: (s: string) => boolean, memberCount: number, from: string, to: string, curOf: (s: string) => string = () => "USD"): Season {
+export function seasonScore(events: EarningsEvent[], isMember: (s: string) => boolean, memberCount: number, from: string, to: string, curOf: (s: string) => string = () => "USD", reitOf: (s: string) => boolean = () => false): Season {
   const seen = new Map<string, EarningsEvent>();
   for (const e of events) if (e.eA != null && e.d >= from && e.d <= to && isMember(e.s)) seen.set(e.s, e);
   const done = [...seen.values()];
-  const epsJ = done.filter((e) => e.eE != null);
+  // Every EPS judgment goes through epsVerdict (0049): a basis mix is neither a beat nor a surprise.
+  const epsV = done.map((e) => epsVerdict({ ...e, reit: reitOf(e.s) })).filter(epsJudged);
   const rev = revenueBeatRate(done, curOf);
-  const sur = epsJ
-    .filter((e) => e.eE !== 0)
-    .map((e) => (((e.eA as number) - (e.eE as number)) / Math.abs(e.eE as number)) * 100)
-    .filter((x) => Math.abs(x) < 500)
+  const sur = epsV
+    .map((j) => j.pct)
+    .filter((x): x is number => x != null && Math.abs(x) < 500)
     .sort((a, b) => a - b);
   const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : null);
   return {
     members: memberCount,
     reported: done.length,
     reportedPct: memberCount ? Math.round((done.length / memberCount) * 100) : 0,
-    epsBeatPct: pct(epsJ.filter((e) => (e.eA as number) >= (e.eE as number)).length, epsJ.length),
+    epsBeatPct: pct(epsV.filter((j) => j.v === "beat").length, epsV.length),
     revBeatPct: pct(rev.beats, rev.judged),
     revExcluded: rev.excluded,
     medianSurprise: sur.length ? Math.round(sur[Math.floor(sur.length / 2)] * 10) / 10 : null,
