@@ -1,7 +1,7 @@
 ---
 id: 0057
 title: Measure a before-the-open report's move on its own day (Walmart's "typical move ±1.0%" is really ±6.1%)
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: data-quality
@@ -48,3 +48,10 @@ Worker unit tests with mocked Finnhub, Nasdaq and Yahoo (`tests/unit/`). Live ch
 
 ## Out of scope
 Filling the *upcoming* session (0050). Intraday reactions (only daily closes). Changing `shared/grades.ts`.
+
+## Built (builder, 2026-11-11)
+`shared/reaction.ts` (`reactionMove`, `sessionHabit`), used by every move in `buildTicker` (the Nasdaq history rows, the `lastE` row, the 0039 reported row) and by `kidsWhy`'s habit. Before the open or during hours: close the day before → close on the day. After the close: close on the day → close the next day. An unknown session gives `move: null` and stays out of `expectedMove`; it's never read as after the close. A past report's session comes from that date's calendar row (Finnhub, with company overrides applied), else the habit: Finnhub's next session, then **Nasdaq's listing for the next report date** (the 0015 window, or the single cached `nq:x:v1:<date>` day; cache only, no new upstream call on the sheet path), then Finnhub's last.
+
+**Nasdaq's day calendar doesn't help for past dates.** Checked 2026-11-11: it returns `time-not-supplied` for every row once a date is about a week old (Nov 5: 568 of 573; Oct 28, Oct 21, Jul 23: all), including WMT 2025-11-20, 2026-05-21 and 2026-08-20, and HD, TGT and TJX's past dates. So no per-date Nasdaq call was added (it would cost calls and give nothing). WMT's upcoming Nov 19 *is* `time-pre-market` on Nasdaq (the calendar already shows it as bmo with `x: agree`), and that habit now measures WMT's past moves. TGT and TJX have no session in either feed, so their moves read "—" until one does. That's honest, where before they were wrong.
+
+Sheet cache keys bumped (`tk:v4`, `tk:stale:v3`, OG `v5`). Tests: `tests/unit/reactionSession.test.ts`.
