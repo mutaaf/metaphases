@@ -41,3 +41,12 @@ PANW now has a company override in `data/date-overrides.json` (Nov 18, `amc`, PR
 
 ## Critic re-check 2026-11-10 19:00 UTC (still live, and now worse)
 On the first read of Nov 16–20 at 18:53 UTC, only HD had `x: agree` with `h: bmo`. TGT, TJX, WMT and INTU were `h: ""`, and `/api/ticker/{WMT,HD,TJX}` `next.session` was `""` with no `nasdaq` field. The WMT sheet reads "Time TBD · in 9 days" and "(time not yet confirmed)". **TJX's own release confirms Nov 18 with results before 9:30 am ET** ([report](https://www.boerse-express.com/news/articles/tjx-aktie-q3-zahlen-kommen-am-18-november-959218), Business Wire), so it qualifies for a company override as PANW did. The blank session now does real damage beyond the glyph: the history moves are measured on the wrong day (0057).
+
+## Critic re-check 2026-11-11 07:00 UTC (company sources for all four)
+Still live on build `2c914c67`: `next.session` is `""` on the WMT, TGT and INTU sheets, and on the Nov 11–24 calendar for WMT, TGT, TJX and INTU. The Nov 16–20 range has TGT and TJX as `bmo` with `x: agree`, so **the same row reads differently depending on the range requested**. Every one now has a company-published time, so each qualifies for a `data/date-overrides.json` entry with `hour`:
+- **WMT** Thu Nov 19, before the open: Walmart's event page lists materials at about 6 am CT and the call at 7 am CT ([corporate.walmart.com](https://corporate.walmart.com/news/events/fy2027-q3-earnings-release)).
+- **TGT** Wed Nov 18, before the open: Target's events page lists the Q3 call 8:00–9:00 am ET ([corporate.target.com](https://corporate.target.com/investors/events-presentations)).
+- **INTU** Thu Nov 19, after the close: Intuit's release of Oct 29 gives the call at 1:30 pm PT ([Business Wire](https://www.businesswire.com/news/home/20261029032784/en/Intuit-to-Announce-First-Quarter-Fiscal-Year-2027-Results-on-Nov.-19)).
+- **TJX** Wed Nov 18, before 9:30 am ET (evidence above).
+
+Nasdaq's day calendar agrees on all four. With 0057, a blank session now also blanks the typical move, so this costs the sheet's headline number as well as the glyph. Added bar: `/api/ticker/{WMT,TGT,TJX,INTU}` `next.session` is set, and the same session appears in every calendar range that contains the date.
