@@ -19,6 +19,7 @@ import { handleAi } from "./ai";
 import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
+import { reactionMove, sessionHabit } from "../shared/reaction";
 import { applyPreReport, nasdaqDayEps, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
@@ -418,11 +419,11 @@ function slimMetric(raw: any) {
 /**
  * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
  * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
- * (`tk:stale:v2:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
+ * (`tk:stale:v3:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
  */
 async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
-  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v3:${symbol}`)}`);
-  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v2:${symbol}`)}`);
+  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v4:${symbol}`)}`);
+  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v3:${symbol}`)}`);
   const hit = await caches.default.match(key);
   if (hit) { const data = (await hit.json()) as TickerResponse; return { data, ttl: sheetTtl(data) }; }
   const built = await buildTicker(symbol, env, ctx);
@@ -485,7 +486,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // session both feeds agree on is filled before the report-day state (0039) is worked out from it.
   const nqWin = nextE && !nextE.source && nextE.epsActual == null ? await nasdaqWindow(today, ctx, false).catch(() => null) : null;
   if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) nextE.hour = c.h; }
-  const habit: Session = (nextE?.hour || lastE?.hour || "") as Session;
+  // 0057: the habit past reports are measured with. No cross-check window in this colo: read the one Nasdaq day
+  // the next report is on, from the cache only (never an upstream call on the sheet path).
+  const nqNextHour = nextE && !nextE.source && !nextE.hour && !nqWin ? (await readJson<NqDay>(NQX_DAY(nextE.date)))?.[symbol] : undefined;
+  const habit: Session = sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
   const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
   const lastSnap = sameEpsUnit(symbol, lastSnapRaw, lastE?.epsEstimate) ? lastSnapRaw : null;
@@ -553,6 +557,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     ? cal.filter((e) => e.date > today && !(e.quarter === nextE.quarter && e.year === nextE.year)).sort((a, b) => a.date.localeCompare(b.date))[0]
     : duePending ? undefined : nextE;
 
+  // 0057: a dated row's own session, else the habit. A company-dated row (override) without a session is unknown:
+  // never filled from a feed's guess.
+  const ownSession = (row: { hour?: string; source?: unknown }): Session => (row.hour as Session) || (row.source ? "" : habit);
   // Past prints: Nasdaq gives report dates; Finnhub gives estimate/actual. Join on order (both newest-first).
   // Finnhub figures only fill gaps when they're in dollars too.
   const history: Reaction[] = [];
@@ -573,11 +580,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const f = !usd ? undefined
       : lastE && lastE.date === date && lastE.epsEstimate != null ? { estimate: lastE.epsEstimate, actual: lastE.epsActual }
       : surprises?.find((x) => periodKey(x.period) != null && periodKey(x.period) === periodKey(r.fiscalQtrEnd));
-    const session: Session = lastE && lastE.date === date ? (lastE.hour as Session) : habit;
-    let move: number | null = null;
-    const before = session === "bmo" ? closeOn(date, -1) : closeOn(date, 0);
-    const after = session === "bmo" ? closeOn(date, 0) : closeOn(date, 1);
-    if (before && after) move = ((after - before) / before) * 100;
+    // That date's own session when the calendar has it, else the habit; unknown stays unknown (move "—").
+    const session: Session = lastE && lastE.date === date ? ownSession(lastE) : habit;
+    const move = reactionMove(session, date, closeOn);
     const pick = pickConsensus({ estimate: r.consensusForecast, actual: r.eps, surprisePct: r.percentageSurprise }, f, lastE && lastE.date === date ? lastSnap : null);
     history.push({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move });
   });
@@ -593,22 +598,21 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   }
   // A print reported in the last ~40 days might be on Finnhub's calendar before Nasdaq's table catches up.
   if (usd && lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date)) {
-    const b = lastE.hour === "bmo" ? closeOn(lastE.date, -1) : closeOn(lastE.date, 0);
-    const a = lastE.hour === "bmo" ? closeOn(lastE.date, 0) : closeOn(lastE.date, 1);
+    const session: Session = ownSession(lastE);
     const est = lastSnap ?? lastE.epsEstimate;
-    history.unshift({ date: lastE.date, session: lastE.hour, period: `Q${lastE.quarter} ${lastE.year}`, epsE: est, epsA: lastE.epsActual, surprisePct: est ? ((lastE.epsActual - est) / Math.abs(est)) * 100 : null, move: b && a ? ((a - b) / b) * 100 : null });
+    history.unshift({ date: lastE.date, session, period: `Q${lastE.quarter} ${lastE.year}`, epsE: est, epsA: lastE.epsActual, surprisePct: est ? ((lastE.epsActual - est) / Math.abs(est)) * 100 : null, move: reactionMove(session, lastE.date, closeOn) });
   }
 
   // 0039: the report that's out heads the history until Nasdaq lists it. Non-dollar figures stay off the
   // dollar table ("—"); the move waits for a settled post-report close.
   if (reported && !history.some((h) => Math.abs(daysApart(h.date, reported.date)) <= 3)) {
-    const settled = tradingDaysSince(reported.date, today) >= (reported.hour === "bmo" ? 1 : 2);
-    const b = reported.hour === "bmo" ? closeOn(reported.date, -1) : closeOn(reported.date, 0);
-    const a = reported.hour === "bmo" ? closeOn(reported.date, 0) : closeOn(reported.date, 1);
+    // A company-dated report with no stated session stays unknown, whatever the cached feed row says (LESSONS 2026-11-10).
+    const rs: Session = nextE?.source && !nextE.hour && reported.date === nextE.date ? "" : ownSession(reported);
+    const settled = tradingDaysSince(reported.date, today) >= (rs === "bmo" || rs === "dmh" ? 1 : 2);
     history.unshift({
-      date: reported.date, session: reported.hour as Session, period: `Q${reported.quarter} ${reported.year}`,
+      date: reported.date, session: rs, period: `Q${reported.quarter} ${reported.year}`,
       epsE: usd ? reported.eE : null, epsA: usd ? reported.eA : null, surprisePct: usd ? surprisePct(reported.eE, reported.eA) : null,
-      move: settled && b && a ? ((a - b) / b) * 100 : null,
+      move: settled ? reactionMove(rs, reported.date, closeOn) : null,
     });
   }
 
@@ -919,12 +923,16 @@ async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Respo
     settle("We couldn't see when it reports.", cached<any>(`fh:why-hour:${s}:${today}`, 86400, ctx, () => getJson(`${FH}/calendar/earnings?symbol=${s}&from=${addDays(today, -40)}&to=${addDays(today, 120)}&token=${env.FINNHUB_API_KEY}`))),
   ]);
   const cal: any[] = fhCal?.earningsCalendar ?? [];
-  const habit = (cal.find((e) => e.hour)?.hour ?? "") as "bmo" | "amc" | "dmh" | "";
+  // 0057: the same habit as the sheet (Finnhub's next, Nasdaq's cached listing for that date, Finnhub's last).
+  const up = cal.filter((e) => e.date >= today).sort((x, y) => x.date.localeCompare(y.date))[0];
+  const last = cal.filter((e) => e.date < today).sort((x, y) => y.date.localeCompare(x.date))[0];
+  const nqUp = up && !up.hour ? (await readJson<NqDay>(NQX_DAY(up.date)))?.[s] : undefined;
+  const habit = sessionHabit(up?.hour, nqUp, last?.hour);
   const num = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[$,]/g, "")); return Number.isFinite(n) ? n : null; };
   const reports = ((nq?.data?.earningsSurpriseTable?.rows ?? []) as any[]).map((r) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");
     const date = `${yy}-${(mm ?? "").padStart(2, "0")}-${(dd ?? "").padStart(2, "0")}`;
-    return { date, eA: num(r.eps), eE: num(r.consensusForecast), hour: ((cal.find((e) => e.date === date)?.hour ?? habit) || "") as "bmo" | "amc" | "dmh" | "" };
+    return { date, eA: num(r.eps), eE: num(r.consensusForecast), hour: ((cal.find((e) => e.date === date)?.hour || habit) || "") as "bmo" | "amc" | "dmh" | "" };
   });
   const input = buildWhyInput({ s, nick: co.nick, range, stock, spy, sector, reports, dividends: stock?.div ?? [] });
   return json({ input, why: whyMoved(input, today), warnings }, 900);
@@ -983,12 +991,12 @@ async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, c
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const key = new Request(`https://cache.metaphases.internal/og-png-v4-${sym}-${day}`);
+    const key = new Request(`https://cache.metaphases.internal/og-png-v5-${sym}-${day}`);
     // A card drawn while degraded is kept 30 s under its own key, so an unfurl burst renders it once, not per request.
-    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v4-${sym}-${day}-d`);
+    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v5-${sym}-${day}-d`);
     if (fmt === "png") { const hit = (await caches.default.match(key)) ?? (await caches.default.match(shortKey)); if (hit) return hit; }
     // 0043: a card drawn while the sheet's date or history failed to load is served briefly and never cached.
-    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v4:${sym}:${day}`)}`);
+    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v5:${sym}:${day}`)}`);
     const svgHit = await caches.default.match(svgKey);
     const { svg, degraded } = svgHit ? { svg: await svgHit.text(), degraded: false } : await cardFor(sym, env, ctx);
     const age = degraded ? SHEET_DEGRADED_TTL : 21600;

@@ -68,7 +68,7 @@ function Reactions({ history, expected, usd }: { history: Reaction[]; expected: 
           const beat = r.epsA != null && r.epsE != null ? r.epsA >= r.epsE : null;
           const h = r.move == null ? 0 : (Math.abs(r.move) / max) * 50;
           return (
-            <div key={r.date} className="rx-col" title={`${r.period}: ${r.move == null ? "no price data" : pct(r.move)} · EPS ${eps(r.epsA)} vs ${eps(r.epsE)}`}>
+            <div key={r.date} className="rx-col" title={`${r.period}: ${r.move == null ? (r.session ? "no price data" : "report time unknown, so no move") : pct(r.move)} · EPS ${eps(r.epsA)} vs ${eps(r.epsE)}`}>
               <span className={`rx-bar ${r.move != null && r.move >= 0 ? "up" : "down"}`} style={{ height: `${h}%`, [r.move != null && r.move >= 0 ? "bottom" : "top"]: "50%" }} />
               <span className="rx-val">{r.move == null ? "—" : pct(r.move, 1)}</span>
               <span className={`rx-dot ${beat == null ? "" : beat ? "res-beat" : "res-miss"}`} />
@@ -90,6 +90,7 @@ function Reactions({ history, expected, usd }: { history: Reaction[]; expected: 
           ))}
         </tbody>
       </table>
+      {history.some((r) => r.move == null && !r.session && r.date.length === 10) && <p className="muted small rx-basis">"—" means no feed says whether that report came before the open or after the close, so we don't guess which day it moved.</p>}
       <p className="muted small rx-basis">{usd && "Estimates use the calendar's consensus wherever we have it for that quarter. "}Actuals are <Term k="adjustedeps">adjusted EPS</Term>, the figure analysts forecast, so they can differ from the profit in the company's filings.</p>
     </div>
   );
