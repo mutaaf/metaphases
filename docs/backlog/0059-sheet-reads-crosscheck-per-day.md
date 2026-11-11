@@ -1,12 +1,12 @@
 ---
 id: 0059
 title: The sheet and its unfurl see the Nasdaq cross-check the calendar already shows (PDD "reports Mon, Nov 16 before the open" while the calendar flags Nasdaq Nov 17)
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-11
-pr:
+pr: 96
 by: critic
 ---
 

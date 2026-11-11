@@ -26,7 +26,7 @@ import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
-import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
+import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
 import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
@@ -228,8 +228,8 @@ const putJson = (req: Request, val: unknown, ttl: number) =>
   caches.default.put(req, new Response(JSON.stringify(val), { headers: { "Cache-Control": `public, max-age=${ttl}`, "Content-Type": "application/json" } })).catch(() => {});
 
 /** One Nasdaq day as symbol → session. No 429 retries (this is optional data); a malformed answer is a failure, an empty day (`rows: null`) is not. */
-async function fetchNasdaqDay(day: string): Promise<NqDay> {
-  const r = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, { headers: UA, signal: AbortSignal.timeout(2500) } as RequestInit);
+async function fetchNasdaqDay(day: string, ms = 2500): Promise<NqDay> {
+  const r = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, { headers: UA, signal: AbortSignal.timeout(ms) } as RequestInit);
   if (!r.ok) throw new Error(`api.nasdaq.com ${r.status}`);
   const body = (await r.json()) as any;
   if (!body?.data || typeof body.data !== "object" || !("rows" in body.data)) throw new Error("nasdaq day calendar malformed");
@@ -255,38 +255,49 @@ async function nasdaqDayOnDemand(day: string, today: string, ctx: ExecutionConte
     const v = await fetchNasdaqDay(day);
     ctx.waitUntil(putJson(NQX_DAY(day), v, Object.keys(v).length ? 21600 : 3600));
     return v;
-  } catch {
+  } catch (e) {
+    // 0059: a slow answer (over the sheet's 2.5 s) isn't remembered as a failure, so the 4 s background fill can
+    // still load that day; a refusal or a malformed answer is.
+    if ((e as Error)?.name === "TimeoutError" || (e as Error)?.name === "AbortError") return null;
     // Re-read and merge, so another day's remembered failure survives (0047).
     ctx.waitUntil((async () => putJson(NQX_FAIL, { ...((await readJson<Record<string, number>>(NQX_FAIL)) ?? {}), [day]: Date.now() + 15 * 60_000 }, 900))());
     return null;
   }
 }
 
+/** The background fill's timeout: Nasdaq's day calendar answers in 1.2–3.3 s (0059), so 2.5 s lost whole days. */
+const NQX_BUILD_TIMEOUT = 4000;
+const WHEN_LONG: Record<Session, string> = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "" };
+
 /**
- * The window's Nasdaq listings. The folded copy when this colo has one; otherwise, only when `build` is set,
- * the cached days plus up to NQX_PER_BUILD fetched ones (if this request takes the per-colo lock). Returns
- * null when there's nothing to compare against.
+ * The window's Nasdaq listings. The folded copy when this colo has one; otherwise the cached days (a partly
+ * loaded window is still evidence for the days it has, 0059), plus, only when `build` is set, up to
+ * NQX_PER_BUILD fetched ones (if this request takes the per-colo lock). Returns null when there's nothing to
+ * compare against.
  */
 async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean): Promise<NqWindow | null> {
   const folded = await readJson<NqWindow>(NQX_IDX(today));
-  if (folded || !build) return folded;
+  if (folded) return folded;
   const days = windowDays(today);
   const loaded: Record<string, NqDay> = {};
   const missing: string[] = [];
   await Promise.all(days.map(async (d) => { const v = await readJson<NqDay>(NQX_DAY(d)); if (v) loaded[d] = v; else missing.push(d); }));
-  if (missing.length && !(await caches.default.match(NQX_LOCK).catch(() => true))) {
+  if (build && missing.length && !(await caches.default.match(NQX_LOCK).catch(() => true))) {
     await caches.default.put(NQX_LOCK, new Response("1", { headers: { "Cache-Control": "public, max-age=60" } })).catch(() => {});
     const failed = (await readJson<Record<string, number>>(NQX_FAIL)) ?? {};
     const now = Date.now();
     const take = missing.filter((d) => !(failed[d] > now)).slice(0, NQX_PER_BUILD);
-    const got = await pool(take, 2, fetchNasdaqDay);
-    let newFail = false;
-    got.forEach((r, i) => {
-      const d = take[i];
-      if (r.status === "fulfilled") { loaded[d] = r.value; ctx.waitUntil(putJson(NQX_DAY(d), r.value, Object.keys(r.value).length ? 21600 : 3600)); }
-      else { failed[d] = now + 15 * 60_000; newFail = true; }
-    });
-    if (newFail) ctx.waitUntil(putJson(NQX_FAIL, failed, 900));
+    // 0059: the fill runs after the response (its 4 s timeout never delays the calendar); the next read has the days.
+    if (take.length) ctx.waitUntil((async () => {
+      const got = await pool(take, 2, (d) => fetchNasdaqDay(d, NQX_BUILD_TIMEOUT));
+      const fresh: Record<string, number> = {};
+      await Promise.all(got.map(async (r, i) => {
+        if (r.status === "fulfilled") await putJson(NQX_DAY(take[i]), r.value, Object.keys(r.value).length ? 21600 : 3600);
+        else fresh[take[i]] = now + 15 * 60_000;
+      }));
+      // Re-read and merge, so another request's remembered failure survives (0047).
+      if (Object.keys(fresh).length) await putJson(NQX_FAIL, { ...((await readJson<Record<string, number>>(NQX_FAIL)) ?? {}), ...fresh }, 900);
+    })().catch(() => {}));
   }
   if (!Object.keys(loaded).length) return null;
   const w: NqWindow = { from: today, to: windowEnd(today), loaded: Object.keys(loaded).sort(), idx: buildIndex(loaded) };
@@ -509,15 +520,21 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const cal: any[] = applyToRows(symbol, upcoming?.earningsCalendar ?? [], OVERRIDES, today);
   const nextE = cal.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
   const lastE = cal.filter((e) => e.date < today).sort((a, b) => b.date.localeCompare(a.date))[0];
-  // 0015: the calendar's Nasdaq cross-check, from the cache only (no upstream calls on the sheet path). A blank
-  // session both feeds agree on is filled before the report-day state (0039) is worked out from it.
-  const nqWin = nextE && !nextE.source && nextE.epsActual == null ? await nasdaqWindow(today, ctx, false).catch(() => null) : null;
-  if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) nextE.hour = c.h; }
+  // 0015/0059: the calendar's Nasdaq cross-check, from the cached days (folded or not: one slow day must not
+  // blind every sheet). A blank session both feeds agree on is filled before the report-day state (0039) is
+  // worked out from it.
+  // The rows the calendar's crossCheck compares: no company date, no figures in, not projected onto a closed day.
+  const xcheck = !!nextE && !nextE.source && nextE.epsActual == null && nextE.revenueActual == null && !closedDay(nextE.date);
+  let nqWin = xcheck ? await nasdaqWindow(today, ctx, false).catch(() => null) : null;
   // 0057: the habit past reports are measured with. A company-dated row already carries its own session (or
   // none). Unless the window already loaded that day: read the one Nasdaq day the next report is on, on demand (one
-  // shared, cached call per day), so the habit never waits for the window to reach that date.
+  // shared, cached call per day), so the habit never waits for the window to reach that date. 0059: inside the
+  // window, that day joins the cross-check too, so the sheet's session matches the calendar's.
   const inWin = !!nqWin && nqWin.loaded.includes(nextE?.date ?? ""); // the window already answered for that day
-  const nqNextHour = nextE && !nextE.source && !nextE.hour && !inWin ? (await nasdaqDayOnDemand(nextE.date, today, ctx))?.[symbol] : undefined;
+  const nqNextDay = nextE && !nextE.source && !nextE.hour && !inWin ? await nasdaqDayOnDemand(nextE.date, today, ctx) : null;
+  const nqNextHour = nqNextDay?.[symbol];
+  if (xcheck && nqNextDay) nqWin = withDay(nqWin, today, nextE.date, nqNextDay);
+  if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) nextE.hour = c.h; }
   const habit: Session = sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
   const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
@@ -677,6 +694,12 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const closed = upNext && !upNext.source && !pending ? closedDay(upNext.date) : null;
   const longDay = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
   const out = reported || duePending;
+  // 0015: name Nasdaq's day when it lists the next report elsewhere (the date itself stays the feed's).
+  let nqNext: { date: string; session: Session } | undefined;
+  if (nqWin && upNext && upNext === nextE && !duePending && !pending && !reported && !upNext.source && !closed) {
+    const c = crossOne(symbol, upNext.date, (upNext.hour || "") as Session, nqWin);
+    if (c?.x === "differs" && c.xd) nqNext = { date: c.xd, session: c.xh ?? "" };
+  }
   if (reported) read.push(reportedLine(name, { date: reported.date, session: reported.hour, quarter: reported.quarter, epsE: reported.eE, epsA: reported.eA, nE: usd ? reported.nE : undefined, reit }, today, (v) => epsIn(v, currency)));
   if (duePending) {
     read.push(pendingLine(name, { date: duePending.date, session: duePending.hour, quarter: duePending.quarter }, today));
@@ -686,8 +709,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   } else if (upNext && closed) {
     read.push(`${name}'s Q${upNext.quarter} report date is not confirmed yet: the data feed projects ${longDay(upNext.date)}, when the market is closed (${closed}).`);
   } else if (upNext) {
-    const when = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "(time not yet confirmed)" }[upNext.hour as Session] ?? "";
-    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${when}.`.replace(" .", "."));
+    const when = upNext.hour ? WHEN_LONG[upNext.hour as Session] ?? "" : nqNext ? "" : "(time not yet confirmed)";
+    // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
+    const nqWhen = nqNext ? (nqNext.date === upNext.date ? (nqNext.session ? `it ${WHEN_LONG[nqNext.session]} that day` : "it at another time that day") : `${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}`) : "";
+    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${when}${nqNext ? `, but that's unconfirmed: Nasdaq's calendar lists ${nqWhen}` : ""}.`.replace(" .", ".").replace(" ,", ","));
   }
   const estLine = duePending ? null
     : ffo ? ((pending ? pending.eE : upNext?.epsEstimate) != null ? `${name} is a REIT whose recent results came in on a different measure from the feed's estimate (usually funds from operations against net income a share), so we don't quote the estimate as the bar.` : null)
@@ -698,12 +723,6 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   if (setup.grade && !out) read.push(`Into the print it's in ${/^[aeiou]/i.test(setup.trend) ? "an" : "a"} ${setup.trend.toLowerCase()}${setup.rsi != null ? ` with RSI ${setup.rsi.toFixed(0)}` : ""}.`);
   if (compass.grade) read.push(`As a long-term holding it grades ${compass.grade} on Compass quality.`);
 
-  // 0015: name Nasdaq's day when it lists the next report elsewhere (the date itself stays the feed's).
-  let nqNext: { date: string; session: Session } | undefined;
-  if (nqWin && upNext && upNext === nextE && !duePending && !pending && !reported && !upNext.source && !closed) {
-    const c = crossOne(symbol, upNext.date, (upNext.hour || "") as Session, nqWin);
-    if (c?.x === "differs" && c.xd) nqNext = { date: c.xd, session: c.xh ?? "" };
-  }
 
   const body: TickerResponse = {
     symbol,
@@ -1025,19 +1044,22 @@ function cardFromSheet(sym: string, d: TickerResponse): string {
   const when = isDated(d.next) ? new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
   // 0039: once it's out (or due), the card says so instead of "Reports …" with the estimate.
   const rc = reportedCard(d, iso(todayNY()));
-  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
+  // 0059: a date (or time) Nasdaq lists differently is never drawn as fact: no session glyph, and the headline says so.
+  const nq = !rc && when ? d.next?.nasdaq : undefined;
+  const contested = nq ? { headline: `Reports ${when}, ${nq.date === d.next!.date ? "time" : "date"} unconfirmed`, session: "" as Session } : {};
+  return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", ...contested, move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
 }
 
 async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const key = new Request(`https://cache.metaphases.internal/og-png-v5-${sym}-${day}`);
+    const key = new Request(`https://cache.metaphases.internal/og-png-v6-${sym}-${day}`);
     // A card drawn while degraded is kept 30 s under its own key, so an unfurl burst renders it once, not per request.
-    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v5-${sym}-${day}-d`);
+    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v6-${sym}-${day}-d`);
     if (fmt === "png") { const hit = (await caches.default.match(key)) ?? (await caches.default.match(shortKey)); if (hit) return hit; }
     // 0043: a card drawn while the sheet's date or history failed to load is served briefly and never cached.
-    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v5:${sym}:${day}`)}`);
+    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v6:${sym}:${day}`)}`);
     const svgHit = await caches.default.match(svgKey);
     const { svg, degraded } = svgHit ? { svg: await svgHit.text(), degraded: false } : await cardFor(sym, env, ctx);
     const age = degraded ? SHEET_DEGRADED_TTL : 21600;
