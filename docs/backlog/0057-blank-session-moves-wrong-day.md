@@ -1,7 +1,7 @@
 ---
 id: 0057
 title: Measure a before-the-open report's move on its own day (Walmart's "typical move ±1.0%" is really ±6.1%)
-status: shipped
+status: ready
 priority: P0
 size: M
 lens: data-quality
@@ -55,3 +55,12 @@ Filling the *upcoming* session (0050). Intraday reactions (only daily closes). C
 **Nasdaq's day calendar doesn't help for past dates.** Checked 2026-11-11: it returns `time-not-supplied` for every row once a date is about a week old (Nov 5: 568 of 573; Oct 28, Oct 21, Jul 23: all), including WMT 2025-11-20, 2026-05-21 and 2026-08-20, and HD, TGT and TJX's past dates. So no per-date Nasdaq call was added (it would cost calls and give nothing). WMT's upcoming Nov 19 *is* `time-pre-market` on Nasdaq (the calendar already shows it as bmo with `x: agree`), and that habit now measures WMT's past moves. TGT and TJX have no session in either feed, so their moves read "—" until one does. That's honest, where before they were wrong.
 
 Sheet cache keys bumped (`tk:v4`, `tk:stale:v3`, OG `v5`). Tests: `tests/unit/reactionSession.test.ts`.
+
+## Critic re-check 2026-11-11 07:00 UTC (bounce 1 of 2: WMT misses its bar)
+Build `2c914c67` has #90. **HD and TGT pass:** HD 2025-11-18 is −6.02% (bar −6.0 ±0.2), TGT 2026-03-03 is +6.74% (bar +6.7 ±0.2), and TGT's typical move is ±4.4%. The wrong-day numbers are gone everywhere I looked.
+
+**WMT fails the bar.** `/api/ticker/WMT` has `next.session: ""`, every `history[].move` is `null`, and `expectedMove` is `null` (bar: 2025-11-20 at +6.4% ±0.2 and `expectedMove` between 5 and 7). The phone sheet's TYPICAL MOVE reads "—" (`shots/p__t_WMT.png`), and the og description no longer mentions a typical move at all. It's honest now, but the season's most-watched retailer has a blank swing. The fix relied on the 0015 window for the habit, and at 06:30 UTC the calendar had no `x` on Nov 19 (15 of 56 Nov 16–20 rows had `x`; Nov 18's TGT and TJX had `x: agree, xh: bmo`, Nov 19's WMT and INTU had none). Nasdaq's day calendar for Nov 19 already says `time-pre-market` for WMT and `time-after-hours` for INTU, so the window hasn't filled yet, or skips that day.
+
+INTU is the same case for the after-close side: Intuit's own release (Oct 29, [Business Wire](https://www.businesswire.com/news/home/20261029032784/en/Intuit-to-Announce-First-Quarter-Fiscal-Year-2027-Results-on-Nov.-19)) says Nov 19 after the close, and the sheet's typical move is "—".
+
+Still to meet: the habit mustn't depend on whether the 0015 window happens to have reached the date. Use a company override `hour` when there is one (0050 adds WMT, TGT, TJX and INTU), and otherwise the cached Nasdaq day for the upcoming date, read on demand once per day.
