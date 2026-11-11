@@ -51,6 +51,19 @@ export function buildIndex(days: Record<string, NqDay>): NqIndex {
 /** The cross-check's view: the index plus which days in the window actually loaded. */
 export interface NqWindow { from: string; to: string; loaded: string[]; idx: NqIndex }
 
+/**
+ * 0059: add one more loaded day to a (possibly partial, possibly absent) window, e.g. the day the sheet read on
+ * demand. A day outside the window, or one already loaded, leaves it as it was.
+ */
+export function withDay(w: NqWindow | null, today: string, day: string, v: NqDay): NqWindow | null {
+  if (!windowDays(today).includes(day) || w?.loaded.includes(day)) return w;
+  const idx: NqIndex = {};
+  for (const [s, list] of Object.entries(w?.idx ?? {})) idx[s] = [...list];
+  for (const [s, h] of Object.entries(v)) (idx[s] ??= []).push({ d: day, h });
+  for (const list of Object.values(idx)) list.sort((a, b) => a.d.localeCompare(b.d));
+  return { from: today, to: windowEnd(today), loaded: [...(w?.loaded ?? []), day].sort(), idx };
+}
+
 export interface Cross { x: "agree" | "differs" | "unknown"; /** Nasdaq's day, on `differs`. */ xd?: string; /** Nasdaq's session, when it gives one. */ xh?: Session; /** A session filled in from Nasdaq (agree only). */ h?: Session }
 
 const dayNum = (d: string) => Date.parse(d + "T12:00:00Z") / 86400000;
