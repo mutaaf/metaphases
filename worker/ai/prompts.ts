@@ -3,6 +3,7 @@
 // non-negotiables from AGENTS.md: plain English, cite the numbers, never advice, never invent.
 import type { ChatMessage } from "./providers";
 import { epsIn, isUsd, moneyIn } from "../../shared/currency";
+import { epsVerdict } from "../../shared/compare";
 
 export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask" | "hype" | "kids";
 export const TASKS: AiTask[] = ["ticker", "week", "exposure", "retrace", "ask", "hype", "kids"];
@@ -66,14 +67,20 @@ function tickerFacts(t: Obj): string[] {
   L.push(`Company: ${name} (${clip(t.symbol, 10)}), ${clip(t.profile?.industry ?? "", 40)}, market cap ${t.profile?.marketCap && (isUsd(cur3(t.next?.currency)) || !isUsd(cur3(t.profile.currency))) ? moneyIn(t.profile.marketCap * 1e6, cur3(t.profile.currency)) : "—"}.`);
   if (t.quote) L.push(`Price $${n(t.quote.price)} (${n(t.quote.changePct)}% today).`);
   // 0039: a report that's out, or whose session passed without figures, is never described as upcoming.
-  if (t.justReported) L.push(`Just reported: Q${t.justReported.quarter} ${t.justReported.year} on ${clip(t.justReported.date, 10)}; EPS ${epsIn(t.justReported.epsA, cur3(t.justReported.currency))} against an estimate of ${epsIn(t.justReported.epsE, cur3(t.justReported.currency))}.`);
+  if (t.justReported) {
+    const j = t.justReported, jv = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, reit: j.reit });
+    // 0049: never hand the model an estimate on another basis from the actual.
+    L.push(jv.v === "not-comparable"
+      ? `Just reported: Q${j.quarter} ${j.year} on ${clip(j.date, 10)}; EPS ${epsIn(j.epsA, cur3(j.currency))}. That figure is on a different basis from the estimate (e.g. FFO or adjusted vs net income); don't call it a beat or a miss and don't compute a surprise.`
+      : `Just reported: Q${j.quarter} ${j.year} on ${clip(j.date, 10)}; EPS ${epsIn(j.epsA, cur3(j.currency))} against an estimate of ${epsIn(jv.est ?? j.epsE, cur3(j.currency))}.`);
+  }
   if (t.next?.status === "results-pending") L.push(`Q${t.next.quarter} ${t.next.year} results were expected on ${clip(t.next.date, 10)} and are not in the data yet; do not describe this report as upcoming and do not guess the results.`);
-  else if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} ${t.next.closed || t.next.overdue ? "(date not confirmed yet)" : `on ${clip(t.next.date, 10)} ${clip(t.next.session || "time TBD", 4)}`}; consensus EPS ${epsIn(t.next.epsE, cur3(t.next.currency))}, revenue estimate ${moneyIn(t.next.revE, cur3(t.next.currency))}${isUsd(cur3(t.next.currency)) ? "" : ` (estimates in ${cur3(t.next.currency) || "local currency"}, not USD; never compare them with USD figures)`}.`);
+  else if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} ${t.next.closed || t.next.overdue ? "(date not confirmed yet)" : `on ${clip(t.next.date, 10)} ${clip(t.next.session || "time TBD", 4)}`}; consensus EPS ${t.next.epsBasis ? "not quoted (this REIT's recent results were on a different measure from the feed's estimate, usually FFO vs net income; don't state an EPS estimate)" : epsIn(t.next.epsE, cur3(t.next.currency))}, revenue estimate ${moneyIn(t.next.revE, cur3(t.next.currency))}${isUsd(cur3(t.next.currency)) ? "" : ` (estimates in ${cur3(t.next.currency) || "local currency"}, not USD; never compare them with USD figures)`}.`);
   else L.push("Next report date: not available.");
   if (t.beatRate) L.push(`Beat the EPS estimate in ${t.beatRate.beats} of the last ${t.beatRate.total} reports.`);
   if (typeof t.expectedMove === "number") L.push(`Typical stock move on a report: ±${n(t.expectedMove, 1)}%.`);
   for (const h of (t.history ?? []).slice(0, 8)) {
-    L.push(`Past report ${clip(h.date, 10)} (${clip(h.period, 12)}): EPS est $${n(h.epsE)} vs actual $${n(h.epsA)}, surprise ${n(h.surprisePct, 1)}%, stock moved ${h.move == null ? "—" : `${n(h.move, 1)}%`}.`);
+    L.push(`Past report ${clip(h.date, 10)} (${clip(h.period, 12)}): EPS est $${n(h.epsE)} vs actual $${n(h.epsA)}, ${h.basis ? "actual on a different basis from the estimate (not a beat or a miss)" : `surprise ${n(h.surprisePct, 1)}%`}, stock moved ${h.move == null ? "—" : `${n(h.move, 1)}%`}.`);
   }
   for (const [label, g] of [["Setup grade", t.setup], ["Compass quality grade", t.compass]] as const) {
     if (!g) continue;
@@ -86,7 +93,7 @@ function tickerFacts(t: Obj): string[] {
 
 function eventLine(e: Obj): string {
   const c = cur3(e.cur);
-  if (!isUsd(c)) return `${clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""} EPS est ${epsIn(e.eE, c)}${e.eA != null ? ` actual ${epsIn(e.eA, c)}` : ""}${e.rE ? ` rev est ${moneyIn(e.rE, c)}` : ""}${e.rA && !e.revNC ? ` rev actual ${moneyIn(e.rA, c)}` : ""} (figures in ${c || "local currency"}, not USD)${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}`;
+  if (!isUsd(c)) return `${clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""} EPS est ${epsIn(e.eE, c)}${e.eA != null ? ` actual ${epsIn(e.eA, c)}` : ""}${e.rE ? ` rev est ${moneyIn(e.rE, c)}` : ""}${e.rA && !e.revNC ? ` rev actual ${moneyIn(e.rA, c)}` : ""}${e.epsNC ? " (reported EPS is on a different basis from the estimate; don't call it an EPS beat or miss)" : ""} (figures in ${c || "local currency"}, not USD)${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}`;
   return `${clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""}${e.mc ? ` mcap ${money(e.mc * 1e6)}` : ""} EPS est ${n(e.eE)}${e.eA != null ? ` actual ${n(e.eA)}` : ""}${e.rE ? ` rev est ${money(e.rE)}` : ""}${e.rA && !e.revNC ? ` rev actual ${money(e.rA)}` : ""}${e.revNC ? " (reported revenue is on a different basis from the estimate; don't call it a revenue beat or miss)" : ""}${e.epsNC ? " (reported EPS is on a different basis from the estimate, e.g. FFO vs net income; don't call it an EPS beat or miss)" : ""}${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}`;
 }
 

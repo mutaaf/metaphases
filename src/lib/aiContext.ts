@@ -1,8 +1,8 @@
 // Grounding for every AI surface: compact, structured facts built from data the page already has.
 // Pure functions (unit-tested) — the worker renders them into prompt lines and trims to a budget.
 import type { EarningsEvent, MacroResponse, TickerResponse } from "../../shared/types";
-import { co, curOf, heldVia, resultOf, surprise, UNIVERSE } from "./data";
-import { epsJudged, epsVerdict, revenueBeatRate, revenueSkipped, revenueVerdict } from "../../shared/compare";
+import { co, curOf, epsOf, heldVia, resultOf, surprise, UNIVERSE } from "./data";
+import { epsJudged, revenueBeatRate, revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { weekOf } from "./dates";
 import type { Holding } from "./store";
 
@@ -11,8 +11,10 @@ const slimEvent = (e: EarningsEvent) => {
   // A revenue actual on a different basis from its estimate (GOOGL net of TAC vs gross), or a hair under an estimate
   // revised after the print (0035), isn't passed as a fact to judge.
   const nc = revenueSkipped(revenueVerdict(e, curOf(e.s)));
-  const epsNC = epsVerdict(e).v === "not-comparable";
-  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.h, eE: e.eE, eA: e.eA, epsNC: epsNC || undefined, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: c?.ec, res: resultOf(e) ?? undefined };
+  const ej = epsOf(e);
+  const epsNC = ej.v === "not-comparable";
+  // The estimate it was judged against (Nasdaq's when Finnhub's is on another basis), never a figure that contradicts `res`.
+  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.h, eE: ej.via ? ej.est : e.eE, eA: e.eA, epsNC: epsNC || undefined, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: c?.ec, res: resultOf(e) ?? undefined };
 };
 
 export function slimMacro(m: MacroResponse | null | undefined, from: string, to: string) {
@@ -56,12 +58,12 @@ export function retraceContext(events: EarningsEvent[], monthLabel: string) {
   const done = events.filter((e) => e.eA != null && e.t);
   const by = (k: string) => done.filter((e) => resultOf(e) === k).length;
   // 0049: an EPS on another basis from its estimate isn't judged, counted or ranked.
-  const epsV = done.map((e) => epsVerdict(e));
+  const epsV = done.map(epsOf);
   const judgedEps = epsV.filter(epsJudged);
   const rev = revenueBeatRate(done, curOf);
   const sur = done.map(surprise).filter((x): x is number => x != null && Math.abs(x) < 500).sort((a, b) => a - b);
   const sectors: Record<string, { n: number; beat: number; s: number[] }> = {};
-  for (const e of done) { const k = co(e.s)?.sec || "Other"; (sectors[k] ??= { n: 0, beat: 0, s: [] }); sectors[k].n++; if (resultOf(e) === "beat") sectors[k].beat++; const x = surprise(e); if (x != null) sectors[k].s.push(x); }
+  for (const e of done) { if (resultOf(e) == null) continue; const k = co(e.s)?.sec || "Other"; (sectors[k] ??= { n: 0, beat: 0, s: [] }); sectors[k].n++; if (resultOf(e) === "beat") sectors[k].beat++; const x = surprise(e); if (x != null) sectors[k].s.push(x); }
   const ranked = done.filter((e) => surprise(e) != null && Math.abs(surprise(e)!) < 500).sort((a, b) => surprise(b)! - surprise(a)!);
   return {
     month: monthLabel,

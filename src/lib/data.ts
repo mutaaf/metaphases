@@ -1,7 +1,7 @@
 import universeRaw from "../../data/universe.json";
 import etfRaw from "../../data/etf_holdings.json";
 import type { EarningsEvent } from "../../shared/types";
-import { epsVerdict, revenueVerdict } from "../../shared/compare";
+import { epsVerdict, isReit, revenueVerdict } from "../../shared/compare";
 
 export interface Co { n: string; logo: string; mc: number; ind: string; sec: string; c: string; web: string; sp: boolean; ec?: string }
 // Non-S&P names carry Finnhub industry labels; fold them into the 11 GICS sectors.
@@ -29,6 +29,11 @@ export const curOf = (s: string): string => UNIVERSE[s]?.ec ?? "USD";
 /** Popularity proxy: market cap (millions). Untracked large reporters fall in after the universe. */
 export const popularity = (e: EarningsEvent) => (UNIVERSE[e.s]?.mc ?? 0) + (e.rE ?? 0) / 1e9;
 
+/** A REIT in the universe (its actual is often FFO). */
+export const reitOf = (s: string) => isReit(s, UNIVERSE[s]?.sec);
+/** The one EPS judgment for a calendar row (0049). */
+export const epsOf = (e: EarningsEvent) => epsVerdict({ ...e, reit: reitOf(e.s) });
+
 export type Result = "beat" | "mixed" | "miss" | null;
 /**
  * Beat = EPS and revenue both clear consensus; miss = both fall short; mixed otherwise. Revenue that
@@ -38,7 +43,7 @@ export type Result = "beat" | "mixed" | "miss" | null;
 export function resultOf(e: EarningsEvent): Result {
   if (e.eA == null) return null;
   // An EPS on another basis from its estimate (0049) isn't judged, and neither is the report.
-  const ev = epsVerdict(e).v;
+  const ev = epsOf(e).v;
   const epsBeat = ev === "beat" ? true : ev === "miss" ? false : null;
   const rv = revenueVerdict(e, curOf(e.s));
   const revBeat = rv === "beat" ? true : rv === "miss" ? false : null;
@@ -49,9 +54,9 @@ export function resultOf(e: EarningsEvent): Result {
   return "mixed";
 }
 /** EPS surprise in %, or null when there's nothing to judge, the bases differ, or both figures are near zero (0049). */
-export const surprise = (e: EarningsEvent) => epsVerdict(e).pct;
+export const surprise = (e: EarningsEvent) => epsOf(e).pct;
 /** 0049: the EPS actual isn't on the estimate's basis, so the row shows a note instead of a result. */
-export const epsBasisDiffers = (e: EarningsEvent) => epsVerdict(e).v === "not-comparable";
+export const epsBasisDiffers = (e: EarningsEvent) => epsOf(e).v === "not-comparable";
 
 export const SECTORS = Array.from(new Set(Object.values(UNIVERSE).map((c) => c.sec).filter(Boolean))).sort();
 

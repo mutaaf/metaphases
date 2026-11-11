@@ -114,3 +114,46 @@ describe("the calendar carries Nasdaq's figure for a basis mix (0049)", () => {
     expect(events[0]).toMatchObject({ eE: 3.43, pr: "n" });
   });
 });
+
+describe("self-review follow-ups (0049)", () => {
+  it("PSA: a REIT's Core FFO $4.34 against a $2.42 GAAP estimate is inside 0.5–2× but not a +80% beat", () => {
+    expect(epsVerdict({ eE: 2.4173, eA: 4.34, reit: true })).toMatchObject({ v: "not-comparable", pct: null });
+    expect(epsVerdict({ eE: 2.4173, eA: 4.34, nE: 4.26, reit: true })).toMatchObject({ v: "beat", via: "nasdaq" });
+    // A REIT whose feed figures agree (PLD) is judged as usual.
+    expect(epsVerdict({ eE: 0.8181, eA: 0.86, reit: true }).v).toBe("beat");
+    expect(resultOf(ev({ s: "PSA", eE: 2.4173, eA: 4.34 }))).toBeNull();
+  });
+  it("Nasdaq's figure on the actual's basis wins inside the band too, and is attached by applyPreReport", () => {
+    const { events } = applyPreReport([ev({ s: "PSA", eE: 2.4173, eA: 4.34 })], {}, { PSA: 4.26 });
+    expect(events[0].nE).toBe(4.26);
+    expect(surprise(events[0])).toBeCloseTo(1.88, 1);
+  });
+  it("a snapshot row on another basis still gets Nasdaq's figure", () => {
+    const { events } = applyPreReport([ev({ s: "UDR", eE: 0.15, eA: 0.65 })], { UDR: { eE: 0.14, rE: null } }, { UDR: 0.64 });
+    expect(events[0]).toMatchObject({ pr: "s", eE: 0.14, nE: 0.64 });
+  });
+  it("a near-zero estimate gets a direction but no percentage, even in band (2¢ → 4¢ is not +100%)", () => {
+    expect(epsVerdict({ eE: 0.02, eA: 0.04 })).toMatchObject({ v: "beat", pct: null });
+  });
+  it("Retrace's sector table counts only judged reports", () => {
+    const c = retraceContext([ev({ s: "CPT", eE: 0.5319, eA: 1.71 }), ev({ s: "UDR", eE: 0.14, eA: 0.65 })], "November");
+    expect(c.sectors.find((x) => x.sector === "Real Estate")).toBeUndefined();
+  });
+  it("The Read judges UDR against Nasdaq's figure when the calendar row carries it", () => {
+    const line = reportedLine("UDR", { date: "2026-11-02", session: "amc", quarter: 3, epsE: 0.14, epsA: 0.65, nE: 0.64, reit: true }, "2026-11-03", (v) => `$${v.toFixed(2)}`);
+    expect(line).toContain("against $0.64 expected");
+    expect(line).toMatch(/a beat of 2%/);
+  });
+  it("the AI ticker facts never hand the model a basis-mix estimate or surprise", async () => {
+    const { factsFor } = await import("../../worker/ai/prompts");
+    const f = factsFor("ticker", {
+      symbol: "UDR", profile: { name: "UDR" },
+      next: { date: "2027-02-10", session: "amc", quarter: 4, year: 2026, epsE: 0.14, revE: null, currency: "USD", epsBasis: "ffo" },
+      justReported: { date: "2026-11-05", session: "amc", quarter: 3, year: 2026, epsE: 0.5319, epsA: 1.71, currency: "USD" },
+      history: [{ date: "2026-08-01", period: "Jun 2026", session: "amc", epsE: 0.5319, epsA: 1.71, surprisePct: null, move: 1, basis: "differs" }],
+    }).join("\n");
+    expect(f).not.toContain("$0.14");
+    expect(f).not.toContain("against an estimate of $0.53");
+    expect(f).toMatch(/different basis/);
+  });
+});

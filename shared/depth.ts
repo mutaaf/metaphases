@@ -134,12 +134,12 @@ export function buildIcs(items: IcsItem[], stamp: Date): string {
 export interface Season { members: number; reported: number; reportedPct: number; epsBeatPct: number | null; revBeatPct: number | null; /** Reports left out of revBeatPct: revenue and estimate on different bases. */ revExcluded: number; medianSurprise: number | null; from: string; to: string; enough: boolean }
 
 /** Aggregate S&P 500 members' reported results inside [from, to] (latest report per company). */
-export function seasonScore(events: EarningsEvent[], isMember: (s: string) => boolean, memberCount: number, from: string, to: string, curOf: (s: string) => string = () => "USD"): Season {
+export function seasonScore(events: EarningsEvent[], isMember: (s: string) => boolean, memberCount: number, from: string, to: string, curOf: (s: string) => string = () => "USD", reitOf: (s: string) => boolean = () => false): Season {
   const seen = new Map<string, EarningsEvent>();
   for (const e of events) if (e.eA != null && e.d >= from && e.d <= to && isMember(e.s)) seen.set(e.s, e);
   const done = [...seen.values()];
   // Every EPS judgment goes through epsVerdict (0049): a basis mix is neither a beat nor a surprise.
-  const epsV = done.map((e) => epsVerdict(e)).filter(epsJudged);
+  const epsV = done.map((e) => epsVerdict({ ...e, reit: reitOf(e.s) })).filter(epsJudged);
   const rev = revenueBeatRate(done, curOf);
   const sur = epsV
     .map((j) => j.pct)

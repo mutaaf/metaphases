@@ -5,7 +5,7 @@ import type { Quarter, Reaction, TickerResponse } from "../../shared/types";
 import { nyDate, peersFor, placeMarkers, seasonScore } from "../../shared/depth";
 import { useCalendar, prefetchTicker } from "../lib/api";
 import { missingDays } from "../lib/partial";
-import { co, curOf, UNIVERSE } from "../lib/data";
+import { co, curOf, reitOf, UNIVERSE } from "../lib/data";
 import { addDays, fmtShort, todayISO } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { BASE, setParam } from "../lib/router";
@@ -53,7 +53,7 @@ export function PriceChart({ data }: { data: TickerResponse }) {
         <path d={g.s50} className="pc-s50" />
         <path d={g.close} className={`pc-close ${g.up ? "up" : "down"}`} />
         {g.markers.map((mk, k) => {
-          const beat = mk.r.epsA != null && mk.r.epsE != null ? mk.r.epsA >= mk.r.epsE : null;
+          const beat = mk.r.epsA != null && mk.r.epsE != null && !mk.r.basis ? mk.r.epsA >= mk.r.epsE : null;
           const cx = g.x(mk.i), cy = g.y(ch.c[mk.i]);
           return (
             <g key={mk.r.date} className={`pc-mark ${beat == null ? "" : beat ? "beat" : "miss"} ${sel === k ? "on" : ""}`} onClick={() => setSel(sel === k ? null : k)} role="button" tabIndex={0} aria-label={`Report ${mk.r.date}`} onKeyDown={(e) => e.key === "Enter" && setSel(sel === k ? null : k)}>
@@ -75,13 +75,13 @@ export function PriceChart({ data }: { data: TickerResponse }) {
 }
 
 function MarkerDetail({ r }: { r: Reaction }) {
-  const beat = r.epsA != null && r.epsE != null ? r.epsA >= r.epsE : null;
+  const beat = r.epsA != null && r.epsE != null && !r.basis ? r.epsA >= r.epsE : null;
   return (
     <div className={`pc-detail ${beat == null ? "" : beat ? "res-beat" : "res-miss"}`}>
       <Phase h={r.session} size={14} />
       <b>{r.period}</b>
       <span>reported {new Date(r.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-      <span>EPS {eps(r.epsE)} → <b>{eps(r.epsA)}</b> ({pct(r.surprisePct)})</span>
+      <span>EPS {eps(r.epsE)} → <b>{eps(r.epsA)}</b> ({r.basis ? "basis differs" : pct(r.surprisePct)})</span>
       <span>Stock {r.move == null ? "—" : <b className={r.move >= 0 ? "pos" : "neg"}>{pct(r.move)}</b>} across the report</span>
     </div>
   );
@@ -182,7 +182,7 @@ export function useSeason() {
   const today = todayISO();
   const from = addDays(today, -42);
   const { data, loading, error } = useCalendar(from, today);
-  const season = useMemo(() => (data ? seasonScore(data.events, (s) => !!UNIVERSE[s]?.sp, SP_COUNT, from, today, curOf) : null), [data]);
+  const season = useMemo(() => (data ? seasonScore(data.events, (s) => !!UNIVERSE[s]?.sp, SP_COUNT, from, today, curOf, reitOf) : null), [data]);
   // Days of the window that didn't load: the reported share is then only a floor, and the rates cover what loaded (0026).
   const missing = useMemo(() => (data ? missingDays(data.warnings ?? [], from, today).length : 0), [data]);
   return { season, missing, loading, error };

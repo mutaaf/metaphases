@@ -126,13 +126,13 @@ export const sameEpsUnit = (symbol: string, a: number | null | undefined, b: num
 
 /** 0049: a reported row whose EPS is on another basis from its estimate carries Nasdaq's figure (`nE`) when that matches the actual's basis. */
 function withNasdaqBasis(e: EarningsEvent, n: number | undefined, usd: (s: string) => boolean): EarningsEvent {
-  if (n == null || e.eA == null || e.eE == null || !usd(e.s) || epsInBand(e.eA, e.eE) || !sameEpsBasis(e.eA, n)) return e;
+  if (n == null || e.eA == null || e.eE == null || !usd(e.s) || sameEpsBasis(e.eA, e.eE) || sameEpsBasis(e.eE, n) || !sameEpsBasis(e.eA, n)) return e;
   return { ...e, nE: n };
 }
 
 /** 0049: a reported row on a different EPS basis from its estimate, which Nasdaq's day calendar may settle. */
 export const needsEpsBasis = (e: Pick<EarningsEvent, "eA" | "eE">, snapE?: number | null) =>
-  e.eA != null && (snapE ?? e.eE) != null && !epsInBand(e.eA, snapE ?? e.eE);
+  e.eA != null && (snapE ?? e.eE) != null && !sameEpsBasis(e.eA, snapE ?? e.eE);
 
 export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasdaqEps: Record<string, number> = {}, usd: (s: string) => boolean = () => true, record = true): { events: EarningsEvent[]; updates: EstSnapshot } {
   const updates: EstSnapshot = {};
@@ -195,21 +195,27 @@ export const epsInBand = (a: number | null | undefined, e: number | null | undef
   fin(a) && fin(e) && e !== 0 && Math.sign(a) === Math.sign(e) && a / e >= EPS_BAND[0] && a / e <= EPS_BAND[1];
 const judge = (a: number, e: number, pct = true): EpsJudgment => ({ v: a >= e ? "beat" : "miss", est: e, pct: pct && e !== 0 ? ((a - e) / Math.abs(e)) * 100 : null });
 
-/** One EPS judgment for every surface. `nE`: Nasdaq's pre-report consensus for the same quarter, when known. */
-export function epsVerdict(e: { eA: number | null | undefined; eE: number | null | undefined; nE?: number | null }): EpsJudgment {
+/**
+ * One EPS judgment for every surface. `nE`: Nasdaq's pre-report consensus for the same quarter, when known.
+ * `reit`: a REIT, whose actual is often FFO against a GAAP estimate even inside EPS_BAND (PSA $2.42 → $4.34
+ * Core FFO, "+80%"), so it only counts as the same basis within EPS_BASIS_MAX.
+ */
+export function epsVerdict(e: { eA: number | null | undefined; eE: number | null | undefined; nE?: number | null; reit?: boolean }): EpsJudgment {
   const { eA, eE, nE } = e;
   if (!fin(eA) || !fin(eE)) return { v: null, est: fin(eE) ? eE : null, pct: null };
-  if (epsInBand(eA, eE)) return judge(eA, eE);
-  if (Math.abs(eA) < EPS_NEAR_ZERO && Math.abs(eE) < EPS_NEAR_ZERO) return judge(eA, eE, false);
-  if (fin(nE) && sameEpsBasis(eA, nE)) return { ...judge(eA, nE), via: "nasdaq" };
+  // Nasdaq's figure on the actual's basis wins over a Finnhub estimate that's well apart from both (UDR, PSA).
+  if (fin(nE) && sameEpsBasis(eA, nE) && !sameEpsBasis(eE, nE) && !sameEpsBasis(eA, eE)) return { ...judge(eA, nE), via: "nasdaq" };
+  const tiny = Math.abs(eE) < EPS_NEAR_ZERO;
+  if (e.reit ? sameEpsBasis(eA, eE) : epsInBand(eA, eE)) return judge(eA, eE, !tiny);
+  if (tiny && Math.abs(eA) < EPS_NEAR_ZERO) return judge(eA, eE, false);
   return { v: "not-comparable", est: eE, pct: null };
 }
 
 export const epsJudged = (j: EpsJudgment) => j.v === "beat" || j.v === "miss";
 
 /** A sheet history row through epsVerdict: a basis mix loses its surprise and says so; a Nasdaq-judged row takes Nasdaq's estimate. */
-export function judgeReaction<T extends { epsE: number | null; epsA: number | null; surprisePct: number | null }>(h: T, nE?: number | null): T & { basis?: "differs" } {
-  const j = epsVerdict({ eA: h.epsA, eE: h.epsE, nE });
+export function judgeReaction<T extends { epsE: number | null; epsA: number | null; surprisePct: number | null }>(h: T, nE?: number | null, reit?: boolean): T & { basis?: "differs" } {
+  const j = epsVerdict({ eA: h.epsA, eE: h.epsE, nE, reit });
   if (j.v === "not-comparable") return { ...h, surprisePct: null, basis: "differs" as const };
   if (j.via) return { ...h, epsE: j.est, surprisePct: j.pct };
   if (j.v && j.pct == null) return { ...h, surprisePct: null };
