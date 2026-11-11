@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPreReport, epsVerdict, isReit, judgeReaction } from "../../shared/compare";
+import { applyPreReport, epsVerdict, isReit, judgeReaction, reitEstimateOffBasis } from "../../shared/compare";
 import { seasonScore } from "../../shared/depth";
 import { reportedLine, tickerShareDesc } from "../../shared/reported";
 import { resultOf, surprise } from "../../src/lib/data";
@@ -155,5 +155,26 @@ describe("self-review follow-ups (0049)", () => {
     expect(f).not.toContain("$0.14");
     expect(f).not.toContain("against an estimate of $0.53");
     expect(f).toMatch(/different basis/);
+  });
+});
+
+describe("REIT estimate evidence (0049 live check)", () => {
+  // Production 2026-11-11: UDR's Q3 row was judged against Nasdaq's $0.64 (no basis flag), and the sheet still said
+  // "Wall Street expects $0.14 a share, versus $0.67 last quarter".
+  const udr = [
+    { epsA: 0.67 },
+    { epsA: 0.1 },
+    { epsA: 0.57 },
+    { epsA: 0.08, basis: "differs" as const },
+  ];
+  it("an upcoming estimate far from the last actual is evidence", () => {
+    expect(reitEstimateOffBasis(udr, 0.1431)).toBe(true);
+  });
+  it("a REIT whose feed figures agree keeps its estimate (PLD-shaped)", () => {
+    expect(reitEstimateOffBasis([{ epsA: 0.86 }, { epsA: 0.82 }], 0.84)).toBe(false);
+  });
+  it("no estimate or no actual: no evidence from the comparison", () => {
+    expect(reitEstimateOffBasis([{ epsA: 0.86 }], null)).toBe(false);
+    expect(reitEstimateOffBasis([], 0.5)).toBe(false);
   });
 });

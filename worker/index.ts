@@ -20,7 +20,7 @@ import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { reactionMove, sessionHabit } from "../shared/reaction";
-import { applyPreReport, isReit, judgeReaction, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
+import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
@@ -420,11 +420,11 @@ function slimMetric(raw: any) {
 /**
  * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
  * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
- * (`tk:stale:v4:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
+ * (`tk:stale:v5:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
  */
 async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
-  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v5:${symbol}`)}`);
-  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v4:${symbol}`)}`);
+  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v6:${symbol}`)}`);
+  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v5:${symbol}`)}`);
   const hit = await caches.default.match(key);
   if (hit) { const data = (await hit.json()) as TickerResponse; return { data, ttl: sheetTtl(data) }; }
   const built = await buildTicker(symbol, env, ctx);
@@ -643,7 +643,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const name = profile?.name || U[symbol]?.n || symbol;
   // 0049: a REIT whose recent results were on another basis from the feed's estimate (FFO vs net income): its
   // upcoming estimate isn't quoted as the bar. Only on evidence: plenty of REITs' feed figures match (PLD, CCI).
-  const ffo = reit && history.slice(0, 2).some((h) => h.basis);
+  const ffo = reit && reitEstimateOffBasis(history, duePending ? duePending.eE : pending ? pending.eE : upNext?.epsEstimate);
   const read: string[] = [];
   // A projected date on a closed-market day isn't a date yet (0045): say so instead of stating it.
   const closed = upNext && !upNext.source && !pending ? closedDay(upNext.date) : null;
