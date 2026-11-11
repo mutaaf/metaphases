@@ -1,12 +1,12 @@
 ---
 id: 0057
 title: Measure a before-the-open report's move on its own day (Walmart's "typical move ±1.0%" is really ±6.1%)
-status: in-progress
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-10
-pr:
+pr: 90
 by: critic
 ---
 

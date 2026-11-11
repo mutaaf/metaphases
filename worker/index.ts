@@ -557,6 +557,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     ? cal.filter((e) => e.date > today && !(e.quarter === nextE.quarter && e.year === nextE.year)).sort((a, b) => a.date.localeCompare(b.date))[0]
     : duePending ? undefined : nextE;
 
+  // 0057: a dated row's own session, else the habit. A company-dated row (override) without a session is unknown:
+  // never filled from a feed's guess.
+  const ownSession = (row: { hour?: string; source?: unknown }): Session => (row.hour as Session) || (row.source ? "" : habit);
   // Past prints: Nasdaq gives report dates; Finnhub gives estimate/actual. Join on order (both newest-first).
   // Finnhub figures only fill gaps when they're in dollars too.
   const history: Reaction[] = [];
@@ -578,7 +581,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       : lastE && lastE.date === date && lastE.epsEstimate != null ? { estimate: lastE.epsEstimate, actual: lastE.epsActual }
       : surprises?.find((x) => periodKey(x.period) != null && periodKey(x.period) === periodKey(r.fiscalQtrEnd));
     // That date's own session when the calendar has it, else the habit; unknown stays unknown (move "—").
-    const session: Session = lastE && lastE.date === date && lastE.hour ? (lastE.hour as Session) : habit;
+    const session: Session = lastE && lastE.date === date ? ownSession(lastE) : habit;
     const move = reactionMove(session, date, closeOn);
     const pick = pickConsensus({ estimate: r.consensusForecast, actual: r.eps, surprisePct: r.percentageSurprise }, f, lastE && lastE.date === date ? lastSnap : null);
     history.push({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move });
@@ -595,7 +598,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   }
   // A print reported in the last ~40 days might be on Finnhub's calendar before Nasdaq's table catches up.
   if (usd && lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date)) {
-    const session: Session = (lastE.hour as Session) || habit;
+    const session: Session = ownSession(lastE);
     const est = lastSnap ?? lastE.epsEstimate;
     history.unshift({ date: lastE.date, session, period: `Q${lastE.quarter} ${lastE.year}`, epsE: est, epsA: lastE.epsActual, surprisePct: est ? ((lastE.epsActual - est) / Math.abs(est)) * 100 : null, move: reactionMove(session, lastE.date, closeOn) });
   }
@@ -603,10 +606,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // 0039: the report that's out heads the history until Nasdaq lists it. Non-dollar figures stay off the
   // dollar table ("—"); the move waits for a settled post-report close.
   if (reported && !history.some((h) => Math.abs(daysApart(h.date, reported.date)) <= 3)) {
-    const rs: Session = (reported.hour as Session) || habit;
+    // A company-dated report with no stated session stays unknown, whatever the cached feed row says (LESSONS 2026-11-10).
+    const rs: Session = nextE?.source && !nextE.hour && reported.date === nextE.date ? "" : ownSession(reported);
     const settled = tradingDaysSince(reported.date, today) >= (rs === "bmo" || rs === "dmh" ? 1 : 2);
     history.unshift({
-      date: reported.date, session: reported.hour as Session, period: `Q${reported.quarter} ${reported.year}`,
+      date: reported.date, session: rs, period: `Q${reported.quarter} ${reported.year}`,
       epsE: usd ? reported.eE : null, epsA: usd ? reported.eA : null, surprisePct: usd ? surprisePct(reported.eE, reported.eA) : null,
       move: settled ? reactionMove(rs, reported.date, closeOn) : null,
     });
