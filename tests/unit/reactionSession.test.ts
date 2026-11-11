@@ -111,3 +111,41 @@ describe("/api/ticker past moves (WMT shape: Finnhub session blank)", () => {
     expect(r.history[0].move).toBeCloseTo(-0.943, 2);
   });
 });
+
+// Critic re-check 2026-11-11: WMT's habit stayed blank because the 0015 window hadn't reached Nov 19 yet.
+// The upcoming date's Nasdaq day is read on demand (one call, shared `nq:x:v1:<day>` cache), not left to the window.
+describe("/api/ticker habit from Nasdaq's day for the next report, read on demand", () => {
+  const dayCalls = () => (fetch as any).mock.calls.filter(([u]: [string]) => u.includes("/api/calendar/earnings?date=")).map(([u]: [string]) => u);
+  const stub = (day: (date: string) => Response) => vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+    const url = new URL(u);
+    if (url.hostname === "api.nasdaq.com" && url.pathname === "/api/calendar/earnings") return day(url.searchParams.get("date") ?? "");
+    if (url.hostname === "api.nasdaq.com") return new Response(JSON.stringify({ data: { earningsSurpriseTable: { rows: nasdaqRows } } }));
+    if (url.hostname.endsWith("finance.yahoo.com")) return new Response(JSON.stringify(chart()));
+    if (url.pathname.endsWith("/calendar/earnings")) return new Response(JSON.stringify({ earningsCalendar: [next] }));
+    return new Response("{}", { status: 404 });
+  }));
+  const dropSheets = () => { for (const k of [...cache.store.keys()]) if (decodeURIComponent(k).includes("/tk:")) cache.store.delete(k); };
+
+  it("nothing cached, Nasdaq lists it before the open: the move is the report day's (+6%), from one shared call", async () => {
+    stub((date) => new Response(JSON.stringify({ data: { rows: date === "2026-11-19" ? [{ symbol: SYM, time: "time-pre-market", marketCap: "$600,000,000,000" }] : [] } })));
+    const r = await sheet();
+    expect(r.history[0]).toMatchObject({ date: "2026-08-20", session: "bmo" });
+    expect(r.history[0].move).toBeCloseTo(6, 4);
+    expect(r.expectedMove).toBeCloseTo(6, 4);
+    expect(dayCalls()).toEqual(["https://api.nasdaq.com/api/calendar/earnings?date=2026-11-19"]);
+    expect(JSON.parse(cache.store.get(CAL("nq:x:v1:2026-11-19"))!)).toEqual({ [SYM]: "bmo" });
+    dropSheets();
+    await sheet();
+    expect(dayCalls()).toHaveLength(1); // the second build reads the cached day
+  });
+
+  it("Nasdaq's day fails: the sheet still builds with move '—' (never the after-close guess), and the failure is remembered", async () => {
+    stub(() => new Response("busy", { status: 503 }));
+    const r = await sheet();
+    expect(r.history[0]).toMatchObject({ date: "2026-08-20", session: "", move: null });
+    expect(r.expectedMove).toBeNull();
+    dropSheets();
+    await sheet();
+    expect(dayCalls()).toHaveLength(1); // no retry for 15 minutes
+  });
+});

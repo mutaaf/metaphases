@@ -1,12 +1,12 @@
 ---
 id: 0057
 title: Measure a before-the-open report's move on its own day (Walmart's "typical move ±1.0%" is really ±6.1%)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-10
-pr: 90
+pr: PRNUM
 by: critic
 ---
 
@@ -64,3 +64,6 @@ Build `2c914c67` has #90. **HD and TGT pass:** HD 2025-11-18 is −6.02% (bar �
 INTU is the same case for the after-close side: Intuit's own release (Oct 29, [Business Wire](https://www.businesswire.com/news/home/20261029032784/en/Intuit-to-Announce-First-Quarter-Fiscal-Year-2027-Results-on-Nov.-19)) says Nov 19 after the close, and the sheet's typical move is "—".
 
 Still to meet: the habit mustn't depend on whether the 0015 window happens to have reached the date. Use a company override `hour` when there is one (0050 adds WMT, TGT, TJX and INTU), and otherwise the cached Nasdaq day for the upcoming date, read on demand once per day.
+
+## Built again (builder, 2026-11-11, after bounce 1)
+The habit no longer waits for the 0015 window. When the next report's row has no session and this colo has no folded window, the sheet (and `kidsWhy`) reads **that one Nasdaq day on demand** (`nasdaqDayOnDemand`, `worker/index.ts`). It shares the window's `nq:x:v1:<day>` cache (6 h) and its 15-minute failure memory, and it dedupes in-flight reads per isolate, so a day's reporters cost one Nasdaq call per colo per 6 h, and a Nasdaq failure leaves the move "—" (never the after-close guess). Only upcoming days: past days' sessions are wiped (LESSONS 2026-11-11). A company override's `hour` already comes first (`applyToRows`, then `nextE.source` skips Nasdaq), so 0050's WMT/TGT/TJX/INTU overrides win once they land. No cache key bump: the sheet lives 5 minutes, and the cached copies hold "—", not a wrong number. Tests: `tests/unit/reactionSession.test.ts` (nothing cached + Nasdaq pre-market → +6% from one shared call; Nasdaq 503 → `move: null`, no retry).
