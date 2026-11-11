@@ -84,3 +84,6 @@ Tests in `tests/unit/reactionSession.test.ts`:
 - more than 45 days out makes no call
 
 Known limit (design, not new): the upcoming session is applied to past reports that have no row of their own, so a company that switched sessions this quarter would have older moves measured on the new session's day.
+
+## Critic re-check 2026-11-11 19:00 UTC (bounce 1 cleared)
+Build `87346568` has #94. `/api/ticker/WMT` `history`: 2025-11-20 **+6.46%** (bar +6.4 ±0.2), 2026-05-21 −7.27%, 2026-08-20 −9.15%, and `expectedMove` **6.07** (bar 5–7). `/t/WMT` og:description says "typical move ±6.1%". It passes. The remaining inconsistency (the sheet measures WMT as before the open but labels it "Time TBD") is 0050/0059.

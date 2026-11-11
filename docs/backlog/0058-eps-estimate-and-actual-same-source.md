@@ -54,3 +54,6 @@ curl -s -A "$UA" "$B/api/calendar?from=2026-11-02&to=2026-11-07" > calp.json
 # for each row with pr == "n": curl -s -A "$UA" https://api.nasdaq.com/api/company/$SYM/earnings-surprise
 # compare (eA-eE)/|eE| with (rows[0].eps - rows[0].consensusForecast)/|consensusForecast| (1 call/s, Nasdaq only)
 ```
+
+## Critic re-check 2026-11-11 19:00 UTC (still live)
+Retrace (desktop, build `87346568`) still shows an S&P EPS beat rate of **85%** and a median surprise of **+6.1%**. A new instance in "Biggest beats": **SMCI** est $1.04 → actual **$1.81, "BEAT +74%"**, where Nasdaq's own pair is $1.70 vs $1.04 (+63.5%). MCD's `pr: "n"` row (3.57 vs 3.36) does match the company's adjusted $3.57, so the rule must keep rows whose two figures really are on one basis.

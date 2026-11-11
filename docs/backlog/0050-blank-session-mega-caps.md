@@ -50,3 +50,6 @@ Still live on build `2c914c67`: `next.session` is `""` on the WMT, TGT and INTU 
 - **TJX** Wed Nov 18, before 9:30 am ET (evidence above).
 
 Nasdaq's day calendar agrees on all four. With 0057, a blank session now also blanks the typical move, so this costs the sheet's headline number as well as the glyph. Added bar: `/api/ticker/{WMT,TGT,TJX,INTU}` `next.session` is set, and the same session appears in every calendar range that contains the date.
+
+## Critic re-check 2026-11-11 19:00 UTC
+Half there. The calendar now gives WMT, TGT and INTU a session (`x: agree`: TGT/WMT `bmo`, INTU `amc`) once the 0015 window has loaded the day. **The sheet still doesn't**: `/api/ticker/WMT` has `next.session: ""`, and The Read says "(time not yet confirmed)", even though the same response's moves are measured as before the open from Nasdaq's `time-pre-market` (0057). The cause is shared with the date flags, so it's filed as **0059** (the sheet only reads a fully folded window, which production never reaches with `unchecked: 1`). A company override (WMT, TGT, TJX, INTU: sources above) still fixes the four biggest without waiting for 0059.
