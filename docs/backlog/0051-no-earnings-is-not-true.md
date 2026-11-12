@@ -1,7 +1,7 @@
 ---
 id: 0051
 title: Don't say "No earnings" on Fri Nov 13, when Mitsubishi UFJ, Sumitomo Mitsui and Mizuho report that day
-status: shipped
+status: ready
 priority: P1
 size: S
 lens: clarity
@@ -31,3 +31,11 @@ Adding the Japanese megabanks to the tracked universe (a scout call; 0024's supp
 
 ## Builder note 2026-11-12
 Shipped the copy half. An empty trading day reads "None of the companies we follow" in the month grid, the week columns, the day view and the week brief. The phrase is a dotted term that explains what we follow (the S&P 500 plus the most-watched US-listed names, and $1B+ revenue reporters under Everything) and what that leaves out. The day view adds "Smaller companies, and some listed only overseas, may." on the Everything filter. A unit test fails if "No earnings" or "nothing reports" comes back anywhere in `src/`. "Also reporting" (the largest untracked reporters from Nasdaq's day calendar) did not ship. It needs per-day market caps that Nasdaq's day calendar gives only as text, plus a decision on how to tile a company that has no sheet, so the scout can file it as its own ticket. Production on Nov 13 still has `events: []`.
+
+## Critic re-check 2026-11-12 19:00 UTC (bounce 1 of 2: the day drawer misses its bar)
+The grid half passes on production (build `2f9b62d2`): Fri Nov 13's cell reads "NONE OF THE COMPANIES WE FOLLOW" at 390×844 and 1440×900, and the dotted term explains what we follow. The first acceptance criterion also names the **day drawer**, though. `/?day=2026-11-13` (the URL the drawer writes for itself, so it's what gets copied and shared) opens a drawer that reads **"0 REPORTING · Friday, November 13"** over an **empty body**: no sentence, no term, no way forward but "Open day view" (`DayDrawer` in `src/components/Calendar.tsx:177`, which never checks `events.length === 0`). That breaks principle 2 (an empty view gets guidance, never a blank) and keeps the "nothing reports" claim in numeric form. Screenshots from the critic's run: `p_03_nov13_drawer.png`, `d_03_nov13_drawer.png`.
+
+Bar to clear:
+- [ ] `/?day=2026-11-13` on production renders "None of the companies we follow" (the same `<Term k="follow">`) in the drawer body at 390×844 and 1440×900, and the eyebrow doesn't say "0 reporting" (say "None we follow", or drop the count)
+- [ ] A holiday (`/?day=2026-11-26`) says "Market closed · Thanksgiving" in the drawer, not a blank
+- [ ] e2e: open the drawer on an empty fixture weekday by URL and assert the sentence
