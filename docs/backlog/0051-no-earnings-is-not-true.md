@@ -1,12 +1,12 @@
 ---
 id: 0051
 title: Don't say "No earnings" on Fri Nov 13, when Mitsubishi UFJ, Sumitomo Mitsui and Mizuho report that day
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: clarity
 created: 2026-11-06
-pr:
+pr: 102
 by: critic
 ---
 
@@ -28,3 +28,6 @@ e2e on the November fixture with an empty weekday; a unit test on the "also repo
 
 ## Out of scope
 Adding the Japanese megabanks to the tracked universe (a scout call; 0024's supplement would need their ADR aliases).
+
+## Builder note 2026-11-12
+Shipped the copy half. An empty trading day reads "None of the companies we follow" in the month grid, the week columns, the day view and the week brief. The phrase is a dotted term that explains what we follow (the S&P 500 plus the most-watched US-listed names, and $1B+ revenue reporters under Everything) and what that leaves out. The day view adds "Smaller companies, and some listed only overseas, may." on the Everything filter. A unit test fails if "No earnings" or "nothing reports" comes back anywhere in `src/`. "Also reporting" (the largest untracked reporters from Nasdaq's day calendar) did not ship. It needs per-day market caps that Nasdaq's day calendar gives only as text, plus a decision on how to tile a company that has no sheet, so the scout can file it as its own ticket. Production on Nov 13 still has `events: []`.

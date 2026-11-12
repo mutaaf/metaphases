@@ -72,8 +72,25 @@ test("calendar days that didn't load say so instead of \"No earnings\"", async (
     await expect(cell.locator(".unknown-tag")).toContainText("Didn't load");
     await expect(cell).not.toContainText("No earnings");
   }
-  // A day that did load and is empty still says so plainly.
-  await expect(page.locator(".cell", { hasText: /Nov\s*13/i }).first()).toContainText("No earnings");
+  // A day that did load and is empty says only that none of ours report (0051).
+  const empty = page.locator(".cell", { hasText: /Nov\s*13/i }).first();
+  await expect(empty).toContainText("None of the companies we follow");
+  await expect(empty).not.toContainText("No earnings");
+});
+
+test("an empty trading day never claims nobody reports, and explains what we follow (0051)", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("./?d=2026-11-13");
+  const empty = page.locator(".cell", { hasText: /Nov\s*13/i }).first();
+  await expect(empty.locator(".empty-tag")).toHaveText(/None of the companies we follow/i);
+  await empty.getByRole("button", { name: /None of the companies we follow/i }).click();
+  await expect(empty.locator(".term-pop")).toContainText("S&P 500");
+  // The tag fits its cell: no horizontal scroll at any width.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "day view" }).click();
+  await expect(page.locator(".dayview")).toContainText("None of the companies we follow report on Friday");
+  await expect(page.locator(".dayview")).not.toContainText("No earnings");
 });
 
 test("week and day views also say a failed day didn't load, and the notice counts days, not warnings", async ({ page }) => {
@@ -108,4 +125,26 @@ test("a pending overseas check is not a failure: no 'busy' notice and no retries
   await expect(page.getByText(/still being checked/)).toBeVisible();
   expect(urls.filter((u) => u.includes("_r=")).length).toBe(0);
   expect(urls.length).toBeLessThanOrEqual(13);
+});
+
+test("a week still loading is unknown, never 'none of ours' from the previous range (0051)", async ({ page }) => {
+  await page.addInitScript(() => { try { const k = "metaphases:v1"; const cur = JSON.parse(localStorage.getItem(k) || "{}"); localStorage.setItem(k, JSON.stringify({ ...cur, prefs: { ...(cur.prefs || {}), view: "week" } })); } catch {} });
+  await page.goto("./?d=2026-11-02");
+  await expect(page.locator(".wcol", { hasText: /Nov\s*06/i })).toBeVisible();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route("**/api/calendar**", async (r) => { await gate; await r.fallback(); });
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.waitForTimeout(400);
+  await expect(page.locator(".empty-none")).toHaveCount(0);
+  release();
+  await expect(page.locator(".wcol", { hasText: /Nov\s*13/i }).locator(".empty-none")).toContainText("None of the companies we follow");
+});
+
+test("with a narrow filter an empty day says so, not that none of ours report (0051)", async ({ page }) => {
+  await page.addInitScript(() => { try { const k = "metaphases:v1"; const cur = JSON.parse(localStorage.getItem(k) || "{}"); localStorage.setItem(k, JSON.stringify({ ...cur, prefs: { ...(cur.prefs || {}), filter: "watch" } })); } catch {} });
+  await page.goto("./?d=2026-11-13");
+  const cell = page.locator(".cell", { hasText: /Nov\s*13/i }).first();
+  await expect(cell.locator(".empty-tag")).toHaveText(/None with these filters/i);
+  await expect(cell).not.toContainText("companies we follow");
 });

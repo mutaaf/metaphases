@@ -68,7 +68,7 @@ export function WeekBrief({ week, current, cal, calLoading, calError, macro, mac
             ) : allMissing ? (
               <p className="muted small">We couldn't load this week's earnings from our data provider. Try again in a few minutes.</p>
             ) : quiet ? (
-              <p className="brief-quiet">No earnings on the calendar this week{b.holidays.length ? ", and markets take a day off" : ""}. A good week to read up on the companies you follow.</p>
+              <p className="brief-quiet">None of the companies we follow report this week{b.holidays.length ? ", and markets take a day off" : ""}. A good week to read up on them.</p>
             ) : b.top.length === 0 ? (
               <p className="muted small">{b.total} {b.total === 1 ? "company reports" : "companies report"}, none of them on our tracked list.</p>
             ) : (
