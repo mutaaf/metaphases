@@ -254,10 +254,12 @@ describe("/api/ticker cross-check (0015)", () => {
     expect(t.next).toMatchObject({ date: "2026-11-09", session: "bmo", status: "results-pending" });
   });
 
-  it("without a cached window, the sheet is unchanged and Nasdaq's calendar isn't called", async () => {
+  it("without a cached window, the sheet is unchanged and Nasdaq's calendar is read only for the report's own day", async () => {
     const t = await call("/api/ticker/QQXB");
     expect(t.next).toMatchObject({ date: "2026-11-18", session: "bmo" });
     expect(t.next.nasdaq).toBeUndefined();
-    expect(nqCalls).toEqual([]);
+    // 0060: the next report's day is read on demand even when Finnhub gives a session (one shared, cached call), so a
+    // session the two calendars disagree on is caught without waiting for the window; no other day is fetched.
+    expect(nqCalls).toEqual(["2026-11-18"]);
   });
 });

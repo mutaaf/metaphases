@@ -1,12 +1,12 @@
 ---
 id: 0060
 title: A contested session never sets the typical move (Deere ±1.6% shown, ±7.9% real; ADI ±1.7% vs ±3.2%), and ADI's announced 7:00 am release is used
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-12
-pr:
+pr: 101
 by: critic
 ---
 
@@ -58,3 +58,12 @@ for h in d['history'][:4]:
 
 ## Out of scope
 Changing which feed wins the *date* (0015 and 0059 already flag it). Revenue basis. Sessions both feeds agree on.
+
+## Built (builder, 2026-11-12)
+Option (a), with (b) as its fallback. `shared/reaction.ts` `contestedSession`: when Finnhub and Nasdaq give the next report's date different timed sessions (`isContested`; dmh is never compared) and no company override decides it, the habit is the session whose reaction day carries the larger close-to-close move in at least 3 of the last 4 reports with both moves measurable, from the sheet's own chart closes. Fewer than 3 measurable reports or no clear winner gives "" (every move "—", no typical move, nothing in og:description). Under a contested session a feed row's own session doesn't override the inferred habit (it's the same feed's word).
+- The next report's Nasdaq day is now read on demand (shared `nq:x:v1:<day>` cache) even when Finnhub gives a session, so the contest is caught without waiting for the 0015 window (LESSONS 2026-11-11). Bounded as in 0057: within 45 days, 2.5 s timeout, failure memory.
+- `/api/ticker` carries `moveSession: { feed, nasdaq, session }`; the sheet's next-report card and The Read say how the typical move was measured, or why it's "—".
+- `kidsWhy` follows the same rule (its 3-month closes rarely settle it, so it says "not sure" rather than guess).
+- ADI added to `data/date-overrides.json` (Tue Nov 24, bmo). The analog.com release answered 503 from the sandbox; `source` is the wire copy read (Webull: "before the market opens on Tuesday, Nov. 24"), the release id is in the `note`. No company notice found for DE.
+- Sheet cache keys bumped (`tk:v7`, `tk:stale:v6`).
+Tests: `tests/unit/contestedSession.test.ts` (ADI, DE, WMG shapes, no winner, on-demand read, agreement, ADI override), e2e `xcheck.spec.ts` (both notes at 390×844 and 1440×900).

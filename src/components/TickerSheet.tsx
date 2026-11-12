@@ -213,6 +213,9 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                   <div><dt><Term k="revenue">Revenue est</Term></dt><dd>{moneyIn(data.next.revE, estCur)}</dd></div>
                   <div><dt><Term k="expectedmove">Typical move</Term></dt><dd>{data.expectedMove != null ? `±${data.expectedMove.toFixed(1)}%` : "—"}</dd></div>
                 </dl>
+                {data.moveSession && data.history.length > 0 && <p className="nc-cur muted small" data-testid="nc-movesession">{data.moveSession.session
+                  ? `Because the two calendars disagree on the time, the typical move is measured on the day this stock has usually moved after a report: ${data.moveSession.session === "bmo" ? "the report day itself (as for a report before the open)" : "the day after (as for a report after the close)"}.`
+                  : "Because the two calendars disagree on the time, and the stock's past moves don't settle it, we can't tell which day the market reacted, so past moves show “—”."}</p>}
                 {data.next.epsBasis && <p className="nc-cur muted small" data-testid="nc-ffo">This <Term k="reit">REIT</Term>'s recent results came in on a different measure from the feed's estimate (usually funds from operations, FFO, against net income a share), so we don't show the estimate as the bar.</p>}
                 {!isUsd(estCur) && <p className="nc-cur muted small">Estimates are in <Term k="reportingcurrency">{currencyName(estCur)}</Term>, not US dollars, and so are the quarterly figures from its filings. The reaction table below is in US dollars.</p>}
               </section>

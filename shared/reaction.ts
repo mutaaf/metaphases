@@ -22,3 +22,28 @@ export function sessionHabit(nextHour: string | undefined, nasdaqNext: string | 
   const ok = (h: string | undefined): h is Session => h === "bmo" || h === "amc" || h === "dmh";
   return ok(nextHour) ? nextHour : ok(nasdaqNext) ? nasdaqNext : ok(lastHour) ? lastHour : "";
 }
+
+/** True when Finnhub and Nasdaq both give a session for the same report date and they differ (dmh is never compared). */
+export function isContested(feed: string | undefined, nasdaq: string | undefined): feed is "bmo" | "amc" {
+  const timed = (h: string | undefined) => h === "bmo" || h === "amc";
+  return timed(feed) && timed(nasdaq) && feed !== nasdaq;
+}
+
+/**
+ * 0060: when the two calendars disagree on the session, neither feed wins blindly (Nasdaq was right for ADI, DE
+ * and ROAD, Finnhub for WMG). The price series says which day the market reacted on: the session whose reaction
+ * day carries the larger close-to-close move in at least 3 of the last 4 reports. Fewer than 3 measurable
+ * reports, or no clear winner, gives "" (unknown: every move reads "—", never one feed's guess).
+ */
+export function contestedSession(a: Session, b: Session, dates: string[], closeOn: (day: string, offset: number) => number | null): Session {
+  let winsA = 0, winsB = 0, measured = 0;
+  for (const d of dates.slice(0, 4)) {
+    const ma = reactionMove(a, d, closeOn), mb = reactionMove(b, d, closeOn);
+    if (ma == null || mb == null) continue;
+    measured++;
+    if (Math.abs(ma) > Math.abs(mb)) winsA++;
+    else if (Math.abs(mb) > Math.abs(ma)) winsB++;
+  }
+  if (measured < 3) return "";
+  return winsA >= 3 ? a : winsB >= 3 ? b : "";
+}
