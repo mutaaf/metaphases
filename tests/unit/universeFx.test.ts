@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const scripts = fileURLToPath(new URL("../../scripts/", import.meta.url));
-const py = (code: string) => JSON.parse(execFileSync("python3", ["-I", "-c", `import sys, json; sys.path.insert(0, ${JSON.stringify(scripts)}); from universe_fx import *\n${code}`], { encoding: "utf8" }).trim().split("\n").pop()!);
+const py = (code: string) => JSON.parse(execFileSync("python3", ["-I", "-B", "-c", `import sys, json; sys.path.insert(0, ${JSON.stringify(scripts)}); from universe_fx import *\n${code}`], { encoding: "utf8" }).trim().split("\n").pop()!);
 
 describe("local_cap_currency (scripts/universe_fx.py)", () => {
   const cases: [string, string, string, string][] = [
