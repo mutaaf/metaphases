@@ -1,12 +1,12 @@
 ---
 id: 0042
 title: Rank and label companies by market value in dollars (Toyota's ¥36T cap outranks Apple and reads "$36T")
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-04
-pr:
+pr: 99
 by: builder
 ---
 
@@ -20,9 +20,9 @@ Still live, and it heads the week. At 1440×900 the brief's **Biggest reporters*
 Give the universe a dollar market value. Options in order: (1) `build_universe.py` converts `mc` with an FX rate it can fetch on an allowed host (Yahoo `JPY=X`-style chart closes), recording `mcCur` and the rate's date; (2) failing that, keep local `mc` but add `usdMc: null` for non-USD caps and rank/label only by `usdMc`, showing "—" for the value. Never print a non-USD cap with "$".
 
 ## Acceptance criteria
-- [ ] Unit test: no universe entry whose cap isn't USD is shown with "$" or ranked by its local number
-- [ ] Week of Nov 2: brief top reporter is a US mega cap, not TM; mega filter doesn't include SQM
-- [ ] Works at 390×844 touch and 1440×900
+- [x] Unit test: no universe entry whose cap isn't USD is shown with "$" or ranked by its local number
+- [x] Week of Nov 2: brief top reporter is a US mega cap, not TM; mega filter doesn't include SQM
+- [x] Works at 390×844 touch and 1440×900
 
 ## Test plan
 Unit on the universe data + `buildBrief` with a TM row in the week; e2e brief head on the November fixture with TM on Nov 5.

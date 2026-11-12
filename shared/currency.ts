@@ -34,7 +34,7 @@ const suffix = (c: Currency | null | undefined) => (c === "" ? " (local currency
 export interface CurrencyInputs {
   /** Finnhub profile2 `estimateCurrency` ("Currency used in Estimates data"). */
   estimateCurrency?: unknown;
-  /** Finnhub profile2 `currency`. Not trusted on its own (SQM's is CLP while it files in USD); it only names the currency once the numbers prove a non-USD basis. */
+  /** Finnhub profile2 `currency`. Not trusted on its own (it can name the reporting currency, or USD for a cap in pesos or pounds: SQM, SHEL); it only names the currency once the numbers prove a non-USD basis. */
   currency?: unknown;
   /** Seeded/refreshed `ec` from data/universe.json. */
   known?: unknown;

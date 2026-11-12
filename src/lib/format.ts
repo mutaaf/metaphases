@@ -10,5 +10,6 @@ export const money = (v: number | null | undefined) => {
 };
 export const eps = (v: number | null | undefined) => (v == null ? "—" : `${v < 0 ? "-" : ""}$${Math.abs(v).toFixed(2)}`);
 export const pct = (v: number | null | undefined, d = 1, sign = true) => (v == null ? "—" : `${sign && v > 0 ? "+" : ""}${v.toFixed(d)}%`);
-/** Market cap from Finnhub is in millions. */
-export const mcap = (m: number) => money(m * 1e6);
+/** Market value in USD millions (data/universe.json `mc`, converted from the listing's currency, 0042).
+ *  0 means unknown (no FX rate), shown as a dash rather than "$0". */
+export const mcap = (m: number | null | undefined) => (m && m > 0 ? money(m * 1e6) : "—");
