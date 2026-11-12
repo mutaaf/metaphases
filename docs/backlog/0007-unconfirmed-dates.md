@@ -1,7 +1,7 @@
 ---
 id: 0007
 title: Mark report dates the company hasn't confirmed (AXON shows Nov 2, company says Nov 5)
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: data-quality

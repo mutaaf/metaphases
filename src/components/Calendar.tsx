@@ -6,6 +6,7 @@ import { missingDays } from "../lib/partial";
 import { co, curOf, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { noResultYet } from "../../shared/pending";
+import { eventProjected } from "../../shared/projected";
 import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
@@ -64,16 +65,17 @@ function TileButton({ e, size = 44 }: { e: EarningsEvent; size?: number }) {
   const { watch } = useStore();
   const r = resultOf(e);
   const starred = watch.some((w) => w.s === e.s);
+  const proj = !r && eventProjected(e, todayISO());
   return (
     <button
-      className={`tbtn ${r ? `res-${r}` : ""}`}
+      className={`tbtn ${r ? `res-${r}` : ""}${proj ? " tbtn-projected" : ""}`}
       onClick={(ev) => { ev.stopPropagation(); setParam("t", e.s); }}
       onMouseEnter={() => prefetchTicker(e.s)}
-      title={`${nameOf(e.s)} (${e.s}) · ${PHASE_LABEL[e.h]}${e.eE != null ? ` · est. ${epsIn(e.eE, curOf(e.s))}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}`}
-      aria-label={`${nameOf(e.s)}, ${PHASE_LABEL[e.h].toLowerCase()}, ${r ? r : "upcoming"}${starred ? ", on your watchlist" : ""}`}
+      title={`${nameOf(e.s)} (${e.s}) · ${PHASE_LABEL[e.h]}${e.eE != null ? ` · est. ${epsIn(e.eE, curOf(e.s))}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}${proj ? " · date not confirmed" : ""}`}
+      aria-label={`${nameOf(e.s)}, ${PHASE_LABEL[e.h].toLowerCase()}, ${r ? r : proj ? "date not confirmed" : "upcoming"}${starred ? ", on your watchlist" : ""}`}
     >
       <Tile s={e.s} size={size} />
-      <span className="tbtn-phase"><Phase h={e.h} size={11} /></span>
+      <span className="tbtn-phase"><Phase h={e.h} size={11} projected={proj} /></span>
       {starred && <span className="tbtn-star" aria-label="On your watchlist" />}
     </button>
   );
@@ -141,6 +143,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         <b>{e.s}</b>
         <span className="muted">{nameOf(e.s)}</span>
         {e.x === "differs" && e.xd && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">Nasdaq: {e.xd === e.d ? (e.xh ? PHASE_LABEL[e.xh].toLowerCase() : "another time") : `${fmtDay(e.xd)}${e.xh ? `, ${PHASE_LABEL[e.xh].toLowerCase()}` : ""}`}</span>}
+        {e.x !== "differs" && e.eA == null && eventProjected(e, todayISO()) && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}
       {(() => { const j = e.eA != null ? epsOf(e) : null; return j?.via ? <span className="erow-num" title="The data feed's estimate is on another basis from the actual (e.g. net income vs FFO), so this is Nasdaq's forecast on the actual's basis."><span className="eyebrow">Nasdaq est</span>{epsIn(j.est, cur)}</span> : <span className="erow-num"><span className="eyebrow">EPS est</span>{epsIn(e.eE, cur)}</span>; })()}
@@ -181,6 +184,11 @@ export function DayDrawer({ day, events, macro, onClose }: { day: string; events
         {(() => {
           const n = events.filter((e) => e.x === "differs").length;
           return n > 0 && <Notice><Term k="xcheck">{n === 1 ? "One date here isn't confirmed" : `${n} dates here aren't confirmed`}</Term>: Nasdaq's calendar lists {n === 1 ? "it" : "them"} on another day or time, marked “Nasdaq” below. Our feed and Nasdaq disagree, so check the company's own announcement.</Notice>;
+        })()}
+        {(() => {
+          // 0007: dates the company hasn't announced (Nasdaq disagreements have their own note above).
+          const n = events.filter((e) => e.x !== "differs" && e.eA == null && eventProjected(e, todayISO())).length;
+          return n > 0 && <Notice><Term k="unconfirmed">{n === 1 ? "One date here is projected" : n === events.length ? "These dates are projected" : `${n} dates here are projected`}</Term>: {n === 1 ? "the company hasn't" : "the companies haven't"} announced {n === 1 ? "it" : "them"} yet, so {n === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>;
         })()}
         {groupBySession(events).map((g) => (
           <section key={g.h} className="sess">

@@ -15,15 +15,16 @@ export function Mark({ size = 22 }: { size?: number }) {
 }
 
 /** Report timing as a moon phase: waxing = before open, full = during hours, waning = after close. */
-export function Phase({ h, size = 12 }: { h: Session; size?: number }) {
+/** `projected` (0007): the feed's guess, not the company's date: a dashed rim, the phase drawn faintly. */
+export function Phase({ h, size = 12, projected }: { h: Session; size?: number; projected?: boolean }) {
   const r = 5.2;
   return (
-    <svg width={size} height={size} viewBox="0 0 12 12" className={`phase phase-${h || "tbd"}`} aria-label={PHASE_LABEL[h]}>
+    <svg width={size} height={size} viewBox="0 0 12 12" className={`phase phase-${h || "tbd"}${projected ? " phase-projected" : ""}`} aria-label={projected ? `${PHASE_LABEL[h]}, date not confirmed` : PHASE_LABEL[h]}>
       {h === "" ? (
         <circle cx="6" cy="6" r={r} fill="none" stroke="currentColor" strokeWidth="1.2" strokeDasharray="1.6 1.4" />
       ) : (
         <>
-          <circle cx="6" cy="6" r={r} fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <circle cx="6" cy="6" r={r} fill="none" stroke="currentColor" strokeWidth="1.2" strokeDasharray={projected ? "1.6 1.4" : undefined} />
           {h === "dmh" && <circle cx="6" cy="6" r={r} fill="currentColor" />}
           {h === "bmo" && <path d={`M6 ${6 - r}a${r} ${r} 0 0 1 0 ${2 * r}a2.6 ${r} 0 0 0 0-${2 * r}z`} fill="currentColor" />}
           {h === "amc" && <path d={`M6 ${6 - r}a${r} ${r} 0 0 0 0 ${2 * r}a2.6 ${r} 0 0 1 0-${2 * r}z`} fill="currentColor" />}

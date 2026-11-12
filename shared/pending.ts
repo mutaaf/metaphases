@@ -81,7 +81,7 @@ export const noResultYet = (e: { d: string; eA: number | null; rA: number | null
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
 /** The `/t/:sym` share title: never a date beyond an unreported quarter (0038) or on a closed day (0045). */
-export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string } } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
+export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string }; projected?: true } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
   // 0039: a report that's out leads the title, whatever comes next.
   if (just) return just.epsA == null ? `${sym} reported Q${just.quarter} · Metaphases`
     : `${sym} reported Q${just.quarter}: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? vsExpected(just, (v) => epsIn(v, just.currency)) : ""} · Metaphases`;
@@ -92,6 +92,8 @@ export function tickerShareTitle(sym: string, name: string, next: { date: string
     // 0059: never state a date two calendars disagree on as fact.
     const nq = (next as { nasdaq?: { date: string } }).nasdaq;
     if (nq) return nq.date === next.date ? `${sym} reports ${when}, time unconfirmed · Metaphases` : `${sym} reports ${when} (unconfirmed; Nasdaq lists ${day(nq.date)}) · Metaphases`;
+    // 0007: the feed's projection is "expected around", never "reports" with a session.
+    if ((next as { projected?: true }).projected) return `${sym} earnings expected around ${when} (not yet confirmed) · Metaphases`;
     return `${sym} reports ${when} ${SESSION_WORDS[(next as { session: string }).session] ?? ""} · Metaphases`.replace("  ", " ");
   }
   if (next?.overdue) return `${sym}'s Q${next.quarter} report: date not confirmed yet · Metaphases`;

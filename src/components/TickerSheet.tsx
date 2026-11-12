@@ -190,7 +190,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
 
             {data.next && (
               <section className="next-card">
-                <div className="nc-phase"><Phase h={data.next.session} size={44} /></div>
+                <div className="nc-phase"><Phase h={data.next.session} size={44} projected={!!data.next.projected && !data.next.nasdaq} /></div>
                 <div>
                   <span className="eyebrow">{due ? "This report" : "Next report"} · Q{data.next.quarter} {data.next.year}</span>
                   <h3>{data.next.closed || data.next.overdue ? "Date not confirmed" : fmtLong(data.next.date)}</h3>
@@ -201,6 +201,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                   {data.next.nasdaq && !data.next.overdue && !due && <span className="muted nc-xcheck small" data-testid="nc-xcheck"><Term k="xcheck">Two calendars disagree.</Term> {data.next.nasdaq.date === data.next.date
                     ? `Nasdaq's calendar lists it ${data.next.nasdaq.session ? PHASE_LABEL[data.next.nasdaq.session].toLowerCase() : "at another time"} that day.`
                     : `Nasdaq's calendar lists it on ${fmtLong(data.next.nasdaq.date)}${data.next.nasdaq.session ? `, ${PHASE_LABEL[data.next.nasdaq.session].toLowerCase()}` : ""}.`} Treat the date as unconfirmed until the company announces it.</span>}
+                  {data.next.projected && !data.next.nasdaq && !data.next.overdue && !due && <span className="muted nc-projected small" data-testid="nc-projected"><Term k="unconfirmed">Date not yet confirmed by the company.</Term> This is our data feed's projection{data.next.session ? ", time included" : ""}; it can move when the company announces its date.</span>}
                   {data.next.confirmed && <span className="nc-confirmed small"><Term k="companydate">Confirmed by the company</Term> · <a href={data.next.confirmed} target="_blank" rel="noopener noreferrer">source</a></span>}
                 </div>
                 <dl className="nc-stats">
