@@ -8,3 +8,4 @@ playwright-report
 data/.universe.partial.json
 shots/
 .claude/
+__pycache__/

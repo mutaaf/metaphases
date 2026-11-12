@@ -4,6 +4,7 @@
 //   /api/ticker/:symbol     the deep sheet: Compass grade, setup grade, reaction history, street view
 //   /api/macro              macro event strip (FRED release calendar + FOMC) and the Market Mood index
 // Every route is "graceful in failure" (Compass UX principle #2/#3): partial data + warnings, never a blank 500.
+import { profileCap } from "../shared/marketCap";
 import universe from "../data/universe.json";
 import type { CalendarResponse, EarningsEvent, MacroResponse, Session, TickerResponse, Reaction, MoodComponent, MacroEvent } from "../shared/types";
 import { compassGrade, setupGrade, rsi, sma } from "../shared/grades";
@@ -746,7 +747,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
 
   const body: TickerResponse = {
     symbol,
-    profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, marketCap: profile.marketCapitalization, currency: typeof profile.currency === "string" ? profile.currency : "USD", exchange: profile.exchange, ipo: profile.ipo } : null,
+    profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, ...profileCap(U[symbol], profile), exchange: profile.exchange, ipo: profile.ipo } : null,
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
     next: duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }

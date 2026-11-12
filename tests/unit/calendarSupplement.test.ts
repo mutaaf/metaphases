@@ -153,13 +153,16 @@ const get = async (from: string, to: string) => {
 
 describe("calendar supplement in the worker", () => {
   it("lists Toyota on Nov 5 once, in its own currency figures, when the range feed lacks it", async () => {
-    const r = await get("2026-11-05", "2026-11-05");
+    let r = await get("2026-11-05", "2026-11-05");
+    // Largest first by dollar value (0042: Toyota's cap was ranked in yen, so it jumped the queue).
+    expect(symCalls).toEqual(supplementSymbols(U).slice(0, SUPP_PER_REQUEST));
+    const tmAt = supplementSymbols(U).indexOf("TM");
+    expect(tmAt).toBeGreaterThanOrEqual(0);
+    for (let i = 1; i <= Math.floor(tmAt / SUPP_PER_REQUEST); i++) { minutePasses(); r = await get("2026-11-05", "2026-11-05"); }
+    expect(symCalls).toContain("TM");
     const tm = r.events.filter((e) => e.s === "TM");
     expect(tm).toHaveLength(1);
     expect(tm[0]).toMatchObject({ d: "2026-11-05", h: "amc", eE: 64.4986, t: 1 });
-    // Largest first, so the Japanese names (market caps in yen) fill in on the first request.
-    expect(symCalls.length).toBe(SUPP_PER_REQUEST);
-    expect(symCalls).toContain("TM");
   });
 
   it("fills in the rest over later requests and stops calling once everything is fresh", async () => {

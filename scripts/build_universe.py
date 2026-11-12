@@ -3,6 +3,7 @@ Usage: FINNHUB_API_KEY=... python3 scripts/build_universe.py [--fresh]   (≈11 
   --fresh  re-download the S&P 500 list and refetch every profile (weekly job); otherwise resumes."""
 import sys
 import csv, json, os, time, urllib.request, pathlib
+from universe_fx import local_cap_currency, to_usd
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 KEY = os.environ["FINNHUB_API_KEY"]
 EXTRA = """PLTR SOFI HOOD RIVN LCID NIO BABA BIDU JD PDD SHOP SE MELI COIN RBLX U SNOW NET DDOG ZS MDB ROKU SPOT
@@ -43,11 +44,20 @@ for i, (sym, base) in enumerate(universe.items()):
             ec = old[sym]["ec"]
         if ec and ec != "USD":
             done[sym]["ec"] = ec
+        # Market value (0042): profile2's marketCapitalization is in the *listing's* currency, so a
+        # primary listing abroad (Toyota on Tokyo, TSMC on Taiwan) gives yen/TWD. `mc` is always USD
+        # millions; the local figure and its currency are kept in mcL/mcCur and converted below.
+        cur = local_cap_currency(p)
+        if cur != "USD":
+            done[sym].update({"mc": 0, "mcCur": cur, "mcL": round(p.get("marketCapitalization") or 0)})
+            if old.get(sym, {}).get("mcCur") == cur and old[sym].get("fx") and old[sym].get("fxAt"):
+                done[sym].update({"fx": old[sym]["fx"], "fxAt": old[sym]["fxAt"]})  # last-known rate
     else:
         print("no profile", sym)
     if i % 25 == 0:
         json.dump(done, open(partial, "w")); print(i, sym, flush=True)
     time.sleep(1.05)
+to_usd(done)
 if len(done) < 0.9 * len(universe):
     sys.exit(f"refusing to write: only {len(done)}/{len(universe)} profiles fetched")
 json.dump(dict(sorted(done.items())), open(out_path, "w"), separators=(",", ":"))
