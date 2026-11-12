@@ -1,10 +1,12 @@
 // 0042: every market value we rank or print is in US dollars. Finnhub's profile2 cap is in the
 // listing's currency (Toyota on Tokyo: ¥36T), which used to head the week brief as "$36.44T".
+// Currency rules for the weekly build: tests/unit/universeFx.test.ts.
 import { describe, expect, it } from "vitest";
 import universe from "../../data/universe.json" with { type: "json" };
 import { buildBrief } from "../../src/lib/brief";
 import { UNIVERSE, popularity } from "../../src/lib/data";
 import { mcap } from "../../src/lib/format";
+import { profileCap } from "../../shared/marketCap";
 import type { EarningsEvent } from "../../shared/types";
 
 type Entry = { n: string; mc: number; c?: string; mcCur?: string; mcL?: number; fx?: number; fxAt?: string };
@@ -13,7 +15,7 @@ const ev = (p: Partial<EarningsEvent>): EarningsEvent => ({ s: "X", d: "2026-11-
 
 describe("universe market values are US dollars (0042)", () => {
   it("foreign primary listings carry their local cap and currency, converted to USD", () => {
-    for (const [s, cur] of [["TM", "JPY"], ["SONY", "JPY"], ["HMC", "JPY"], ["TSM", "TWD"], ["SQM", "CLP"], ["NVO", "DKK"]] as const) {
+    for (const [s, cur] of [["TM", "JPY"], ["SONY", "JPY"], ["HMC", "JPY"], ["TSM", "TWD"], ["SQM", "CLP"], ["NVO", "DKK"], ["SHEL", "GBP"], ["BP", "GBP"]] as const) {
       expect(U[s]?.mcCur, s).toBe(cur);
     }
   });
@@ -56,5 +58,11 @@ describe("universe market values are US dollars (0042)", () => {
 
   it("an unknown value reads as a dash, not $0", () => {
     expect(mcap(0)).toBe("—");
+  });
+
+  it("a tracked company's sheet gives the universe's dollar value, whatever the profile says", () => {
+    expect(profileCap(UNIVERSE.SQM, { marketCapitalization: 15130410, currency: "USD" })).toEqual({ marketCap: UNIVERSE.SQM.mc, currency: "USD" });
+    expect(profileCap({ mc: 0 }, { marketCapitalization: 5, currency: "USD" })).toEqual({ marketCap: null, currency: "USD" });
+    expect(profileCap(undefined, { marketCapitalization: 7, currency: "JPY" })).toEqual({ marketCap: 7, currency: "JPY" });
   });
 });
