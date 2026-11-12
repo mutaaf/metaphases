@@ -387,7 +387,7 @@ function WeekColumn({ day, events, next, macro, failed }: { day: string; events:
         <div key={g.h} className="wsess">
           <span className="eyebrow sess-mini"><Phase h={g.h} size={10} /> {PHASE_LABEL[g.h]}</span>
           {g.list.slice(0, 14).map((e) => (
-            <button key={e.s} className={`wrow ${resultOf(e) ? `res-${resultOf(e)}` : ""}`} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
+            <button key={e.s} className={`wrow ${resultOf(e) ? `res-${resultOf(e)}` : ""}${e.eA == null && e.x !== "differs" && eventProjected(e, todayISO()) ? " wrow-projected" : ""}`} title={e.eA == null && e.x !== "differs" && eventProjected(e, todayISO()) ? `${nameOf(e.s)}: date not confirmed by the company yet` : undefined} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
               <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eA ?? e.eE, curOf(e.s))}</span>
             </button>
           ))}

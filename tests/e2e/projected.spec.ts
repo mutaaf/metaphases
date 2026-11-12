@@ -35,10 +35,22 @@ test("the sheet says a projected date isn't confirmed by the company; a firm one
   });
   await page.goto("./t/GOOGL");
   const card = page.locator(".next-card");
-  await expect(card.getByTestId("nc-projected")).toHaveText("Date not yet confirmed by the company. This is our data feed's projection, time included; it can move when the company announces its date.");
+  await expect(card.locator("h3")).toHaveText("Around Tuesday, February 2");
+  await expect(card).toContainText("After close (projected)");
+  await expect(card.getByTestId("nc-projected")).toHaveText("Date not yet confirmed by the company. The date and time shown are our data feed's projection and can move when the company announces its own.");
   await expect(card.locator(".nc-phase .phase-projected")).toHaveCount(1);
   await noSideScroll(page);
   await page.screenshot({ path: test.info().outputPath("projected-sheet.png") });
+  // A Nasdaq disagreement has its own note, which wins.
+  await page.route("**/api/ticker/AXON", async (r) => {
+    const body = JSON.parse(fx("ticker-NVDA.json").replaceAll('"NVDA"', '"AXON"'));
+    body.next = { ...body.next, date: "2026-11-02", session: "", projected: true, nasdaq: { date: "2026-11-05", session: "amc" } };
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/AXON");
+  await expect(page.getByTestId("nc-xcheck")).toBeVisible();
+  await expect(page.getByTestId("nc-projected")).toHaveCount(0);
+  await expect(page.locator(".next-card h3")).toHaveText("Monday, November 2");
   await page.goto("./t/NVDA");
   await expect(page.locator(".next-card h3")).toBeVisible();
   await expect(page.getByTestId("nc-projected")).toHaveCount(0);

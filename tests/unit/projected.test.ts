@@ -47,6 +47,20 @@ describe("share meta and .ics for a projected date", () => {
     const d = { next, justReported: undefined, beatRate: null, expectedMove: null, setup: { grade: null }, compass: { grade: null } } as any;
     expect(tickerShareDesc("Alphabet", d)).toMatch(/^Alphabet — report expected around Tue, Feb 2, date not yet confirmed by the company; Street expects \$2\.60 EPS\./);
   });
+  it("a Nasdaq disagreement or a report that's out wins over 'projected'", () => {
+    const contested = { ...next, date: "2026-11-02", session: "", nasdaq: { date: "2026-11-05", session: "amc" } };
+    expect(tickerShareTitle("AXON", "Axon", contested)).toBe("AXON reports Mon, Nov 2 (unconfirmed; Nasdaq lists Thu, Nov 5) · Metaphases");
+    const d = { next: contested, justReported: undefined, beatRate: null, expectedMove: null, setup: { grade: null }, compass: { grade: null } } as any;
+    expect(tickerShareDesc("Axon", d)).toMatch(/^Axon — report date unconfirmed \(the feed says Mon, Nov 2; Nasdaq lists Thu, Nov 5\)/);
+    const just = { quarter: 3, epsE: 1, epsA: 1.2 };
+    expect(tickerShareTitle("GOOGL", "Alphabet", next, just)).toMatch(/^GOOGL reported Q3/);
+    expect(tickerShareDesc("Alphabet", { ...d, next, justReported: { ...just, date: "2026-10-29", session: "amc", year: 2026 } })).toMatch(/^Alphabet — Reported Q3/);
+  });
+  it("a closed-day (0045) .ics item is tentative too, and says it's a projection", () => {
+    const out = buildIcs([{ symbol: "MRVL", name: "Marvell", date: "2026-11-26", session: "", quarter: 3, year: 2027, epsE: 1.11, url: "https://x/t/MRVL", closed: "Thanksgiving" }], new Date("2026-11-05T00:00:00Z"));
+    expect(out).toContain("STATUS:TENTATIVE");
+    expect(out.replace(/\r\n /g, "")).toContain("the data feed's projection");
+  });
   it(".ics marks it STATUS:TENTATIVE and says so; a confirmed one isn't", () => {
     const base = { symbol: "GOOGL", name: "Alphabet", date: "2027-02-02", session: "amc" as const, quarter: 4, year: 2026, epsE: 2.6, url: "https://x/t/GOOGL" };
     const tent = buildIcs([{ ...base, projected: true }], new Date("2026-11-01T00:00:00Z"));
@@ -101,6 +115,21 @@ describe("0007 through the worker", () => {
     const line = t.read.join(" ");
     expect(line).toMatch(/Q4 report is expected around Tuesday, Feb 2, but the company hasn't confirmed the date yet\./);
     expect(line).not.toMatch(/after the (close|closing bell)/i);
+  }, 20_000);
+
+  it("the share card headline says 'Around … · unconfirmed' and draws no session", async () => {
+    const svg = await (await get("/og/t/QQPF.svg")).text();
+    expect(svg).toContain("Around Tue, Feb 2 · unconfirmed");
+    expect(svg).not.toMatch(/Reports Tue, Feb 2/);
+  }, 20_000);
+
+  it("a closed-market projection stays 'closed', not 'projected'", async () => {
+    FH_ROWS.push(fhRow("QQPH", "2026-11-26"));
+    try {
+      const t = await (await get("/api/ticker/QQPH")).json() as any;
+      expect(t.next).toMatchObject({ date: "2026-11-26", closed: "Thanksgiving" });
+      expect(t.next.projected).toBeUndefined();
+    } finally { FH_ROWS.pop(); }
   }, 20_000);
 
   it("a near amc date is not projected; a near blank-session date is", async () => {

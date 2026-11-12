@@ -1068,7 +1068,7 @@ function cardFromSheet(sym: string, d: TickerResponse): string {
   const nq = !rc && when ? d.next?.nasdaq : undefined;
   const contested = nq ? { headline: `Reports ${when}, ${nq.date === d.next!.date ? "time" : "date"} unconfirmed`, session: "" as Session }
     // 0007: a projected date is "expected around", with no session glyph.
-    : !rc && when && d.next?.projected ? { headline: `Expected around ${when}, not yet confirmed`, session: "" as Session } : {};
+    : !rc && when && d.next?.projected ? { headline: `Around ${when} · unconfirmed`, session: "" as Session } : {};
   return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", ...contested, move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
 }
 
@@ -1081,7 +1081,7 @@ async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, c
     const shortKey = new Request(`https://cache.metaphases.internal/og-png-v7-${sym}-${day}-d`);
     if (fmt === "png") { const hit = (await caches.default.match(key)) ?? (await caches.default.match(shortKey)); if (hit) return hit; }
     // 0043: a card drawn while the sheet's date or history failed to load is served briefly and never cached.
-    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v6:${sym}:${day}`)}`);
+    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v7:${sym}:${day}`)}`);
     const svgHit = await caches.default.match(svgKey);
     const { svg, degraded } = svgHit ? { svg: await svgHit.text(), degraded: false } : await cardFor(sym, env, ctx);
     const age = degraded ? SHEET_DEGRADED_TTL : 21600;
@@ -1102,7 +1102,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const svg = await cached(`story:svg:v3:${kind}:${day}`, 21600, ctx, async () => {
+    const svg = await cached(`story:svg:v4:${kind}:${day}`, 21600, ctx, async () => {
       if (kind === "kids") return storyKidsSvg();
       const rc = kind.match(/^kids-recap:(\d+)\.(\d+)\.(\d+)\.(n|-?[\d.]+)\.(\d)$/);
       if (rc) {
@@ -1116,8 +1116,9 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
         const name = d.profile?.name ?? U[sym]?.n ?? sym;
         return storyTickerSvg({
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
-          when: isDated(d.next) ? whenPlain(d.next.date, d.next.session, day) : d.next ? "date not confirmed yet" : "date not announced yet",
-          session: d.next?.session ?? "", epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
+          // 0007: a projected date is "expected around", with no session glyph.
+          when: isDated(d.next) ? (d.next.projected && !d.next.nasdaq ? `expected around ${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (not yet confirmed)` : whenPlain(d.next.date, d.next.session, day)) : d.next ? "date not confirmed yet" : "date not announced yet",
+          session: isDated(d.next) && d.next.projected && !d.next.nasdaq ? "" : d.next?.session ?? "", epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
           beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, ...(reportedCard(d, day) ?? {}),
         });
       }

@@ -133,6 +133,8 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   const via = heldVia(symbol, holdings);
   const direct = holdings.find((h) => h.s === symbol);
   const today = todayISO();
+  // 0007: the feed's projection (a Nasdaq disagreement has its own note and wins).
+  const proj = !!data?.next?.projected && !data?.next?.nasdaq && !data?.next?.closed;
   const sheetRef = useRef<HTMLElement>(null);
   useDialog(sheetRef, onClose, { initialFocus: "self" });
 
@@ -190,18 +192,18 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
 
             {data.next && (
               <section className="next-card">
-                <div className="nc-phase"><Phase h={data.next.session} size={44} projected={!!data.next.projected && !data.next.nasdaq} /></div>
+                <div className="nc-phase"><Phase h={data.next.session} size={44} projected={proj} /></div>
                 <div>
                   <span className="eyebrow">{due ? "This report" : "Next report"} · Q{data.next.quarter} {data.next.year}</span>
-                  <h3>{data.next.closed || data.next.overdue ? "Date not confirmed" : fmtLong(data.next.date)}</h3>
+                  <h3>{data.next.closed || data.next.overdue ? "Date not confirmed" : proj ? `Around ${fmtLong(data.next.date)}` : fmtLong(data.next.date)}</h3>
                   {data.next.closed && <span className="muted nc-closed">The data feed projects {fmtLong(data.next.date)}, but markets are closed that day ({data.next.closed}).</span>}
                   {data.next.overdue && <span className="muted nc-closed">{data.next.date ? `The data feed expected it on ${fmtLong(data.next.date)}, and there are no results yet.` : "The data feed has no date for this quarter yet, and there are no results yet."} The new date isn't confirmed.</span>}
                   {due && <span className="muted nc-closed">Results were expected {data.next.session ? `${PHASE_LABEL[data.next.session].toLowerCase()} ` : ""}{data.next.date === today ? "today" : `on ${fmtLong(data.next.date)}`}. None are in our data yet.</span>}
-                  {!data.next.overdue && !due && <span className="muted"><Term k={data.next.session || "bmo"}>{PHASE_LABEL[data.next.session]}</Term>{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
+                  {!data.next.overdue && !due && <span className="muted"><Term k={data.next.session || "bmo"}>{PHASE_LABEL[data.next.session]}</Term>{proj && data.next.session ? " (projected)" : ""}{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
                   {data.next.nasdaq && !data.next.overdue && !due && <span className="muted nc-xcheck small" data-testid="nc-xcheck"><Term k="xcheck">Two calendars disagree.</Term> {data.next.nasdaq.date === data.next.date
                     ? `Nasdaq's calendar lists it ${data.next.nasdaq.session ? PHASE_LABEL[data.next.nasdaq.session].toLowerCase() : "at another time"} that day.`
                     : `Nasdaq's calendar lists it on ${fmtLong(data.next.nasdaq.date)}${data.next.nasdaq.session ? `, ${PHASE_LABEL[data.next.nasdaq.session].toLowerCase()}` : ""}.`} Treat the date as unconfirmed until the company announces it.</span>}
-                  {data.next.projected && !data.next.nasdaq && !data.next.overdue && !due && <span className="muted nc-projected small" data-testid="nc-projected"><Term k="unconfirmed">Date not yet confirmed by the company.</Term> This is our data feed's projection{data.next.session ? ", time included" : ""}; it can move when the company announces its date.</span>}
+                  {proj && !data.next.overdue && !due && <span className="muted nc-projected small" data-testid="nc-projected"><Term k="unconfirmed">Date not yet confirmed by the company.</Term> The {data.next.session ? "date and time shown are" : "date shown is"} our data feed's projection and can move when the company announces its own.</span>}
                   {data.next.confirmed && <span className="nc-confirmed small"><Term k="companydate">Confirmed by the company</Term> · <a href={data.next.confirmed} target="_blank" rel="noopener noreferrer">source</a></span>}
                 </div>
                 <dl className="nc-stats">

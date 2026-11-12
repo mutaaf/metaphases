@@ -3,7 +3,7 @@
 // Finnhub's calendar mixes dates a company has announced with its own projections, and doesn't say which is
 // which. Two signals mark a projection:
 //   1. no session (`hour` blank): a company announcing its date almost always names the time too;
-//   2. more than CONFIRM_HORIZON_DAYS ahead: companies typically announce two to four weeks before the report,
+//   2. more than CONFIRM_HORIZON_DAYS ahead: companies typically announce two to three weeks before the report,
 //      so a date further out (GOOGL "Tue, Feb 2 · after close", 93 days ahead) is the feed's guess even when the
 //      feed carries a session (critique 2026-11-01-0506 #3).
 // A date from data/date-overrides.json (the company's own announcement, `o` / `source`) is always confirmed,
