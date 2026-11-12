@@ -6,7 +6,7 @@ priority: P1
 size: S
 lens: clarity
 created: 2026-11-06
-pr: PRNUM
+pr: 102
 by: critic
 ---
 
