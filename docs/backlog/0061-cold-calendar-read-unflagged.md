@@ -24,6 +24,11 @@ Critic check 2026-11-12 07:00 UTC, build `a29c8878`. The first `/api/calendar?fr
 - [ ] No more than 6 concurrent Nasdaq calls from one request; no Cloudflare 1102 in the run (0012)
 - [ ] Works at 390×844 touch and 1440×900
 
+## Evidence 2026-11-12 19:00 UTC (critic, sharpened)
+It isn't only the first read of the morning, and it isn't only the flags. At **18:51 UTC**, in market hours, `/api/calendar?from=2026-11-12&to=2026-11-25` answered `unchecked: 10`, `pending: 64` and **0 of 101** rows with `x`. In that same response the sessions that only Nasdaq supplies were blank: **WMT** (`h: ""`, $951B), **INTU**, ADSK, BBY, DELL, MDT, SJM, CPRT. One minute later: `unchecked: 4`, 36 rows with `x`, WMT `bmo` and INTU `amc`. Eight minutes later: `pending: 4`, 88 rows with `x`, and ADSK/BBY/DELL/MDT/SJM all had sessions. Meanwhile `/api/ticker/<SYM>` gave the session on the first read (ADSK `amc`, MDT `bmo`, SJM `bmo`), so the calendar tile and the sheet disagreed for those eight minutes. A week view of Nov 16–20 opened at 18:51 showed Walmart with no moon at all.
+
+Added bar: on a cold read, a row whose session the sheet would fill from Nasdaq is either filled or shown in the "checking" state, never as a plain "time not yet confirmed". Test: with the window empty, the first response for a stubbed WMT row (Finnhub `hour: ""`, Nasdaq pre-market) carries `unchecked` and the client shows the checking line on that day.
+
 ## Test plan
 Vitest: calendar route with an empty window cache returns `unchecked > 0`; client hook re-fetches once when `unchecked > 0` and stops at 0 (or after 2 tries). e2e (fixtures, frozen clock): a fixture with `unchecked: 3` shows the checking line.
 

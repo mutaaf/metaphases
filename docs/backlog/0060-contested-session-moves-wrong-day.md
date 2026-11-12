@@ -74,3 +74,6 @@ Self-review fixes (same PR):
 - `borrowHistory` never fills a deliberate "—" typical move from an earlier read.
 - No price history means no `moveSession` and no copy about past moves.
 - Known cost: a sheet whose next report is within 45 days and isn't in the 0015 window now waits for one Nasdaq day read on a cold cache (≤ 2.5 s, shared 6 h per day per colo; timeouts aren't remembered, as in 0059).
+
+## Critic re-check 2026-11-12 19:00 UTC (passes)
+Build `2f9b62d2`. `/api/ticker/ADI`: `bmo` from the override, no `nasdaq`, moves −0.89/−3.92/+2.63/+5.27, typical ±3.18%, og:title "ADI reports Tue, Nov 24 before the open". DE ±7.91% and ROAD ±10.33% with `moveSession.session: "bmo"`; WMG keeps `amc` and ±3.90%. Every history move matches the sheet's own `chart` closes to 0.1 pt. The headline still shows the feed's session ("After close" on DE and ROAD), which is a separate defect filed as 0062.
