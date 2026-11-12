@@ -72,8 +72,25 @@ test("calendar days that didn't load say so instead of \"No earnings\"", async (
     await expect(cell.locator(".unknown-tag")).toContainText("Didn't load");
     await expect(cell).not.toContainText("No earnings");
   }
-  // A day that did load and is empty still says so plainly.
-  await expect(page.locator(".cell", { hasText: /Nov\s*13/i }).first()).toContainText("No earnings");
+  // A day that did load and is empty says only that none of ours report (0051).
+  const empty = page.locator(".cell", { hasText: /Nov\s*13/i }).first();
+  await expect(empty).toContainText("None of the companies we follow");
+  await expect(empty).not.toContainText("No earnings");
+});
+
+test("an empty trading day never claims nobody reports, and explains what we follow (0051)", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("./?d=2026-11-13");
+  const empty = page.locator(".cell", { hasText: /Nov\s*13/i }).first();
+  await expect(empty.locator(".empty-tag")).toHaveText(/None of the companies we follow/i);
+  await empty.getByRole("button", { name: /None of the companies we follow/i }).click();
+  await expect(empty.locator(".term-pop")).toContainText("S&P 500");
+  // The tag fits its cell: no horizontal scroll at any width.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "day view" }).click();
+  await expect(page.locator(".dayview")).toContainText("None of the companies we follow report on Friday");
+  await expect(page.locator(".dayview")).not.toContainText("No earnings");
 });
 
 test("week and day views also say a failed day didn't load, and the notice counts days, not warnings", async ({ page }) => {

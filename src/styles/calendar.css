@@ -147,4 +147,9 @@ button.chip:hover { border-color: var(--ink); }
 .brief-skel { display: grid; gap: 8px; margin-top: 8px; }
 
 .eps-only { display: block; margin-top: 3px; white-space: nowrap; font: 500 10px/1.2 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted, #7d796f); }
+/* 0051: the pop fills the cell, so it never spills past the grid's right edge. */
+.empty-none { line-height: 1.6; text-align: left; letter-spacing: .08em; }
+.wcol:has(.empty-none) { position: relative; }
+.empty-none .term { position: static; }
+.empty-none .term-pop { left: 8px; right: 8px; top: auto; width: auto; margin-top: 8px; }
 .empty-tag.unknown-tag { border-style: dashed; background: transparent; }

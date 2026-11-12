@@ -21,6 +21,14 @@ import { HomeHero } from "./Hero";
 const HOLIDAY = Object.fromEntries(HOLIDAYS.map((h) => [h.date, h.name]));
 const PER_CELL = 3;
 
+// An empty trading day means none of the companies we follow report, never
+// that nobody does: Japan's megabanks and hundreds of small caps can (0051).
+const WEEKDAY_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const NONE_OURS = "None of the companies we follow";
+function EmptyTag() {
+  return <span className="empty-tag empty-none"><Term k="follow">{NONE_OURS}</Term></span>;
+}
+
 export const FILTERS: { key: string; label: string; hint: string }[] = [
   { key: "popular", label: "Most popular", hint: "The ~650 companies investors watch most" },
   { key: "sp500", label: "S&P 500", hint: "Index members only" },
@@ -106,7 +114,7 @@ function DayCell({ day, events, inMonth, today, next, macro, onOpen, unknown }: 
         !inMonth ? null
           : unknown === "failed" ? <span className="empty-tag unknown-tag">Didn't load</span>
           : unknown === "loading" ? null
-          : <span className="empty-tag">No earnings</span>
+          : <EmptyTag />
       ) : (
         <div className="cell-tiles">
           {events.slice(0, PER_CELL).map((e) => <TileButton key={e.s} e={e} />)}
@@ -317,7 +325,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
                 {reported.length > 0 && <> · <b>{Math.round((beats / reported.length) * 100)}%</b> of those reported so far <Term k="beat">beat</Term> on both lines</>}
                 . Tap any logo for the full read.
               </>
-            ) : loading ? "Charting the phases…" : !data ? "The calendar didn't load, so we can't say who reports yet." : "A quiet stretch — nothing reports with these filters."}
+            ) : loading ? "Charting the phases…" : !data ? "The calendar didn't load, so we can't say who reports yet." : `${NONE_OURS} report ${view === "month" ? "this month" : view === "week" ? "this week" : "on this day"} with these filters.`}
           </p>
         </div>
         <div className="toolbar">
@@ -363,7 +371,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
             loading && !data ? (
               <div key={d} className="cell"><Skeleton w={60} h={10} /><div className="cell-tiles"><Skeleton w={44} h={44} /><Skeleton w={44} h={44} /><Skeleton w={44} h={44} /></div></div>
             ) : view === "week" ? (
-              <WeekColumn key={d} day={d} events={byDay[d] ?? []} failed={(!data && !!error) || failedDays.has(d)} next={next} macro={macroByDay[d] ?? []} />
+              <WeekColumn key={d} day={d} events={byDay[d] ?? []} loaded={!!data} failed={(!data && !!error) || failedDays.has(d)} next={next} macro={macroByDay[d] ?? []} />
             ) : (
               <DayCell key={d} day={d} events={byDay[d] ?? []} unknown={!data ? (error ? "failed" : "loading") : failedDays.has(d) ? "failed" : undefined} inMonth={inMonth(d)} today={today} next={next} macro={macroByDay[d] ?? []} onOpen={() => openDrawer(d)} />
             ),
@@ -375,7 +383,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   );
 }
 
-function WeekColumn({ day, events, next, macro, failed }: { day: string; events: EarningsEvent[]; next: string; macro: MacroEvent[]; failed?: boolean }) {
+function WeekColumn({ day, events, next, macro, failed, loaded }: { day: string; events: EarningsEvent[]; next: string; macro: MacroEvent[]; failed?: boolean; loaded?: boolean }) {
   const d = parse(day);
   return (
     <div className={`wcol ${day === next ? "next" : ""}`}>
@@ -383,6 +391,7 @@ function WeekColumn({ day, events, next, macro, failed }: { day: string; events:
       {macro.map((m) => <span key={m.key} className={`mtag kind-${m.kind}`}>{m.name}</span>)}
       {HOLIDAY[day] && <span className="empty-tag">Market closed · {HOLIDAY[day]}</span>}
       {failed && !HOLIDAY[day] && !events.length && <span className="empty-tag unknown-tag">Didn't load</span>}
+      {loaded && !failed && !HOLIDAY[day] && !events.length && <EmptyTag />}
       {groupBySession(events).map((g) => (
         <div key={g.h} className="wsess">
           <span className="eyebrow sess-mini"><Phase h={g.h} size={10} /> {PHASE_LABEL[g.h]}</span>
@@ -399,6 +408,9 @@ function WeekColumn({ day, events, next, macro, failed }: { day: string; events:
 }
 
 function DayView({ day, events, loading, macro, failed }: { day: string; events: EarningsEvent[]; loading: boolean; macro: MacroEvent[]; failed?: boolean }) {
+  const { prefs } = useStore();
+  const narrowed = prefs.filter !== "everything" || !!prefs.sector;
+  const wd = WEEKDAY_LONG[parse(day).getDay()];
   if (loading) return <div className="dayview">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={52} />)}</div>;
   return (
     <div className="dayview">
@@ -406,7 +418,7 @@ function DayView({ day, events, loading, macro, failed }: { day: string; events:
       {HOLIDAY[day] && <Notice>Markets are closed for {HOLIDAY[day]}.</Notice>}
       {!events.length && !HOLIDAY[day] && (failed
         ? <p className="empty-big">This day's earnings didn't load, so we can't say who reports. Try again in a moment.</p>
-        : <p className="empty-big">No earnings with these filters. Try <b>Everything</b>.</p>)}
+        : <p className="empty-big"><Term k="follow">{NONE_OURS}</Term> report on {wd}{narrowed ? <> with these filters. Try <b>Everything</b>.</> : <>. Smaller companies, and some listed only overseas, may.</>}</p>)}
       {groupBySession(events).map((g) => (
         <section key={g.h} className="sess">
           <h3 className="sess-head"><Phase h={g.h} size={14} /> {PHASE_LABEL[g.h]} <span className="muted">· {g.list.length}</span></h3>
