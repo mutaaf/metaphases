@@ -18,6 +18,7 @@ import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
 import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
+import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { reactionMove, sessionHabit } from "../shared/reaction";
 import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
@@ -708,6 +709,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const closed = upNext && !upNext.source && !pending ? closedDay(upNext.date) : null;
   const longDay = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
   const out = reported || duePending;
+  const projected = !!upNext && !pending && !duePending && !closed && isProjected({ date: upNext.date, session: upNext.hour || "", source: upNext.source }, today);
   // 0015: name Nasdaq's day when it lists the next report elsewhere (the date itself stays the feed's).
   let nqNext: { date: string; session: Session } | undefined;
   if (nqWin && upNext && upNext === nextE && !duePending && !pending && !reported && !upNext.source && !closed) {
@@ -722,6 +724,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     read.push(`${name}'s Q${pending.quarter} report date is not confirmed yet: the data feed expected it on ${longDay(pending.passed)} and has no results yet.`);
   } else if (upNext && closed) {
     read.push(`${name}'s Q${upNext.quarter} report date is not confirmed yet: the data feed projects ${longDay(upNext.date)}, when the market is closed (${closed}).`);
+  } else if (upNext && projected && !nqNext) {
+    // 0007: the feed's projection, not the company's date: "expected around", and no session stated as fact.
+    read.push(`${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} is expected around ${longDay(upNext.date)}, but the company hasn't confirmed the date yet.`);
   } else if (upNext) {
     const when = upNext.hour ? WHEN_LONG[upNext.hour as Session] ?? "" : nqNext ? "" : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
@@ -745,7 +750,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
     next: duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
-      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}) } : null,
+      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
@@ -1040,7 +1045,7 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
     const sym = syms[i];
     for (const e of applyToRows(sym, r.value?.earningsCalendar ?? [], OVERRIDES, today)) {
       if (e.date < today) continue;
-      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}) });
+      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}), ...(isProjected({ date: e.date, session: e.hour || "", source: e.source }, today) ? { projected: true } : {}) });
     }
   });
   items.sort((a, b) => a.date.localeCompare(b.date));
@@ -1061,7 +1066,9 @@ function cardFromSheet(sym: string, d: TickerResponse): string {
   const rc = reportedCard(d, iso(todayNY()));
   // 0059: a date (or time) Nasdaq lists differently is never drawn as fact: no session glyph, and the headline says so.
   const nq = !rc && when ? d.next?.nasdaq : undefined;
-  const contested = nq ? { headline: `Reports ${when}, ${nq.date === d.next!.date ? "time" : "date"} unconfirmed`, session: "" as Session } : {};
+  const contested = nq ? { headline: `Reports ${when}, ${nq.date === d.next!.date ? "time" : "date"} unconfirmed`, session: "" as Session }
+    // 0007: a projected date is "expected around", with no session glyph.
+    : !rc && when && d.next?.projected ? { headline: `Around ${when} · unconfirmed`, session: "" as Session } : {};
   return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", ...contested, move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
 }
 
@@ -1069,12 +1076,12 @@ async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, c
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const key = new Request(`https://cache.metaphases.internal/og-png-v6-${sym}-${day}`);
+    const key = new Request(`https://cache.metaphases.internal/og-png-v7-${sym}-${day}`);
     // A card drawn while degraded is kept 30 s under its own key, so an unfurl burst renders it once, not per request.
-    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v6-${sym}-${day}-d`);
+    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v7-${sym}-${day}-d`);
     if (fmt === "png") { const hit = (await caches.default.match(key)) ?? (await caches.default.match(shortKey)); if (hit) return hit; }
     // 0043: a card drawn while the sheet's date or history failed to load is served briefly and never cached.
-    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v6:${sym}:${day}`)}`);
+    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v7:${sym}:${day}`)}`);
     const svgHit = await caches.default.match(svgKey);
     const { svg, degraded } = svgHit ? { svg: await svgHit.text(), degraded: false } : await cardFor(sym, env, ctx);
     const age = degraded ? SHEET_DEGRADED_TTL : 21600;
@@ -1095,7 +1102,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const svg = await cached(`story:svg:v3:${kind}:${day}`, 21600, ctx, async () => {
+    const svg = await cached(`story:svg:v4:${kind}:${day}`, 21600, ctx, async () => {
       if (kind === "kids") return storyKidsSvg();
       const rc = kind.match(/^kids-recap:(\d+)\.(\d+)\.(\d+)\.(n|-?[\d.]+)\.(\d)$/);
       if (rc) {
@@ -1109,8 +1116,9 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
         const name = d.profile?.name ?? U[sym]?.n ?? sym;
         return storyTickerSvg({
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
-          when: isDated(d.next) ? whenPlain(d.next.date, d.next.session, day) : d.next ? "date not confirmed yet" : "date not announced yet",
-          session: d.next?.session ?? "", epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
+          // 0007: a projected date is "expected around", with no session glyph.
+          when: isDated(d.next) ? (d.next.projected && !d.next.nasdaq ? `expected around ${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (not yet confirmed)` : whenPlain(d.next.date, d.next.session, day)) : d.next ? "date not confirmed yet" : "date not announced yet",
+          session: isDated(d.next) && d.next.projected && !d.next.nasdaq ? "" : d.next?.session ?? "", epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
           beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, ...(reportedCard(d, day) ?? {}),
         });
       }

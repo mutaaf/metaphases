@@ -90,7 +90,7 @@ export function quartersFrom(series: Record<string, Pt[]> | undefined, sharesMil
 }
 
 // ── ICS (RFC 5545) ─────────────────────────────────────────────────────
-export interface IcsItem { symbol: string; name: string; date: string; session: Session; quarter: number; year: number; epsE: number | null; cur?: string; url: string; /** Projected onto a market holiday (0045): the entry says the date isn't confirmed. */ closed?: string }
+export interface IcsItem { symbol: string; name: string; date: string; session: Session; quarter: number; year: number; epsE: number | null; cur?: string; url: string; /** Projected onto a market holiday (0045): the entry says the date isn't confirmed. */ closed?: string; /** 0007: the feed's projection, not the company's date: STATUS:TENTATIVE. */ projected?: boolean }
 const SESSION_TEXT: Record<Session, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "time not yet confirmed" };
 const escText = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 
@@ -119,8 +119,11 @@ export function buildIcs(items: IcsItem[], stamp: Date): string {
       `DTSTAMP:${dt}`,
       `DTSTART;VALUE=DATE:${it.date.replace(/-/g, "")}`,
       `DTEND;VALUE=DATE:${shift(it.date, 1).replace(/-/g, "")}`,
-      `SUMMARY:${escText(`${it.symbol} earnings · ${it.closed ? "date not confirmed" : SESSION_TEXT[it.session]}`)}`,
-      `DESCRIPTION:${escText(`${it.name} reports Q${it.quarter} ${it.year} ${SESSION_TEXT[it.session]}.${est} Full read: ${it.url}`)}`,
+      `SUMMARY:${escText(`${it.symbol} earnings · ${it.closed || it.projected ? "date not confirmed" : SESSION_TEXT[it.session]}`)}`,
+      `DESCRIPTION:${escText(it.closed || it.projected
+        ? `${it.name}'s Q${it.quarter} ${it.year} report is expected around this day. Date not yet confirmed by the company: this is the data feed's projection, and it updates when the company announces its date.${est} Full read: ${it.url}`
+        : `${it.name} reports Q${it.quarter} ${it.year} ${SESSION_TEXT[it.session]}.${est} Full read: ${it.url}`)}`,
+      ...(it.closed || it.projected ? ["STATUS:TENTATIVE"] : []),
       `URL:${it.url}`,
       "TRANSP:TRANSPARENT",
       "END:VEVENT",
