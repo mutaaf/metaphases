@@ -1,5 +1,6 @@
 import { HOLIDAYS } from "./market";
 import { epsIn } from "./currency";
+import { vsExpected } from "./compare";
 const HOLIDAY_SET: ReadonlySet<string> = new Set(HOLIDAYS.map((h) => h.date));
 
 /**
@@ -80,10 +81,10 @@ export const noResultYet = (e: { d: string; eA: number | null; rA: number | null
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
 /** The `/t/:sym` share title: never a date beyond an unreported quarter (0038) or on a closed day (0045). */
-export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string } } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string } | null): string {
+export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string } } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
   // 0039: a report that's out leads the title, whatever comes next.
   if (just) return just.epsA == null ? `${sym} reported Q${just.quarter} · Metaphases`
-    : `${sym} reported Q${just.quarter}: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? ` vs ${epsIn(just.epsE, just.currency)} expected` : ""} · Metaphases`;
+    : `${sym} reported Q${just.quarter}: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? vsExpected(just, (v) => epsIn(v, just.currency)) : ""} · Metaphases`;
   if (next?.status === "results-pending") return `${sym}'s Q${next.quarter} results expected: none in yet · Metaphases`;
   if (isDated(next)) {
     const day = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });

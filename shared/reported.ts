@@ -1,5 +1,5 @@
 import { epsIn } from "./currency";
-import { epsVerdict } from "./compare";
+import { epsVerdict, vsExpected } from "./compare";
 import type { TickerResponse } from "./types";
 
 /**
@@ -67,7 +67,7 @@ export function reportedLine(name: string, r: { date: string; session: string; q
   if (j.act != null && r.epsE != null && j.v) {
     const s = j.pct;
     const verdict = s == null ? (j.v === "beat" ? "above the estimate" : "below the estimate") : Math.abs(s) < 0.5 ? "in line with the estimate" : s > 0 ? `a beat of ${Math.abs(s).toFixed(0)}%` : `a miss of ${Math.abs(s).toFixed(0)}%`;
-    return `${head}: ${fmt(r.epsA)} a share on the company's measure. On the same basis as the ${fmt(r.epsE)} estimate it was ${fmt(j.act)} (Nasdaq's figures), ${verdict}.`;
+    return `${head}: ${fmt(r.epsA)} a share in our data feed. On the same basis as the ${fmt(r.epsE)} estimate it was ${fmt(j.act)} (Nasdaq's figures), ${verdict}.`;
   }
   const s = j.pct;
   if (r.epsE == null || j.v == null) return `${head}: ${fmt(r.epsA)} a share.`;
@@ -95,7 +95,7 @@ export function tickerShareDesc(name: string, d: Pick<TickerResponse, "next" | "
   ].filter(Boolean);
   const j = d.justReported;
   const lead = j
-    ? ` — Reported Q${j.quarter} on ${shortDay(j.date)}${j.epsA != null ? `: ${epsIn(j.epsA, j.currency)} EPS${(() => { const v = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, nA: j.nA, reit: j.reit }); return v.est != null && v.v !== "not-comparable" ? (v.act != null ? ` (${epsIn(v.act, j.currency)} on the estimate's basis) vs ${epsIn(v.est, j.currency)} expected` : ` vs ${epsIn(v.est, j.currency)} expected`) : ""; })()}` : ""}`
+    ? ` — Reported Q${j.quarter} on ${shortDay(j.date)}${j.epsA != null ? `: ${epsIn(j.epsA, j.currency)} EPS${(() => { const v = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, nA: j.nA, reit: j.reit }); return v.v === "not-comparable" ? "" : vsExpected(j, (x) => epsIn(x, j.currency)); })()}` : ""}`
     : d.next?.status === "results-pending" ? ` — Q${d.next.quarter} results expected, none in our data yet${d.next.epsE != null && !d.next.epsBasis ? ` (estimate going in ${epsIn(d.next.epsE, d.next.currency)} EPS)` : ""}`
     : d.next?.epsE != null && !d.next.epsBasis ? ` — Street expects ${epsIn(d.next.epsE, d.next.currency)} EPS` : "";
   // 0059: a date the two calendars disagree on is said to be unconfirmed (overdue / closed rows never carry one).

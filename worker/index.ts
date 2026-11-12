@@ -158,14 +158,14 @@ async function supplement(env: Env, ctx: ExecutionContext, today: string, refres
 
 const touchesSupp = (from: string, to: string, today: string) => to >= addDays(today, -SUPP_BACK) && from <= addDays(today, SUPP_AHEAD);
 
-/** One day's processed events. v3 (0058): judged rows carry Nasdaq's actual (`nA`), so settled days re-read it. The last-good copy keeps its key: it's only a fallback. */
+/** One day's processed events. v3 (0058): judged rows carry Nasdaq's actual (`nA`), so settled days re-read it. The last-good copy moves too, or a fallback would serve the old mixed pairs. */
 const CAL_DAY = (day: string) => CAL(`cal:v3:${day}`);
 
 async function putDay(day: string, events: EarningsEvent[], today: string, ctx: ExecutionContext) {
   const body = JSON.stringify(events);
   ctx.waitUntil(Promise.all([
     caches.default.put(CAL_DAY(day), new Response(body, { headers: { "Cache-Control": `public, max-age=${calTtl(day, today)}`, "Content-Type": "application/json" } })),
-    caches.default.put(CAL(`cal:stale:v2:${day}`), new Response(body, { headers: { "Cache-Control": "public, max-age=604800" } })),
+    caches.default.put(CAL(`cal:stale:v3:${day}`), new Response(body, { headers: { "Cache-Control": "public, max-age=604800" } })),
   ]));
 }
 
@@ -179,14 +179,20 @@ async function readSnap(day: string): Promise<EstSnapshot> {
 }
 
 /** Nasdaq's day calendar: pre-report EPS consensus (`e`) and, on the same basis, the reported EPS (`a`, 0058) for that day's reporters (one call per day, cached). */
-function nasdaqDay(day: string, today: string, ctx: ExecutionContext): Promise<{ e: Record<string, number>; a: Record<string, number> }> {
-  return cached(`nq:cal:v2:${day}`, day < today ? 7 * 86400 : 3600, ctx, async () => {
-    // A slow Nasdaq must not hold up the calendar, and an empty answer isn't cached for a week.
-    const body = await getJson(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, UA, 4000);
-    const e = nasdaqDayEps(body);
-    if (!Object.keys(e).length) throw new Error("nasdaq day calendar empty");
-    return { e, a: nasdaqDayActuals(body) };
-  });
+async function nasdaqDay(day: string, today: string, ctx: ExecutionContext): Promise<{ e: Record<string, number>; a: Record<string, number> | null }> {
+  const req = CAL(`nq:cal:v2:${day}`);
+  const hit = await readJson<{ e: Record<string, number>; a: Record<string, number> | null }>(req);
+  if (hit) return hit;
+  // A slow Nasdaq must not hold up the calendar, and an empty answer isn't cached for a week.
+  const body = await getJson<any>(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, UA, 4000);
+  const e = nasdaqDayEps(body);
+  if (!Object.keys(e).length) throw new Error("nasdaq day calendar empty");
+  // Nasdaq adds the `eps` column a day or two after the report (live, Nov 12: none for Nov 11, 225 for Nov 10).
+  // Until it does, the actuals are null (rows not judged yet) and the answer is kept an hour, not a week.
+  const a = (body?.data?.rows ?? []).some((r: any) => r && "eps" in r) ? nasdaqDayActuals(body) : null;
+  const val = { e, a };
+  ctx.waitUntil(putJson(req, val, day < today && a ? 7 * 86400 : 3600));
+  return val;
 }
 
 /** Nasdaq's figures are dollars: only swap them in for tracked names whose estimates are in dollars too. */
@@ -353,7 +359,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
       out[i] = { status: "fulfilled", value: ev };
     } catch (reason) {
       health.failed = true;
-      const stale = await caches.default.match(CAL(`cal:stale:v2:${d}`));
+      const stale = await caches.default.match(CAL(`cal:stale:v3:${d}`));
       out[i] = stale ? { status: "fulfilled", value: (await stale.json()) as EarningsEvent[] } : { status: "rejected", reason };
     }
   };
@@ -755,7 +761,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
 async function passedRow(symbol: string, q: { quarter: number; year: number }, days: string[]): Promise<EarningsEvent | null> {
   const found = await Promise.all(days.map(async (d) => {
     try {
-      const hit = (await caches.default.match(CAL_DAY(d))) ?? (await caches.default.match(CAL(`cal:stale:v2:${d}`)));
+      const hit = (await caches.default.match(CAL_DAY(d))) ?? (await caches.default.match(CAL(`cal:stale:v3:${d}`)));
       const evs = hit ? ((await hit.json()) as EarningsEvent[]) : [];
       return evs.find((e) => e.s === symbol && e.q === q.quarter && e.y === q.year) ?? null;
     } catch { return null; }

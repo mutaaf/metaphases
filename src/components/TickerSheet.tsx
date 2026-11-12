@@ -1,4 +1,4 @@
-import { epsVerdict } from "../../shared/compare";
+import { epsVerdict, vsExpected } from "../../shared/compare";
 import { useEffect, useRef, useState } from "react";
 import type { Factor, Reaction, TickerResponse } from "../../shared/types";
 import { useTicker } from "../lib/api";
@@ -31,7 +31,7 @@ function JustReported({ j, today }: { j: NonNullable<TickerResponse["justReporte
         <div><dt><Term k="consensus">{jv.via ? "Expected (Nasdaq)" : "Expected"}</Term></dt><dd>{epsIn(jv.via ? jv.est : j.epsE, j.currency)}</dd></div>
         <div><dt><Term k="surprise">Result</Term></dt><dd className={s == null || Math.abs(s) < 0.5 ? "" : s > 0 ? "pos" : "neg"}>{verdict ?? (j.epsA == null ? "Figures not in yet" : "—")}</dd></div>
       </dl>
-      {jv.act != null && <p className="muted small rx-basis" data-testid="jr-pair">{epsIn(j.epsA, j.currency)} is the company's figure. On the estimate's basis (Nasdaq's figures) it was {epsIn(jv.act, j.currency)} against {epsIn(jv.est, j.currency)}, and that's the result shown.</p>}
+      {jv.act != null && <p className="muted small rx-basis" data-testid="jr-pair">{epsIn(j.epsA, j.currency)} is our data feed's figure. On the estimate's basis (Nasdaq's figures) it was {epsIn(jv.act, j.currency)} against {epsIn(jv.est, j.currency)}, and that's the result shown.</p>}
       {jv.v === "not-comparable" && <p className="muted small rx-basis" data-testid="jr-basis"><Term k="epsbasis">EPS basis differs from the estimate</Term> (for example FFO or adjusted earnings against net income), so we don't call it a beat or a miss.</p>}
     </section>
   );
@@ -147,7 +147,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   const just = data?.justReported;
   const due = data?.next?.status === "results-pending";
   const shareText = just
-    ? `${name} reported Q${just.quarter}${just.epsA != null ? `: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? ` vs ${epsIn(just.epsE, just.currency)} expected` : ""}` : ""}.`
+    ? `${name} reported Q${just.quarter}${just.epsA != null ? `: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? vsExpected(just, (v) => epsIn(v, just.currency)) : ""}` : ""}.`
     : due ? `${name}'s Q${data!.next!.quarter} results were expected; none are in yet.`
     : data?.next?.closed || data?.next?.overdue
     ? `${name}: report date not confirmed yet — earnings track record, quality grade and setup.`

@@ -3,6 +3,7 @@ import worker from "../../worker/index";
 import { applyPreReport, epsVerdict, judgeReaction, nasdaqDayActuals, nasdaqDayEps } from "../../shared/compare";
 import { seasonScore } from "../../shared/depth";
 import { reportedLine, tickerShareDesc } from "../../shared/reported";
+import { tickerShareTitle } from "../../shared/pending";
 import { resultOf, surprise } from "../../src/lib/data";
 import { retraceContext } from "../../src/lib/aiContext";
 import type { EarningsEvent, TickerResponse } from "../../shared/types";
@@ -32,8 +33,8 @@ describe("epsVerdict judges Nasdaq's estimate with Nasdaq's actual (0058)", () =
   it("AMD's surprise is about +9.5%, not +24.4%", () => {
     expect(epsVerdict({ eA: 2.09, eE: 1.68, nA: 1.84 }).pct).toBeCloseTo(9.52, 1);
   });
-  it("Nasdaq has no actual for the row (null): not comparable, never a mixed pair", () => {
-    expect(epsVerdict({ eA: 4.57, eE: 3.82, nA: null })).toMatchObject({ v: "not-comparable", pct: null });
+  it("Nasdaq has no actual for the row yet (null): not judged yet, never a mixed pair, and not called a basis mismatch", () => {
+    expect(epsVerdict({ eA: 4.57, eE: 3.82, nA: null })).toMatchObject({ v: null, pct: null, pending: true });
   });
   it("no nA (Finnhub-only or same figure): judged as before", () => {
     expect(epsVerdict({ eA: 3.57, eE: 3.36 })).toMatchObject({ v: "beat" });
@@ -63,7 +64,7 @@ describe("applyPreReport pairs Nasdaq's estimate with Nasdaq's actual (0058)", (
     expect(by("MCD").nA).toBeUndefined();
     expect(resultOf(by("MCD"))).toBe("beat");
   });
-  it("a row Nasdaq has no actual for isn't judged", () => {
+  it("a row Nasdaq has no actual for isn't judged (yet)", () => {
     expect(by("NOAC")).toMatchObject({ eE: 0.95, pr: "n", nA: null });
     expect(resultOf(by("NOAC"))).toBeNull();
     expect(surprise(by("NOAC"))).toBeNull();
@@ -101,12 +102,24 @@ describe("the sheet's lines say which pair was judged (0058)", () => {
   const fmt = (v: number) => `$${v.toFixed(2)}`;
   it("reportedLine names the company's figure and the judged pair, never a +20% beat", () => {
     const line = reportedLine("Lumentum", { date: "2026-11-02", session: "amc", quarter: 1, epsE: 3.82, epsA: 4.57, nA: 3.76 }, "2026-11-03", fmt);
-    expect(line).toBe("Lumentum reported Q1 on Monday, Nov 2 after the close: $4.57 a share on the company's measure. On the same basis as the $3.82 estimate it was $3.76 (Nasdaq's figures), a miss of 2%.");
-    expect(reportedLine("X", { date: "2026-11-02", session: "amc", quarter: 1, epsE: 3.82, epsA: 4.57, nA: null }, "2026-11-03", fmt)).toContain("we don't call it a beat or a miss");
+    expect(line).toBe("Lumentum reported Q1 on Monday, Nov 2 after the close: $4.57 a share in our data feed. On the same basis as the $3.82 estimate it was $3.76 (Nasdaq's figures), a miss of 2%.");
+    // Nasdaq's figure not posted yet: the result alone, no verdict, no basis claim.
+    expect(reportedLine("X", { date: "2026-11-02", session: "amc", quarter: 1, epsE: 3.82, epsA: 4.57, nA: null }, "2026-11-03", fmt)).toBe("X reported Q1 on Monday, Nov 2 after the close: $4.57 a share.");
   });
   it("judgeReaction shows the same-source pair in the history table", () => {
     expect(judgeReaction({ epsE: 3.82, epsA: 4.57, surprisePct: 19.6 }, null, false, 3.76)).toMatchObject({ epsE: 3.82, epsA: 3.76 });
     expect(judgeReaction({ epsE: 3.82, epsA: 4.57, surprisePct: 19.6 }, null, false, 3.76).surprisePct).toBeCloseTo(-1.57, 1);
+  });
+  it("the share title quotes the judged pair, and no pair while Nasdaq's figure is pending", () => {
+    const just = { quarter: 1, epsE: 3.82, epsA: 4.57 };
+    expect(tickerShareTitle("LITE", "LITE", null, { ...just, nA: 3.76 })).toBe("LITE reported Q1: $4.57 a share ($3.76 on the estimate's basis) vs $3.82 expected · Metaphases");
+    expect(tickerShareTitle("LITE", "LITE", null, { ...just, nA: null })).toBe("LITE reported Q1: $4.57 a share · Metaphases");
+    expect(tickerShareTitle("ZZZR", "ZZZR", null, { quarter: 3, epsE: 0.73, epsA: 0.87 })).toBe("ZZZR reported Q3: $0.87 a share vs $0.73 expected · Metaphases");
+  });
+  it("a pending pair leaves the history row unjudged without a basis flag (a REIT's estimate isn't hidden for it)", () => {
+    const h = judgeReaction({ epsE: 3.82, epsA: 4.57, surprisePct: 19.6 }, null, true, null);
+    expect(h).toMatchObject({ epsE: null, epsA: 4.57, surprisePct: null });
+    expect(h.basis).toBeUndefined();
   });
   it("the share description quotes the pair on the estimate's basis", () => {
     const d = { next: null, justReported: { date: "2026-11-02", session: "amc", quarter: 1, year: 2027, epsE: 3.82, epsA: 4.57, nA: 3.76 }, beatRate: null, expectedMove: null, setup: { grade: null }, compass: { grade: null } } as unknown as TickerResponse;
@@ -118,7 +131,8 @@ describe("the sheet's lines say which pair was judged (0058)", () => {
 class MemCache {
   store = new Map<string, string>();
   async match(req: Request) { const v = this.store.get(req.url); return v === undefined ? undefined : new Response(v); }
-  async put(req: Request, res: Response) { this.store.set(req.url, await res.text()); }
+  ttl = new Map<string, number>();
+  async put(req: Request, res: Response) { this.store.set(req.url, await res.text()); this.ttl.set(req.url, Number(/max-age=(\d+)/.exec(res.headers.get("Cache-Control") ?? "")?.[1])); }
   async delete(req: Request) { return this.store.delete(req.url); }
 }
 const env = { FINNHUB_API_KEY: "k", FRED_API_KEY: "k", ASSETS: { fetch: async () => new Response("") } } as any;
@@ -162,6 +176,19 @@ describe("worker (0058)", () => {
     const lite = r.events.find((e: any) => e.s === "LITE");
     expect(lite).toMatchObject({ eA: 4.57, eE: 3.82, nA: 3.76, pr: "n" });
     expect(resultOf(lite)).toBe("miss");
+  });
+
+  it("/api/calendar: the day after a report Nasdaq hasn't posted actuals (no eps column): not judged yet, and asked again within the hour", async () => {
+    calRows = [{ symbol: "LITE", date: "2026-11-11", hour: "amc", quarter: 1, year: 2027, epsEstimate: 4.4, epsActual: 4.57, revenueEstimate: null, revenueActual: null }];
+    nqDayRows = [{ symbol: "LITE", epsForecast: "$3.82", lastYearEPS: "$1.00" }];
+    const r = await get("/api/calendar?from=2026-11-11&to=2026-11-11");
+    const lite = r.events.find((e: any) => e.s === "LITE");
+    expect(lite).toMatchObject({ eA: 4.57, eE: 3.82, nA: null, pr: "n" });
+    expect(resultOf(lite)).toBeNull();
+    const cache = (globalThis as any).caches.default as MemCache;
+    const key = [...cache.store.keys()].find((k) => k.includes("nq%3Acal%3Av2%3A2026-11-11"));
+    expect(key).toBeTruthy();
+    expect(cache.ttl.get(key!)).toBe(3600);
   });
 
   it("/api/ticker: The Read sets the next estimate against last quarter's actual on its own basis (AMD: never $2.95 vs $1.84)", async () => {

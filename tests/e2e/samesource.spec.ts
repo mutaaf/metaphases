@@ -7,13 +7,15 @@ const fx = (n: string) => JSON.parse(readFileSync(new URL(`../fixtures/${n}`, im
 const APO = { s: "APO", d: "2026-10-28", h: "bmo", q: 3, y: 2026, eE: 2.04, eA: 2.07, nA: 1.82, pr: "n", rE: null, rA: null, t: 1 };
 // LITE-shaped with the gap widened so the mixed pair would rank among Biggest beats (+78%); its own pair is a −1.6% miss.
 const LITE = { s: "LITE", d: "2026-10-28", h: "amc", q: 1, y: 2027, eE: 3.82, eA: 6.8, nA: 3.76, pr: "n", rE: null, rA: null, t: 1 };
+// Nasdaq hasn't posted its actual yet (it lags a day or two): no verdict, and not called a basis mismatch.
+const VRTX = { s: "VRTX", d: "2026-10-28", h: "amc", q: 3, y: 2026, eE: 4.36, eA: 4.76, nA: null, pr: "n", rE: null, rA: null, t: 1 };
 const AMD = { s: "AMD", d: "2026-10-28", h: "amc", q: 3, y: 2026, eE: 1.68, eA: 2.09, nA: 1.84, pr: "n", rE: null, rA: null, t: 1 };
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/calendar**", (r) => {
     const to = new URL(r.request().url()).searchParams.get("to") ?? "";
     const body = fx(to < "2026-11-07" ? "calendar-2026-10.json" : "calendar-2026-11.json");
-    if (to < "2026-11-07") body.events = body.events.filter((e: any) => !["APO", "AMD", "LITE"].includes(e.s)).concat([APO, AMD, LITE]);
+    if (to < "2026-11-07") body.events = body.events.filter((e: any) => !["APO", "AMD", "LITE", "VRTX"].includes(e.s)).concat([APO, AMD, LITE, VRTX]);
     r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
 });
@@ -24,9 +26,12 @@ test("the day drawer judges the same-source pair and shows it", async ({ page })
   await expect(apo.locator(".chip.res-miss")).toContainText("-11%");
   await expect(apo.locator(".chip.res-beat")).toHaveCount(0);
   await expect(apo.locator("[data-testid=nq-actual]")).toContainText("$1.82");
-  await expect(apo.locator("[data-testid=nq-actual]")).toHaveAttribute("title", /company's own figure is \$2\.07/);
+  await expect(apo.locator("[data-testid=nq-actual]")).toHaveAttribute("title", /data feed's figure is \$2\.07/);
   const amd = page.locator("[role=dialog] .erow", { hasText: "AMD" }).first();
   await expect(amd.locator(".chip.res-beat")).toContainText("+10%"); // +9.5%, not +24%
+  const vrtx = page.locator("[role=dialog] .erow", { hasText: "VRTX" }).first();
+  await expect(vrtx.locator("[data-testid=eps-pending]")).toHaveText(/judging soon/i);
+  await expect(vrtx.locator("[data-testid=eps-basis], .chip.res-beat, .chip.res-miss")).toHaveCount(0);
 });
 
 test("Retrace's biggest beats never lists a miss from a mixed pair", async ({ page }) => {

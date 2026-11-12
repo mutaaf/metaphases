@@ -138,16 +138,17 @@ export const needsEpsBasis = (e: Pick<EarningsEvent, "eA" | "eE">, snapE?: numbe
  * 0058: a row judged against Nasdaq's estimate (`pr: "n"`) is judged against Nasdaq's actual for the same quarter
  * too (`nA`), because the two feeds' EPS bases differ by 5–25% for many names (LITE: Finnhub $4.57 against
  * Nasdaq's $3.82 estimate, while Nasdaq's own actual is $3.76). `nA` is set only when it differs from `eA`;
- * `null` means Nasdaq has no actual for the row, so the pair can't be judged.
+ * `null` means Nasdaq has no actual for the row yet (its day calendar posts them 1–2 days after
+ * the report), so the row isn't judged until it does. `act === null`: the day's actuals aren't posted at all.
  */
-function withNasdaqActual(e: EarningsEvent, act: Record<string, number> | undefined): EarningsEvent {
-  if (!act || e.eA == null) return e;
-  const a = act[e.s];
+function withNasdaqActual(e: EarningsEvent, act: Record<string, number> | null | undefined): EarningsEvent {
+  if (act === undefined || e.eA == null) return e;
+  const a = act?.[e.s];
   if (a == null) return { ...e, nA: null };
   return Math.abs(a - e.eA) < 0.005 ? e : { ...e, nA: a };
 }
 
-export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasdaqEps: Record<string, number> = {}, usd: (s: string) => boolean = () => true, record = true, nasdaqAct?: Record<string, number>): { events: EarningsEvent[]; updates: EstSnapshot } {
+export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasdaqEps: Record<string, number> = {}, usd: (s: string) => boolean = () => true, record = true, nasdaqAct?: Record<string, number> | null): { events: EarningsEvent[]; updates: EstSnapshot } {
   const updates: EstSnapshot = {};
   const out = events.map((e) => {
     if (e.eA == null && e.rA == null) {
@@ -206,6 +207,15 @@ export interface EpsJudgment {
   via?: "nasdaq";
   /** 0058: the actual it was judged with, when that isn't the shown `eA` (Nasdaq's actual, on its estimate's basis). */
   act?: number;
+  /** 0058: the estimate is Nasdaq's and Nasdaq's actual isn't posted yet, so the report isn't judged yet. */
+  pending?: true;
+}
+
+/** 0058: " vs $X expected" for a title or share line, on one basis: the judged pair's actual is named, a pending pair says nothing. */
+export function vsExpected(r: { epsA: number | null; epsE: number | null; nE?: number | null; nA?: number | null; reit?: boolean }, fmt: (v: number) => string): string {
+  const j = epsVerdict({ eA: r.epsA, eE: r.epsE, nE: r.nE, nA: r.nA, reit: r.reit });
+  if (j.pending || j.est == null || r.epsA == null) return "";
+  return j.act != null ? ` (${fmt(j.act)} on the estimate's basis) vs ${fmt(j.est)} expected` : ` vs ${fmt(j.via ? j.est : (r.epsE as number))} expected`;
 }
 
 const fin = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -223,7 +233,8 @@ export function epsVerdict(e: { eA: number | null | undefined; eE: number | null
   const { eA, eE, nE } = e;
   if (!fin(eA) || !fin(eE)) return { v: null, est: fin(eE) ? eE : null, pct: null };
   // 0058: an estimate from Nasdaq is judged with Nasdaq's actual, never against the other feed's figure.
-  if (e.nA === null) return { v: "not-comparable", est: eE, pct: null };
+  // No Nasdaq actual yet: nothing to judge yet (not "basis differs": Nasdaq posts it a day or two later).
+  if (e.nA === null) return { v: null, est: eE, pct: null, pending: true };
   if (fin(e.nA)) {
     const j = epsVerdict({ eA: e.nA, eE, reit: e.reit });
     return j.v === "beat" || j.v === "miss" ? { ...j, act: e.nA } : j;
@@ -243,6 +254,8 @@ export function judgeReaction<T extends { epsE: number | null; epsA: number | nu
   const j = epsVerdict({ eA: h.epsA, eE: h.epsE, nE, nA, reit });
   if (j.v === "not-comparable") return { ...h, surprisePct: null, basis: "differs" as const };
   // 0058: the history table shows a same-source pair (as Nasdaq's own rows do), so the beat count can't mix feeds.
+  // Not judged yet: no estimate on the actual's basis to show.
+  if (j.pending) return { ...h, epsE: null, surprisePct: null };
   if (j.act != null) return { ...h, epsA: j.act, surprisePct: j.pct };
   if (j.via) return { ...h, epsE: j.est, surprisePct: j.pct };
   if (j.v && j.pct == null) return { ...h, surprisePct: null };
