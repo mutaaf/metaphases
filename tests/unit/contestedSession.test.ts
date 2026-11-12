@@ -3,6 +3,8 @@ import worker from "../../worker/index";
 import overridesFile from "../../data/date-overrides.json" with { type: "json" };
 import { applyToRows, validateOverrides, type DateOverrides } from "../../shared/dateOverrides";
 import { contestedSession, isContested } from "../../shared/reaction";
+import { borrowHistory } from "../../shared/sheetCache";
+import { factsFor } from "../../worker/ai/prompts";
 
 // 0060: Finnhub and Nasdaq list the same date in different sessions (ADI, DE, ROAD: Finnhub "amc", Nasdaq "bmo",
 // Nasdaq right; WMG: the reverse, Finnhub right). Neither feed wins blindly: the stock's own closes say which day
@@ -182,5 +184,94 @@ describe("ADI's announced 7:00 am release (0060)", () => {
     expect(r.moveSession).toBeUndefined();
     expect(r.expectedMove).toBeCloseTo(mean(ADI_DAY), 4);
     expect(applyToRows("ADI", [{ symbol: "ADI", date: NEXT_DAY, hour: "amc", quarter: 4, year: 2026 }], FILE, "2026-11-12")[0]).toMatchObject({ hour: "bmo" });
+  });
+});
+
+// Self-review: the verdict must outlive the report day (Finnhub drops the row, Nasdaq wipes the session) and a
+// Nasdaq timeout; a current agreement still wins; no price history means no claim about it.
+describe("a contest is remembered per company", () => {
+  const memo = (date: string) => cache.store.set(CAL(`ms:v1:${SYM}`), JSON.stringify({ date, feed: "amc", nasdaq: "bmo" }));
+
+  it("is written when found", async () => {
+    stub(SYM, "amc", closes(ADI_DAY, ADI_NEXT));
+    nasdaqSays(SYM, "bmo");
+    await sheet();
+    expect(JSON.parse(cache.store.get(CAL(`ms:v1:${SYM}`))!)).toEqual({ date: NEXT_DAY, feed: "amc", nasdaq: "bmo" });
+  });
+
+  it("the day after the report: Finnhub lists only the next quarter, Nasdaq can't say, the moves stay on the report day", async () => {
+    vi.setSystemTime(new Date("2026-08-21T16:00:00Z"));
+    memo("2026-08-20");
+    stub(SYM, "amc", closes(ADI_DAY, ADI_NEXT)); // next row Nov 24: more than 45 days out, so no Nasdaq read
+    const r = await sheet();
+    expect(r.moveSession).toEqual({ feed: "amc", nasdaq: "bmo", session: "bmo" });
+    expect(r.history[0]).toMatchObject({ date: "2026-08-20", session: "bmo" });
+    expect(r.history[0].move).toBeCloseTo(ADI_DAY[0], 4);
+  });
+
+  it("without the memo that same day, Finnhub's session is all there is (the case the memo fixes)", async () => {
+    vi.setSystemTime(new Date("2026-08-21T16:00:00Z"));
+    stub(SYM, "amc", closes(ADI_DAY, ADI_NEXT));
+    const r = await sheet();
+    expect(r.moveSession).toBeUndefined();
+    expect(r.history[0].move).toBeCloseTo(ADI_NEXT[0], 4);
+  });
+
+  it("Nasdaq's day is down before the report: the remembered contest still decides", async () => {
+    memo(NEXT_DAY);
+    stub(SYM, "amc", closes(ADI_DAY, ADI_NEXT)); // the day calendar answers with no rows
+    const r = await sheet();
+    expect(r.moveSession?.session).toBe("bmo");
+    expect(r.expectedMove).toBeCloseTo(mean(ADI_DAY), 4);
+  });
+
+  it("Nasdaq now agrees with Finnhub: the memo is ignored", async () => {
+    memo(NEXT_DAY);
+    stub(SYM, "amc", closes(ADI_DAY, ADI_NEXT));
+    nasdaqSays(SYM, "amc");
+    const r = await sheet();
+    expect(r.moveSession).toBeUndefined();
+    expect(r.history[0].move).toBeCloseTo(ADI_NEXT[0], 4);
+  });
+
+  it("a memo older than 30 days is ignored", async () => {
+    vi.setSystemTime(new Date("2026-09-25T16:00:00Z"));
+    memo("2026-08-20");
+    stub(SYM, "amc", closes(ADI_DAY, ADI_NEXT));
+    const r = await sheet();
+    expect(r.moveSession).toBeUndefined();
+  });
+
+  it("no price history: no moveSession and no claim about past moves", async () => {
+    stub(SYM, "amc", closes(ADI_DAY, ADI_NEXT));
+    nasdaqSays(SYM, "bmo");
+    (fetch as any).mockImplementation(async (u: string) => {
+      const url = new URL(u);
+      if (url.hostname.endsWith("finance.yahoo.com")) return new Response("busy", { status: 503 });
+      if (url.hostname === "api.nasdaq.com") return new Response(JSON.stringify({ data: { earningsSurpriseTable: { rows: nqRows } } }));
+      if (url.pathname.endsWith("/calendar/earnings")) return new Response(JSON.stringify({ earningsCalendar: [{ symbol: SYM, date: NEXT_DAY, hour: "amc", quarter: 4, year: 2026, epsEstimate: 1.1, epsActual: null, revenueEstimate: 4e9, revenueActual: null }] }));
+      return new Response("{}", { status: 404 });
+    });
+    const r = await sheet();
+    expect(r.moveSession).toBeUndefined();
+    expect(r.read.join(" ")).not.toContain("two calendars disagree on the time");
+  });
+});
+
+describe("downstream of a contested session", () => {
+  it("an earlier good copy never fills a deliberate '—' typical move", () => {
+    const built = { history: [{ move: null }], beatRate: null, expectedMove: null, moveSession: { feed: "amc", nasdaq: "bmo", session: "" }, warnings: [] } as any;
+    const old = { at: Date.now(), day: "2026-11-12", data: { history: [], beatRate: null, expectedMove: 1.6, warnings: [] } } as any;
+    expect(borrowHistory(built, old, "2026-11-12").expectedMove).toBeNull();
+    expect(borrowHistory({ ...built, moveSession: undefined }, old, "2026-11-12").expectedMove).toBe(1.6);
+  });
+
+  it("the AI is told the time is unconfirmed and how moves were measured", () => {
+    const base = { symbol: "ADI", next: { date: NEXT_DAY, session: "amc", quarter: 4, year: 2026, epsE: 1, revE: 1, currency: "USD" }, expectedMove: 3.2, history: [] };
+    const inferred = factsFor("ticker", { ...base, moveSession: { feed: "amc", nasdaq: "bmo", session: "bmo" } }).join("\n");
+    expect(inferred).toContain("Past moves are measured as if before the open");
+    const unknown = factsFor("ticker", { ...base, expectedMove: null, moveSession: { feed: "amc", nasdaq: "bmo", session: "" } }).join("\n");
+    expect(unknown).toContain("there is no typical move");
+    expect(factsFor("ticker", { ...base, moveSession: { feed: "<x>", nasdaq: "bmo", session: "bmo" } }).join("\n")).not.toContain("unconfirmed: the data feed");
   });
 });

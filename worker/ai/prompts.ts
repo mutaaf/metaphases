@@ -81,6 +81,11 @@ function tickerFacts(t: Obj): string[] {
   if (t.next?.status === "results-pending") L.push(`Q${t.next.quarter} ${t.next.year} results were expected on ${clip(t.next.date, 10)} and are not in the data yet; do not describe this report as upcoming and do not guess the results.`);
   else if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} ${t.next.closed || t.next.overdue ? "(date not confirmed yet)" : `on ${clip(t.next.date, 10)} ${clip(t.next.session || "time TBD", 4)}`}; consensus EPS ${t.next.epsBasis ? "not quoted (this REIT's recent results were on a different measure from the feed's estimate, usually FFO vs net income; don't state an EPS estimate)" : epsIn(t.next.epsE, cur3(t.next.currency))}, revenue estimate ${moneyIn(t.next.revE, cur3(t.next.currency))}${isUsd(cur3(t.next.currency)) ? "" : ` (estimates in ${cur3(t.next.currency) || "local currency"}, not USD; never compare them with USD figures)`}.`);
   else L.push("Next report date: not available.");
+  // 0060: the two calendars disagree on the session; say how the moves were measured (enum-checked, never free text).
+  const ms = t.moveSession as Obj | undefined, S: Record<string, string> = { bmo: "before the open", amc: "after the close" };
+  if (ms && S[ms.feed] && S[ms.nasdaq]) L.push(ms.session && S[ms.session]
+    ? `The report time is unconfirmed: the data feed says ${S[ms.feed]}, Nasdaq's calendar says ${S[ms.nasdaq]}. Past moves are measured as if ${S[ms.session]}, the day this stock has usually moved; don't state the time as fact.`
+    : `The report time is unconfirmed: the data feed says ${S[ms.feed]}, Nasdaq's calendar says ${S[ms.nasdaq]}, and past moves don't settle it, so there is no typical move; don't state the time as fact.`);
   if (t.beatRate) L.push(`Beat the EPS estimate in ${t.beatRate.beats} of the last ${t.beatRate.total} reports.`);
   if (typeof t.expectedMove === "number") L.push(`Typical stock move on a report: ±${n(t.expectedMove, 1)}%.`);
   for (const h of (t.history ?? []).slice(0, 8)) {

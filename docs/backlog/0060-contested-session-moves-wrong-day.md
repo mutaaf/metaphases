@@ -64,6 +64,13 @@ Option (a), with (b) as its fallback. `shared/reaction.ts` `contestedSession`: w
 - The next report's Nasdaq day is now read on demand (shared `nq:x:v1:<day>` cache) even when Finnhub gives a session, so the contest is caught without waiting for the 0015 window (LESSONS 2026-11-11). Bounded as in 0057: within 45 days, 2.5 s timeout, failure memory.
 - `/api/ticker` carries `moveSession: { feed, nasdaq, session }`; the sheet's next-report card and The Read say how the typical move was measured, or why it's "—".
 - `kidsWhy` follows the same rule (its 3-month closes rarely settle it, so it says "not sure" rather than guess).
-- ADI added to `data/date-overrides.json` (Tue Nov 24, bmo). The analog.com release answered 503 from the sandbox; `source` is the wire copy read (Webull: "before the market opens on Tuesday, Nov. 24"), the release id is in the `note`. No company notice found for DE.
+- ADI added to `data/date-overrides.json` (Tue Nov 24, bmo). The analog.com release answers 503 to the sandbox; its text ("at 7:00 a.m. Eastern time on Tuesday, November 24, 2026") was read through the search index, and a Webull/Barchart copy agrees. No company notice found for DE.
 - Sheet cache keys bumped (`tk:v7`, `tk:stale:v6`).
 Tests: `tests/unit/contestedSession.test.ts` (ADI, DE, WMG shapes, no winner, on-demand read, agreement, ADI override), e2e `xcheck.spec.ts` (both notes at 390×844 and 1440×900).
+
+Self-review fixes (same PR):
+- **The contest is remembered per company** (`ms:v1:<SYM>`, 60-day cache, used for 30 days after the report date). The day after a report, Finnhub's `symbol=` has dropped the row and Nasdaq's day calendar has wiped the session, so without it the just-reported move went back to Finnhub's session. The memo also covers a Nasdaq timeout before the report. A current agreement between the feeds, or a company override for that date, always wins over the memo. It's an edge cache, so a colo that never built the sheet before the report doesn't have it.
+- The AI context says the time is unconfirmed and how moves were measured (enum-checked values only).
+- `borrowHistory` never fills a deliberate "—" typical move from an earlier read.
+- No price history means no `moveSession` and no copy about past moves.
+- Known cost: a sheet whose next report is within 45 days and isn't in the 0015 window now waits for one Nasdaq day read on a cold cache (≤ 2.5 s, shared 6 h per day per colo; timeouts aren't remembered, as in 0059).

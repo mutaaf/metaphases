@@ -277,6 +277,12 @@ async function nasdaqDayOnDemand(day: string, today: string, ctx: ExecutionConte
   }
 }
 
+/** 0060: a session the two calendars disagreed on, remembered per company for MS_DAYS after the report. */
+interface ContestMemo { date: string; feed: Session; nasdaq: Session }
+const MS_KEY = (sym: string) => CAL(`ms:v1:${sym}`);
+const MS_DAYS = 30;
+const MS_TTL = 60 * 86400;
+
 /** The background fill's timeout: Nasdaq's day calendar answers in 1.2–3.3 s (0059), so 2.5 s lost whole days. */
 const NQX_BUILD_TIMEOUT = 4000;
 const WHEN_LONG: Record<Session, string> = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "" };
@@ -564,9 +570,22 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   };
   // 0060: the two calendars give the next report different sessions (and no company notice settles it). Neither
   // feed wins blindly: the stock's own past moves say which day the market reacts on, or the moves read "—".
-  const contested = !!nextE && !nextE.source && isContested(fhNextHour, nqOnNext);
-  const habit: Session = contested
-    ? contestedSession(fhNextHour as Session, nqOnNext as Session, rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null), closeOn)
+  // The contest is remembered per company (MS_KEY) past the report day: once the date passes, Finnhub's `symbol=`
+  // drops the row and Nasdaq wipes its session, so neither feed can show it again, and a Nasdaq timeout must not
+  // bring back one feed's session as fact.
+  let contest: ContestMemo | null = nextE && !nextE.source && isContested(fhNextHour, nqOnNext) ? { date: nextE.date, feed: fhNextHour as Session, nasdaq: nqOnNext as Session } : null;
+  if (contest) ctx.waitUntil(putJson(MS_KEY(symbol), contest, MS_TTL));
+  else {
+    const memo = await readJson<ContestMemo>(MS_KEY(symbol));
+    // Only while nothing current answers it: the report it was about has passed (and the company didn't date it
+    // since), or it's still ahead and Nasdaq can't say right now. A current agreement always wins.
+    const settled = !!nextE && nextE.date === memo?.date && (!!nextE.source || (nqOnNext === "bmo" || nqOnNext === "amc"));
+    const ov = memo ? activeOverrides(OVERRIDES, today)[symbol] : undefined;
+    if (memo && !settled && !(ov && ov.date === memo.date) && memo.date >= addDays(today, -MS_DAYS) && (memo.date < today || memo.date === nextE?.date)) contest = memo;
+  }
+  const contested = !!contest;
+  const habit: Session = contest
+    ? contestedSession(contest.feed, contest.nasdaq, rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null), closeOn)
     : sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
   const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
@@ -751,7 +770,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   if (estLine) read.push(estLine);
   if (beatRate) read.push(`It has beaten the estimate in ${beats} of its last ${judged.length} reports.`);
   // 0060: say how past moves were measured when the two calendars disagree on the time.
-  if (contested && history.length) read.push(habit
+  if (contested && chart && history.length) read.push(habit
     ? `The two calendars disagree on the time, so past moves are measured on the day the stock has usually moved: ${habit === "bmo" ? "the report day, as for a report before the open" : "the day after, as for a report after the close"}.`
     : "The two calendars disagree on the time, and the stock's past moves don't settle it, so we can't tell which day the market reacted.");
   if (expectedMove != null) read.push(`The stock has moved about ±${expectedMove.toFixed(1)}% on a typical report${out ? "." : " — that's the size of swing to be ready for."}`);
@@ -768,7 +787,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
-    ...(contested ? { moveSession: { feed: fhNextHour as Session, nasdaq: nqOnNext as Session, session: habit } } : {}),
+    ...(contest && chart ? { moveSession: { feed: contest.feed, nasdaq: contest.nasdaq, session: habit } } : {}),
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
     quarters: quartersFrom(quarterly, profile?.shareOutstanding ?? null),
