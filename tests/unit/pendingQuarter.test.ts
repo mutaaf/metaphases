@@ -99,7 +99,7 @@ const get = async (path: string) => {
 
 describe("/api/ticker keeps an unreported quarter as next (AXON shape, Nov 4)", () => {
   it("with the calendar's passed row: Q3, the passed date, its estimates, flagged overdue", async () => {
-    cache.store.set(CAL("cal:v2:2026-11-02"), JSON.stringify([axonQ3Day]));
+    cache.store.set(CAL("cal:v3:2026-11-02"), JSON.stringify([axonQ3Day]));
     const r = await get("/api/ticker/ZZZT");
     expect(r.next).toMatchObject({ quarter: 3, year: 2026, date: "2026-11-02", epsE: 1.87, revE: 705000000, overdue: true });
     expect(r.read[0]).toContain("Q3 report date is not confirmed yet");
@@ -114,13 +114,13 @@ describe("/api/ticker keeps an unreported quarter as next (AXON shape, Nov 4)", 
   });
 
   it("a row from yesterday is inside the grace day: a normal report the feeds haven't caught up with", async () => {
-    cache.store.set(CAL("cal:v2:2026-11-03"), JSON.stringify([{ ...axonQ3Day, d: "2026-11-03" }]));
+    cache.store.set(CAL("cal:v3:2026-11-03"), JSON.stringify([{ ...axonQ3Day, d: "2026-11-03" }]));
     const r = await get("/api/ticker/ZZZT");
     expect(r.next.overdue).toBeUndefined();
   });
 
   it("a passed row with figures means it reported and Nasdaq is behind: no overdue flag", async () => {
-    cache.store.set(CAL("cal:v2:2026-11-02"), JSON.stringify([{ ...axonQ3Day, eA: 2.0 }]));
+    cache.store.set(CAL("cal:v3:2026-11-02"), JSON.stringify([{ ...axonQ3Day, eA: 2.0 }]));
     const r = await get("/api/ticker/ZZZT");
     expect(r.next.overdue).toBeUndefined();
   });
@@ -132,7 +132,7 @@ describe("/api/ticker keeps an unreported quarter as next (AXON shape, Nov 4)", 
 describe("a company-announced date that has passed is a report, not an overdue quarter", () => {
   it("AXON on Nov 6: no overdue flag", async () => {
     vi.setSystemTime(new Date("2026-11-06T10:00:00Z"));
-    cache.store.set(CAL("cal:v2:2026-11-02"), JSON.stringify([{ ...axonQ3Day, s: "AXON" }]));
+    cache.store.set(CAL("cal:v3:2026-11-02"), JSON.stringify([{ ...axonQ3Day, s: "AXON" }]));
     const r = await get("/api/ticker/AXON");
     expect(r.next?.overdue).toBeUndefined();
     expect(r.read.join(" ")).not.toContain("expected it on Monday, Nov 2");

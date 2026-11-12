@@ -103,7 +103,7 @@ describe("/api/ticker on report day (PFE shape, Nov 3, 1 pm ET)", () => {
   });
 
   it("the actual can come from the calendar's cached day when the symbol row lacks it", async () => {
-    cache.store.set(CAL("cal:v2:2026-11-03"), JSON.stringify([{ ...q3Day, eA: 0.87 }]));
+    cache.store.set(CAL("cal:v3:2026-11-03"), JSON.stringify([{ ...q3Day, eA: 0.87 }]));
     const r = await get("/api/ticker/ZZZR");
     expect(r.next.quarter).toBe(4);
     expect(r.history[0]).toMatchObject({ date: "2026-11-03", epsA: 0.87 });
@@ -134,7 +134,7 @@ describe("/api/ticker the day after (ADM shape, Nov 4): the report never vanishe
   beforeEach(() => { vi.setSystemTime(new Date("2026-11-04T15:00:00Z")); symbolRows = [q4]; });
 
   it("figures on the cached day: the report heads history while Nasdaq catches up", async () => {
-    cache.store.set(CAL("cal:v2:2026-11-03"), JSON.stringify([{ ...q3Day, eA: 0.87 }]));
+    cache.store.set(CAL("cal:v3:2026-11-03"), JSON.stringify([{ ...q3Day, eA: 0.87 }]));
     const r = await get("/api/ticker/ZZZR");
     expect(r.history[0]).toMatchObject({ date: "2026-11-03", epsE: 0.73, epsA: 0.87 });
     expect(r.next.quarter).toBe(4);
@@ -143,7 +143,7 @@ describe("/api/ticker the day after (ADM shape, Nov 4): the report never vanishe
   });
 
   it("no figures yet: Q3 stays next as results pending, not Q4 with last quarter's numbers", async () => {
-    cache.store.set(CAL("cal:v2:2026-11-03"), JSON.stringify([q3Day]));
+    cache.store.set(CAL("cal:v3:2026-11-03"), JSON.stringify([q3Day]));
     const r = await get("/api/ticker/ZZZR");
     expect(r.next).toMatchObject({ quarter: 3, date: "2026-11-03", status: "results-pending" });
     expect(r.next.overdue).toBeUndefined();
@@ -163,7 +163,7 @@ describe("review fixes", () => {
       if (url.pathname.endsWith("/calendar/earnings")) return new Response(JSON.stringify({ earningsCalendar: symbolRows }));
       return new Response("{}", { status: 404 });
     }));
-    cache.store.set(CAL("cal:v2:2026-11-03"), JSON.stringify([{ ...q3Day, eA: 0.87 }]));
+    cache.store.set(CAL("cal:v3:2026-11-03"), JSON.stringify([{ ...q3Day, eA: 0.87 }]));
     const r = await get("/api/ticker/ZZZR");
     expect(r.history.filter((h: any) => h.epsA === 0.87)).toHaveLength(1);
     expect(r.beatRate.total).toBe(3);
@@ -172,7 +172,7 @@ describe("review fixes", () => {
   it("'Just reported' comes down after a few trading days; the history row stays", async () => {
     vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); // 5 trading days after Nov 3
     symbolRows = [q4];
-    cache.store.set(CAL("cal:v2:2026-11-03"), JSON.stringify([{ ...q3Day, eA: 0.87 }]));
+    cache.store.set(CAL("cal:v3:2026-11-03"), JSON.stringify([{ ...q3Day, eA: 0.87 }]));
     const r = await get("/api/ticker/ZZZR");
     expect(r.justReported).toBeUndefined();
     expect(r.history[0]).toMatchObject({ date: "2026-11-03", epsA: 0.87 });

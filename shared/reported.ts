@@ -1,5 +1,5 @@
 import { epsIn } from "./currency";
-import { epsVerdict } from "./compare";
+import { epsVerdict, vsExpected } from "./compare";
 import type { TickerResponse } from "./types";
 
 /**
@@ -11,7 +11,7 @@ import type { TickerResponse } from "./types";
  */
 
 /** A report day's row, from Finnhub's `symbol=` calendar or the calendar route's cached day. */
-export interface DayRow { date: string; hour: string; quarter: number; year: number; eE: number | null; eA: number | null; rE: number | null; rA: number | null; /** 0049: the calendar row's Nasdaq figure on the actual's basis. */ nE?: number }
+export interface DayRow { date: string; hour: string; quarter: number; year: number; eE: number | null; eA: number | null; rE: number | null; rA: number | null; /** 0049: the calendar row's Nasdaq figure on the actual's basis. */ nE?: number; /** 0058: Nasdaq's actual on the estimate's basis (EarningsEvent.nA). */ nA?: number | null }
 
 export type Outcome = { kind: "reported"; row: DayRow } | { kind: "results-pending"; row: DayRow } | null;
 
@@ -56,13 +56,19 @@ const longDay = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en
 const onDay = (d: string, today: string) => (d === today ? `today (${longDay(d)})` : `on ${longDay(d)}`);
 
 /** The Read's opening line for a just-reported quarter, in the past tense. `fmt` formats an EPS in its currency. */
-export function reportedLine(name: string, r: { date: string; session: string; quarter: number; epsE: number | null; epsA: number | null; nE?: number; reit?: boolean }, today: string, fmt: (v: number) => string): string {
+export function reportedLine(name: string, r: { date: string; session: string; quarter: number; epsE: number | null; epsA: number | null; nE?: number; nA?: number | null; reit?: boolean }, today: string, fmt: (v: number) => string): string {
   const when = [onDay(r.date, today), WHEN[r.session] ?? ""].filter(Boolean).join(" ");
   const head = `${name} reported Q${r.quarter} ${when}`;
   if (r.epsA == null) return `${head}; the per-share result isn't in our data yet.`;
-  const j = epsVerdict({ eA: r.epsA, eE: r.epsE, nE: r.nE, reit: r.reit });
+  const j = epsVerdict({ eA: r.epsA, eE: r.epsE, nE: r.nE, nA: r.nA, reit: r.reit });
   // 0049: an actual on another basis from its estimate (FFO vs net income, adjusted vs GAAP) is neither a beat nor a miss.
   if (j.v === "not-comparable") return `${head}: ${fmt(r.epsA)} a share. That figure isn't on the same basis as the ${fmt(r.epsE as number)} estimate (for example FFO or adjusted earnings against net income), so we don't call it a beat or a miss.`;
+  // 0058: judged on the estimate's own basis (Nasdaq's actual against Nasdaq's estimate); the company's figure is named too.
+  if (j.act != null && r.epsE != null && j.v) {
+    const s = j.pct;
+    const verdict = s == null ? (j.v === "beat" ? "above the estimate" : "below the estimate") : Math.abs(s) < 0.5 ? "in line with the estimate" : s > 0 ? `a beat of ${Math.abs(s).toFixed(0)}%` : `a miss of ${Math.abs(s).toFixed(0)}%`;
+    return `${head}: ${fmt(r.epsA)} a share in our data feed. On the same basis as the ${fmt(r.epsE)} estimate it was ${fmt(j.act)} (Nasdaq's figures), ${verdict}.`;
+  }
   const s = j.pct;
   if (r.epsE == null || j.v == null) return `${head}: ${fmt(r.epsA)} a share.`;
   const est = j.est ?? r.epsE;
@@ -89,7 +95,7 @@ export function tickerShareDesc(name: string, d: Pick<TickerResponse, "next" | "
   ].filter(Boolean);
   const j = d.justReported;
   const lead = j
-    ? ` — Reported Q${j.quarter} on ${shortDay(j.date)}${j.epsA != null ? `: ${epsIn(j.epsA, j.currency)} EPS${(() => { const v = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, reit: j.reit }); return v.est != null && v.v !== "not-comparable" ? ` vs ${epsIn(v.est, j.currency)} expected` : ""; })()}` : ""}`
+    ? ` — Reported Q${j.quarter} on ${shortDay(j.date)}${j.epsA != null ? `: ${epsIn(j.epsA, j.currency)} EPS${(() => { const v = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, nA: j.nA, reit: j.reit }); return v.v === "not-comparable" ? "" : vsExpected(j, (x) => epsIn(x, j.currency)); })()}` : ""}`
     : d.next?.status === "results-pending" ? ` — Q${d.next.quarter} results expected, none in our data yet${d.next.epsE != null && !d.next.epsBasis ? ` (estimate going in ${epsIn(d.next.epsE, d.next.currency)} EPS)` : ""}`
     : d.next?.epsE != null && !d.next.epsBasis ? ` — Street expects ${epsIn(d.next.epsE, d.next.currency)} EPS` : "";
   // 0059: a date the two calendars disagree on is said to be unconfirmed (overdue / closed rows never carry one).

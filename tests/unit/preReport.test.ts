@@ -65,7 +65,7 @@ describe("calendar: pre-report estimates (0035)", () => {
     expect([...cache.store.keys()].some((k) => k.includes("nq%3Acal"))).toBe(false);
     const crossCheckCalls = nasdaqCalls;
     // The day's list expires; Finnhub now shows the actual and a revised estimate.
-    for (const k of [...cache.store.keys()]) if (k.includes("cal%3Av2%3A2026-06-02")) cache.store.delete(k);
+    for (const k of [...cache.store.keys()]) if (k.includes("cal%3Av3%3A2026-06-02")) cache.store.delete(k);
     finnhub = [row("V", "2026-06-02", 3.5055, 3.48, 10.75e9, 10.7e9)];
     const r = await get("2026-06-02", "2026-06-02");
     expect(r.events[0]).toMatchObject({ eE: 3.44, rE: 10.6e9, eA: 3.48, pr: "s" });

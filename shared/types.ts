@@ -20,6 +20,8 @@ export interface EarningsEvent {
   pr?: "s" | "n";
   /** 0049: Nasdaq's pre-report EPS consensus when `eE` is on another basis from `eA` (REIT FFO vs GAAP EPS) and Nasdaq's is on the actual's. Judge with `epsVerdict`. */
   nE?: number;
+  /** 0058: Nasdaq's actual for the quarter when `eE` is Nasdaq's (`pr: "n"`) and its actual differs from `eA`; null = Nasdaq has none, so the pair isn't judged. Judge with `epsVerdict`. */
+  nA?: number | null;
   /** 0015, the next 14 days: how Nasdaq's per-day calendar compares. "agree" = same day; "differs" = another day or session (`xd`/`xh` say which); "unknown" = Nasdaq doesn't list it. Absent = not checked. */
   x?: "agree" | "differs" | "unknown";
   /** Nasdaq's day on `differs`. */
@@ -70,7 +72,7 @@ export interface TickerResponse {
   quote: { price: number; change: number; changePct: number; prevClose: number; asOf: number } | null;
   next: { date: string; session: Session; quarter: number; year: number; epsE: number | null; revE: number | null; /** ISO code of epsE/revE. "" = not dollars, currency unknown. */ currency?: string; /** The company's announcement URL when its date overrides Finnhub's. */ confirmed?: string; /** Projected onto a closed-market day (holiday name or "a weekend"): not a real date yet (0045). */ closed?: string; /** 0038: this quarter's projected date passed with no results and no new date is known. `date` is the passed date, or "" if the feed never had one. */ overdue?: true; /** 0039: the session has passed (today, or within the grace day) and no figures are in yet. */ status?: "results-pending"; /** 0015: Nasdaq's per-day calendar lists this report on another day or session (`date`/`session` say which). The feed's date stays; the sheet calls it unconfirmed. */ nasdaq?: { date: string; session: Session }; /** 0049: a REIT, whose own measure is FFO: the feed's EPS estimate isn't the bar it reports against, so it isn't quoted. */ epsBasis?: "ffo" } | null;
   /** 0039: a report that came out today or in the last day or two, before Nasdaq's history catches up. `epsE`/`epsA` are in `currency`. */
-  justReported?: { date: string; session: Session; quarter: number; year: number; epsE: number | null; epsA: number | null; currency?: string; /** 0049: Nasdaq's consensus on the actual's basis when `epsE` isn't. */ nE?: number; /** 0049: a REIT (judge with `epsVerdict({ reit })`). */ reit?: true };
+  justReported?: { date: string; session: Session; quarter: number; year: number; epsE: number | null; epsA: number | null; currency?: string; /** 0049: Nasdaq's consensus on the actual's basis when `epsE` isn't. */ nE?: number; /** 0058: Nasdaq's actual on `epsE`'s basis (see EarningsEvent.nA). */ nA?: number | null; /** 0049: a REIT (judge with `epsVerdict({ reit })`). */ reit?: true };
   compass: { score: number | null; grade: Grade | null; factors: Factor[] };
   setup: { score: number | null; grade: Grade | null; factors: Factor[]; trend: string; rsi: number | null; atrPct: number | null; from52wHigh: number | null };
   history: Reaction[];
