@@ -68,10 +68,12 @@ function tickerFacts(t: Obj): string[] {
   if (t.quote) L.push(`Price $${n(t.quote.price)} (${n(t.quote.changePct)}% today).`);
   // 0039: a report that's out, or whose session passed without figures, is never described as upcoming.
   if (t.justReported) {
-    const j = t.justReported, jv = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, reit: j.reit });
+    const j = t.justReported, jv = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, nA: j.nA, reit: j.reit });
     // 0049: never hand the model an estimate on another basis from the actual.
     L.push(jv.v === "not-comparable"
       ? `Just reported: Q${j.quarter} ${j.year} on ${clip(j.date, 10)}; EPS ${epsIn(j.epsA, cur3(j.currency))}. That figure is on a different basis from the estimate (e.g. FFO or adjusted vs net income); don't call it a beat or a miss and don't compute a surprise.`
+      : jv.act != null
+      ? `Just reported: Q${j.quarter} ${j.year} on ${clip(j.date, 10)}; EPS ${epsIn(j.epsA, cur3(j.currency))} on the company's measure, ${epsIn(jv.act, cur3(j.currency))} on the basis of the ${epsIn(jv.est, cur3(j.currency))} estimate (judge the beat or miss on that pair: ${jv.v}).`
       : `Just reported: Q${j.quarter} ${j.year} on ${clip(j.date, 10)}; EPS ${epsIn(j.epsA, cur3(j.currency))} against an estimate of ${epsIn(jv.est ?? j.epsE, cur3(j.currency))}.`);
   }
   if (t.next?.status === "results-pending") L.push(`Q${t.next.quarter} ${t.next.year} results were expected on ${clip(t.next.date, 10)} and are not in the data yet; do not describe this report as upcoming and do not guess the results.`);

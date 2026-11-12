@@ -1,7 +1,7 @@
 ---
 id: 0058
 title: Judge a beat with an estimate and an actual from the same source (Lumentum, Vertex and Apollo misses shown as beats)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality

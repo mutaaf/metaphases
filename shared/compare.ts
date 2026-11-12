@@ -134,7 +134,20 @@ function withNasdaqBasis(e: EarningsEvent, n: number | undefined, usd: (s: strin
 export const needsEpsBasis = (e: Pick<EarningsEvent, "eA" | "eE">, snapE?: number | null) =>
   e.eA != null && (snapE ?? e.eE) != null && !sameEpsBasis(e.eA, snapE ?? e.eE);
 
-export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasdaqEps: Record<string, number> = {}, usd: (s: string) => boolean = () => true, record = true): { events: EarningsEvent[]; updates: EstSnapshot } {
+/**
+ * 0058: a row judged against Nasdaq's estimate (`pr: "n"`) is judged against Nasdaq's actual for the same quarter
+ * too (`nA`), because the two feeds' EPS bases differ by 5–25% for many names (LITE: Finnhub $4.57 against
+ * Nasdaq's $3.82 estimate, while Nasdaq's own actual is $3.76). `nA` is set only when it differs from `eA`;
+ * `null` means Nasdaq has no actual for the row, so the pair can't be judged.
+ */
+function withNasdaqActual(e: EarningsEvent, act: Record<string, number> | undefined): EarningsEvent {
+  if (!act || e.eA == null) return e;
+  const a = act[e.s];
+  if (a == null) return { ...e, nA: null };
+  return Math.abs(a - e.eA) < 0.005 ? e : { ...e, nA: a };
+}
+
+export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasdaqEps: Record<string, number> = {}, usd: (s: string) => boolean = () => true, record = true, nasdaqAct?: Record<string, number>): { events: EarningsEvent[]; updates: EstSnapshot } {
   const updates: EstSnapshot = {};
   const out = events.map((e) => {
     if (e.eA == null && e.rA == null) {
@@ -150,21 +163,25 @@ export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasda
     // unit: a snapshot recorded before a share-class rescale (0046, BRK.B) is 1,500× off, not drift.
     if (s && (s.eE != null || s.rE != null) && (s.eE != null || e.eE == null) && (s.rE != null || e.rE == null) && sameEpsUnit(e.s, s.eE, e.eE)) return withNasdaqBasis({ ...e, eE: s.eE, rE: s.rE, pr: "s" as const }, nasdaqEps[e.s], usd);
     const n = nasdaqEps[e.s];
-    if (n != null && usd(e.s) && sameEpsBasis(n, e.eE)) return { ...e, eE: n, pr: "n" as const };
+    if (n != null && usd(e.s) && sameEpsBasis(n, e.eE)) return withNasdaqActual({ ...e, eE: n, pr: "n" as const }, nasdaqAct);
     return withNasdaqBasis(e, n, usd);
   });
   return { events: out, updates };
 }
 
-/** Nasdaq's day calendar (`/api/calendar/earnings?date=`) → symbol → pre-report EPS consensus. */
-export function nasdaqDayEps(body: any): Record<string, number> {
+const dayFigure = (v: unknown) => parseFloat(String(v ?? "").replace(/[$,\s]/g, "").replace(/^\((.*)\)$/, "-$1"));
+function dayColumn(body: any, key: "epsForecast" | "eps"): Record<string, number> {
   const out: Record<string, number> = {};
   for (const r of body?.data?.rows ?? []) {
-    const v = parseFloat(String(r?.epsForecast ?? "").replace(/[$,\s]/g, "").replace(/^\((.*)\)$/, "-$1"));
+    const v = dayFigure(r?.[key]);
     if (typeof r?.symbol === "string" && Number.isFinite(v)) out[r.symbol] = v;
   }
   return out;
 }
+/** Nasdaq's day calendar (`/api/calendar/earnings?date=`) → symbol → pre-report EPS consensus. */
+export const nasdaqDayEps = (body: any): Record<string, number> => dayColumn(body, "epsForecast");
+/** 0058: the same call's reported EPS (`eps`), on the basis of its own consensus. */
+export const nasdaqDayActuals = (body: any): Record<string, number> => dayColumn(body, "eps");
 
 // ── 0049: an EPS actual on the estimate's basis ─────────────────────────
 // Finnhub's EPS estimate and actual aren't always the same measure: a REIT's actual is FFO while the
@@ -187,6 +204,8 @@ export interface EpsJudgment {
   pct: number | null;
   /** Judged against Nasdaq's consensus because Finnhub's estimate is on another basis. */
   via?: "nasdaq";
+  /** 0058: the actual it was judged with, when that isn't the shown `eA` (Nasdaq's actual, on its estimate's basis). */
+  act?: number;
 }
 
 const fin = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -200,9 +219,15 @@ const judge = (a: number, e: number, pct = true): EpsJudgment => ({ v: a >= e ? 
  * `reit`: a REIT, whose actual is often FFO against a GAAP estimate even inside EPS_BAND (PSA $2.42 → $4.34
  * Core FFO, "+80%"), so it only counts as the same basis within EPS_BASIS_MAX.
  */
-export function epsVerdict(e: { eA: number | null | undefined; eE: number | null | undefined; nE?: number | null; reit?: boolean }): EpsJudgment {
+export function epsVerdict(e: { eA: number | null | undefined; eE: number | null | undefined; nE?: number | null; nA?: number | null; reit?: boolean }): EpsJudgment {
   const { eA, eE, nE } = e;
   if (!fin(eA) || !fin(eE)) return { v: null, est: fin(eE) ? eE : null, pct: null };
+  // 0058: an estimate from Nasdaq is judged with Nasdaq's actual, never against the other feed's figure.
+  if (e.nA === null) return { v: "not-comparable", est: eE, pct: null };
+  if (fin(e.nA)) {
+    const j = epsVerdict({ eA: e.nA, eE, reit: e.reit });
+    return j.v === "beat" || j.v === "miss" ? { ...j, act: e.nA } : j;
+  }
   // Nasdaq's figure on the actual's basis wins over a Finnhub estimate that's well apart from both (UDR, PSA).
   if (fin(nE) && sameEpsBasis(eA, nE) && !sameEpsBasis(eE, nE) && !sameEpsBasis(eA, eE)) return { ...judge(eA, nE), via: "nasdaq" };
   const tiny = Math.abs(eE) < EPS_NEAR_ZERO;
@@ -214,9 +239,11 @@ export function epsVerdict(e: { eA: number | null | undefined; eE: number | null
 export const epsJudged = (j: EpsJudgment) => j.v === "beat" || j.v === "miss";
 
 /** A sheet history row through epsVerdict: a basis mix loses its surprise and says so; a Nasdaq-judged row takes Nasdaq's estimate. */
-export function judgeReaction<T extends { epsE: number | null; epsA: number | null; surprisePct: number | null }>(h: T, nE?: number | null, reit?: boolean): T & { basis?: "differs" } {
-  const j = epsVerdict({ eA: h.epsA, eE: h.epsE, nE, reit });
+export function judgeReaction<T extends { epsE: number | null; epsA: number | null; surprisePct: number | null }>(h: T, nE?: number | null, reit?: boolean, nA?: number | null): T & { basis?: "differs" } {
+  const j = epsVerdict({ eA: h.epsA, eE: h.epsE, nE, nA, reit });
   if (j.v === "not-comparable") return { ...h, surprisePct: null, basis: "differs" as const };
+  // 0058: the history table shows a same-source pair (as Nasdaq's own rows do), so the beat count can't mix feeds.
+  if (j.act != null) return { ...h, epsA: j.act, surprisePct: j.pct };
   if (j.via) return { ...h, epsE: j.est, surprisePct: j.pct };
   if (j.v && j.pct == null) return { ...h, surprisePct: null };
   return h;

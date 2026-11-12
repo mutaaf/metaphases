@@ -20,7 +20,7 @@ import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { reactionMove, sessionHabit } from "../shared/reaction";
-import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
+import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
@@ -158,10 +158,13 @@ async function supplement(env: Env, ctx: ExecutionContext, today: string, refres
 
 const touchesSupp = (from: string, to: string, today: string) => to >= addDays(today, -SUPP_BACK) && from <= addDays(today, SUPP_AHEAD);
 
+/** One day's processed events. v3 (0058): judged rows carry Nasdaq's actual (`nA`), so settled days re-read it. The last-good copy keeps its key: it's only a fallback. */
+const CAL_DAY = (day: string) => CAL(`cal:v3:${day}`);
+
 async function putDay(day: string, events: EarningsEvent[], today: string, ctx: ExecutionContext) {
   const body = JSON.stringify(events);
   ctx.waitUntil(Promise.all([
-    caches.default.put(CAL(`cal:v2:${day}`), new Response(body, { headers: { "Cache-Control": `public, max-age=${calTtl(day, today)}`, "Content-Type": "application/json" } })),
+    caches.default.put(CAL_DAY(day), new Response(body, { headers: { "Cache-Control": `public, max-age=${calTtl(day, today)}`, "Content-Type": "application/json" } })),
     caches.default.put(CAL(`cal:stale:v2:${day}`), new Response(body, { headers: { "Cache-Control": "public, max-age=604800" } })),
   ]));
 }
@@ -175,13 +178,14 @@ async function readSnap(day: string): Promise<EstSnapshot> {
   try { const hit = await caches.default.match(EST(day)); return hit ? ((await hit.json()) as EstSnapshot) : {}; } catch { return {}; }
 }
 
-/** Nasdaq's day calendar: pre-report EPS consensus for that day's reporters (one call per day, cached). */
-function nasdaqDay(day: string, today: string, ctx: ExecutionContext): Promise<Record<string, number>> {
-  return cached(`nq:cal:v1:${day}`, day < today ? 7 * 86400 : 3600, ctx, async () => {
+/** Nasdaq's day calendar: pre-report EPS consensus (`e`) and, on the same basis, the reported EPS (`a`, 0058) for that day's reporters (one call per day, cached). */
+function nasdaqDay(day: string, today: string, ctx: ExecutionContext): Promise<{ e: Record<string, number>; a: Record<string, number> }> {
+  return cached(`nq:cal:v2:${day}`, day < today ? 7 * 86400 : 3600, ctx, async () => {
     // A slow Nasdaq must not hold up the calendar, and an empty answer isn't cached for a week.
-    const eps = nasdaqDayEps(await getJson(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, UA, 4000));
-    if (!Object.keys(eps).length) throw new Error("nasdaq day calendar empty");
-    return eps;
+    const body = await getJson(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, UA, 4000);
+    const e = nasdaqDayEps(body);
+    if (!Object.keys(e).length) throw new Error("nasdaq day calendar empty");
+    return { e, a: nasdaqDayActuals(body) };
   });
 }
 
@@ -196,8 +200,8 @@ async function preReportDay(day: string, events: EarningsEvent[], today: string,
   const snap = await readSnap(day);
   // Also for a reported row whose EPS is on another basis from its estimate (0049): Nasdaq's figure may settle it.
   const needNq = events.some((e) => ((e.eA != null || e.rA != null) && !snap[e.s] && e.eE != null) || (usdEstimates(e.s) && needsEpsBasis(e, snap[e.s]?.eE)));
-  const nq = needNq ? await nasdaqDay(day, today, ctx).catch(() => ({})) : {};
-  const { events: out, updates } = applyPreReport(events, snap, nq, usdEstimates, day > today);
+  const nq = needNq ? await nasdaqDay(day, today, ctx).catch(() => null) : null;
+  const { events: out, updates } = applyPreReport(events, snap, nq?.e ?? {}, usdEstimates, day > today, nq?.a);
   if (Object.keys(updates).length) {
     // Re-read just before writing and add only our entries: another request's newer snapshot survives (0047).
     ctx.waitUntil((async () => {
@@ -321,7 +325,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
   const out: PromiseSettledResult<EarningsEvent[]>[] = new Array(days.length);
   const missing: number[] = [];
   await Promise.all(days.map(async (d, i) => {
-    const hit = await caches.default.match(CAL(`cal:v2:${d}`));
+    const hit = await caches.default.match(CAL_DAY(d));
     if (hit) out[i] = { status: "fulfilled", value: (await hit.json()) as EarningsEvent[] }; else missing.push(i);
   }));
   if (!missing.length) return out;
@@ -594,10 +598,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       eE: row?.eE ?? snapE ?? nextE.epsEstimate ?? null, eA: nextE.epsActual ?? row?.eA ?? null,
       rE: row?.rE ?? nextE.revenueEstimate ?? null, rA: nextE.revenueActual ?? row?.rA ?? null,
       ...(row?.nE != null ? { nE: row.nE } : {}),
+      ...(row && row.nA !== undefined ? { nA: row.nA } : {}),
     };
     outcome = reportOutcome(day, today, nowMin);
   } else if (skip && skipRow && !pending && !companyDated) {
-    outcome = reportOutcome({ date: skipRow.d, hour: skipRow.h ?? "", quarter: skip.quarter, year: skip.year, eE: skipRow.eE ?? null, eA: skipRow.eA ?? null, rE: skipRow.rE ?? null, rA: skipRow.rA ?? null, ...(skipRow.nE != null ? { nE: skipRow.nE } : {}) }, today, nowMin);
+    outcome = reportOutcome({ date: skipRow.d, hour: skipRow.h ?? "", quarter: skip.quarter, year: skip.year, eE: skipRow.eE ?? null, eA: skipRow.eA ?? null, rE: skipRow.rE ?? null, rA: skipRow.rA ?? null, ...(skipRow.nE != null ? { nE: skipRow.nE } : {}), ...(skipRow.nA !== undefined ? { nA: skipRow.nA } : {}) }, today, nowMin);
   }
   const reported = outcome?.kind === "reported" ? outcome.row : null;
   const duePending = outcome?.kind === "results-pending" ? outcome.row : null;
@@ -612,6 +617,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // Past prints: Nasdaq gives report dates; Finnhub gives estimate/actual. Join on order (both newest-first).
   // Finnhub figures only fill gaps when they're in dollars too.
   const history: Reaction[] = [];
+  // 0058: each row's actual as Finnhub reports it (the company's measure, the basis of Finnhub's upcoming estimate).
+  const fhActual = new Map<Reaction, number | null>();
+  const keep = (h: Reaction, fa: unknown) => { fhActual.set(h, typeof fa === "number" && Number.isFinite(fa) ? fa : null); return h; };
   const barDates = chart ? chart.t.map(nyDate) : []; // computed once per build
   const closeOn = (day: string, offset: number) => {
     if (!chart) return null;
@@ -635,7 +643,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const pick = pickConsensus({ estimate: r.consensusForecast, actual: r.eps, surprisePct: r.percentageSurprise }, f, lastE && lastE.date === date ? lastSnap : null);
     // 0049: an actual on another basis from its estimate gets no surprise; Nasdaq's consensus stands in when it matches.
     const nE = typeof r.consensusForecast === "number" ? r.consensusForecast : parseFloat(r.consensusForecast);
-    history.push(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit));
+    history.push(keep(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit), f?.actual));
   });
   // Fall back to Finnhub's four quarters if Nasdaq was unreachable.
   if (!history.length && surprises?.length && usd) {
@@ -644,14 +652,14 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     for (const f of surprises.slice(0, 4)) {
       if (lastE && lastE.epsActual != null && lastE.quarter === f.quarter && lastE.year === f.year) continue;
       const label = f.quarter && f.year ? `Q${f.quarter} ${f.year}` : `Quarter to ${String(f.period).slice(0, 7)}`; // never a bare YYYY-MM-DD
-      history.push(judgeReaction({ date: label, session: "", period: label, epsE: f.estimate, epsA: f.actual, surprisePct: f.surprisePercent, move: null } as Reaction, null, reit));
+      history.push(keep(judgeReaction({ date: label, session: "", period: label, epsE: f.estimate, epsA: f.actual, surprisePct: f.surprisePercent, move: null } as Reaction, null, reit), f.actual));
     }
   }
   // A print reported in the last ~40 days might be on Finnhub's calendar before Nasdaq's table catches up.
   if (usd && lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date)) {
     const session: Session = ownSession(lastE);
     const est = lastSnap ?? lastE.epsEstimate;
-    history.unshift(judgeReaction({ date: lastE.date, session, period: `Q${lastE.quarter} ${lastE.year}`, epsE: est, epsA: lastE.epsActual, surprisePct: est ? ((lastE.epsActual - est) / Math.abs(est)) * 100 : null, move: reactionMove(session, lastE.date, closeOn) } as Reaction, null, reit));
+    history.unshift(keep(judgeReaction({ date: lastE.date, session, period: `Q${lastE.quarter} ${lastE.year}`, epsE: est, epsA: lastE.epsActual, surprisePct: est ? ((lastE.epsActual - est) / Math.abs(est)) * 100 : null, move: reactionMove(session, lastE.date, closeOn) } as Reaction, null, reit), lastE.epsActual));
   }
 
   // 0039: the report that's out heads the history until Nasdaq lists it. Non-dollar figures stay off the
@@ -660,11 +668,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // A company-dated report with no stated session stays unknown, whatever the cached feed row says (LESSONS 2026-11-10).
     const rs: Session = nextE?.source && !nextE.hour && reported.date === nextE.date ? "" : ownSession(reported);
     const settled = tradingDaysSince(reported.date, today) >= (rs === "bmo" || rs === "dmh" ? 1 : 2);
-    history.unshift(judgeReaction({
+    history.unshift(keep(judgeReaction({
       date: reported.date, session: rs, period: `Q${reported.quarter} ${reported.year}`,
       epsE: usd ? reported.eE : null, epsA: usd ? reported.eA : null, surprisePct: usd ? surprisePct(reported.eE, reported.eA) : null,
       move: settled ? reactionMove(rs, reported.date, closeOn) : null,
-    } as Reaction, usd ? reported.nE : null, reit));
+    } as Reaction, usd ? reported.nE : null, reit, usd ? reported.nA : undefined), usd ? reported.eA : null));
   }
 
   const judged = history.filter((h) => h.epsA != null && h.epsE != null && !h.basis);
@@ -700,7 +708,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const c = crossOne(symbol, upNext.date, (upNext.hour || "") as Session, nqWin);
     if (c?.x === "differs" && c.xd) nqNext = { date: c.xd, session: c.xh ?? "" };
   }
-  if (reported) read.push(reportedLine(name, { date: reported.date, session: reported.hour, quarter: reported.quarter, epsE: reported.eE, epsA: reported.eA, nE: usd ? reported.nE : undefined, reit }, today, (v) => epsIn(v, currency)));
+  if (reported) read.push(reportedLine(name, { date: reported.date, session: reported.hour, quarter: reported.quarter, epsE: reported.eE, epsA: reported.eA, nE: usd ? reported.nE : undefined, nA: usd ? reported.nA : undefined, reit }, today, (v) => epsIn(v, currency)));
   if (duePending) {
     read.push(pendingLine(name, { date: duePending.date, session: duePending.hour, quarter: duePending.quarter }, today));
     if (duePending.eE != null && !ffo) read.push(`The estimate going in was ${epsIn(duePending.eE, currency)} a share.`);
@@ -716,7 +724,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   }
   const estLine = duePending ? null
     : ffo ? ((pending ? pending.eE : upNext?.epsEstimate) != null ? `${name} is a REIT whose recent results came in on a different measure from the feed's estimate (usually funds from operations against net income a share), so we don't quote the estimate as the bar.` : null)
-    : readEstimate(name, pending ? pending.eE : upNext?.epsEstimate, currency, history[0]?.epsA);
+    // 0058: last quarter's actual on the upcoming estimate's basis (Finnhub's), never Nasdaq's ($2.95 vs $1.84 for AMD).
+    : readEstimate(name, pending ? pending.eE : upNext?.epsEstimate, currency, history[0] ? fhActual.get(history[0]) ?? null : null);
   if (estLine) read.push(estLine);
   if (beatRate) read.push(`It has beaten the estimate in ${beats} of its last ${judged.length} reports.`);
   if (expectedMove != null) read.push(`The stock has moved about ±${expectedMove.toFixed(1)}% on a typical report${out ? "." : " — that's the size of swing to be ready for."}`);
@@ -731,7 +740,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     next: duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
       : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}) } : null,
-    ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
+    ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
@@ -746,7 +755,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
 async function passedRow(symbol: string, q: { quarter: number; year: number }, days: string[]): Promise<EarningsEvent | null> {
   const found = await Promise.all(days.map(async (d) => {
     try {
-      const hit = (await caches.default.match(CAL(`cal:v2:${d}`))) ?? (await caches.default.match(CAL(`cal:stale:v2:${d}`)));
+      const hit = (await caches.default.match(CAL_DAY(d))) ?? (await caches.default.match(CAL(`cal:stale:v2:${d}`)));
       const evs = hit ? ((await hit.json()) as EarningsEvent[]) : [];
       return evs.find((e) => e.s === symbol && e.q === q.quarter && e.y === q.year) ?? null;
     } catch { return null; }
