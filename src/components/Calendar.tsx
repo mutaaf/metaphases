@@ -26,11 +26,14 @@ const PER_CELL = 3;
 const WEEKDAY_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const NONE_OURS = "None of the companies we follow";
 function EmptyTag() {
+  const { prefs } = useStore();
+  // Watchlist, holdings, S&P 500, mega caps or a sector: plenty of ours may report.
+  if (!["popular", "everything"].includes(prefs.filter) || prefs.sector) return <span className="empty-tag">None with these filters</span>;
   return <span className="empty-tag empty-none"><Term k="follow">{NONE_OURS}</Term></span>;
 }
 
 export const FILTERS: { key: string; label: string; hint: string }[] = [
-  { key: "popular", label: "Most popular", hint: "The ~650 companies investors watch most" },
+  { key: "popular", label: "Most popular", hint: "The ~630 companies investors watch most" },
   { key: "sp500", label: "S&P 500", hint: "Index members only" },
   { key: "mega", label: "Mega caps", hint: "Worth $200B or more" },
   { key: "everything", label: "Everything", hint: "Adds every $1B+ revenue reporter" },
@@ -280,6 +283,9 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   }, [data, all, store.watch, store.holdings, view, anchor]);
 
   // A day that didn't load is unknown, never "No earnings" (0026).
+  // useApi keeps the previous range while the next one loads: a day outside it is unknown, not empty.
+  const covered = (d: string) => !!data && data.from <= d && d <= data.to;
+  const unknownDay = (d: string) => (covered(d) ? undefined : error ? "failed" as const : "loading" as const);
   const failedDays = useMemo(() => new Set(data ? missingDays(data.warnings ?? [], data.from, data.to) : []), [data]);
   const byDay = useMemo(() => {
     const m: Record<string, EarningsEvent[]> = {};
@@ -363,7 +369,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       )}
 
       {view === "day" ? (
-        <DayView day={anchor} events={byDay[anchor] ?? []} loading={loading && !data} failed={(!data && !!error) || failedDays.has(anchor)} macro={macroByDay[anchor] ?? []} />
+        <DayView day={anchor} events={byDay[anchor] ?? []} loading={unknownDay(anchor) === "loading"} failed={unknownDay(anchor) === "failed" || failedDays.has(anchor)} macro={macroByDay[anchor] ?? []} />
       ) : (
         <div className={`grid ${view}`}>
           {WEEKDAYS.map((w, i) => <div key={w} className={`wd wd-${i}`}><span>{w}</span></div>)}
@@ -371,9 +377,9 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
             loading && !data ? (
               <div key={d} className="cell"><Skeleton w={60} h={10} /><div className="cell-tiles"><Skeleton w={44} h={44} /><Skeleton w={44} h={44} /><Skeleton w={44} h={44} /></div></div>
             ) : view === "week" ? (
-              <WeekColumn key={d} day={d} events={byDay[d] ?? []} loaded={!!data} failed={(!data && !!error) || failedDays.has(d)} next={next} macro={macroByDay[d] ?? []} />
+              <WeekColumn key={d} day={d} events={byDay[d] ?? []} loaded={covered(d)} failed={unknownDay(d) === "failed" || failedDays.has(d)} next={next} macro={macroByDay[d] ?? []} />
             ) : (
-              <DayCell key={d} day={d} events={byDay[d] ?? []} unknown={!data ? (error ? "failed" : "loading") : failedDays.has(d) ? "failed" : undefined} inMonth={inMonth(d)} today={today} next={next} macro={macroByDay[d] ?? []} onOpen={() => openDrawer(d)} />
+              <DayCell key={d} day={d} events={byDay[d] ?? []} unknown={unknownDay(d) ?? (failedDays.has(d) ? "failed" : undefined)} inMonth={inMonth(d)} today={today} next={next} macro={macroByDay[d] ?? []} onOpen={() => openDrawer(d)} />
             ),
           )}
         </div>

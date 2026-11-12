@@ -126,3 +126,25 @@ test("a pending overseas check is not a failure: no 'busy' notice and no retries
   expect(urls.filter((u) => u.includes("_r=")).length).toBe(0);
   expect(urls.length).toBeLessThanOrEqual(13);
 });
+
+test("a week still loading is unknown, never 'none of ours' from the previous range (0051)", async ({ page }) => {
+  await page.addInitScript(() => { try { const k = "metaphases:v1"; const cur = JSON.parse(localStorage.getItem(k) || "{}"); localStorage.setItem(k, JSON.stringify({ ...cur, prefs: { ...(cur.prefs || {}), view: "week" } })); } catch {} });
+  await page.goto("./?d=2026-11-02");
+  await expect(page.locator(".wcol", { hasText: /Nov\s*06/i })).toBeVisible();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route("**/api/calendar**", async (r) => { await gate; await r.fallback(); });
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.waitForTimeout(400);
+  await expect(page.locator(".empty-none")).toHaveCount(0);
+  release();
+  await expect(page.locator(".wcol", { hasText: /Nov\s*13/i }).locator(".empty-none")).toContainText("None of the companies we follow");
+});
+
+test("with a narrow filter an empty day says so, not that none of ours report (0051)", async ({ page }) => {
+  await page.addInitScript(() => { try { const k = "metaphases:v1"; const cur = JSON.parse(localStorage.getItem(k) || "{}"); localStorage.setItem(k, JSON.stringify({ ...cur, prefs: { ...(cur.prefs || {}), filter: "watch" } })); } catch {} });
+  await page.goto("./?d=2026-11-13");
+  const cell = page.locator(".cell", { hasText: /Nov\s*13/i }).first();
+  await expect(cell.locator(".empty-tag")).toHaveText(/None with these filters/i);
+  await expect(cell).not.toContainText("companies we follow");
+});

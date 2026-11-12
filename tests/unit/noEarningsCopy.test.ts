@@ -15,7 +15,7 @@ function files(dir: string): string[] {
 
 describe("0051 empty-day copy", () => {
   it("no surface says \"No earnings\" or \"nothing reports\"", () => {
-    const hits = files("src").filter((f) => /No earnings|nothing reports/i.test(readFileSync(f, "utf8").replace(/\/\/.*$/gm, "")));
+    const hits = files("src").filter((f) => /No earnings|nothing reports/i.test(readFileSync(f, "utf8").replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "")));
     expect(hits).toEqual([]);
   });
 
