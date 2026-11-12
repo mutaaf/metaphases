@@ -27,3 +27,16 @@ test("the brief's biggest reporters are ranked in dollars: Apple first, Toyota a
   await expect(cos.nth(1)).toContainText("AMD");
   await expect(brief).not.toContainText(/\$(36|23)\.\d\dT/);
 });
+
+test("the sheet header gives SQM's value in dollars, not its peso figure labelled USD", async ({ page }) => {
+  const nvda = fx("ticker-NVDA.json");
+  await page.route("**/api/ticker/SQM", (r) => {
+    const d = JSON.parse(JSON.stringify(nvda).replaceAll('"NVDA"', '"SQM"'));
+    d.profile = { ...d.profile, name: "Sociedad Quimica y Minera de Chile SA", marketCap: 15130410.04, currency: "USD", exchange: "SANTIAGO STOCK EXCHANGE" };
+    r.fulfill({ contentType: "application/json", body: JSON.stringify(d) });
+  });
+  await page.goto("./?t=SQM");
+  const id = page.locator(".sheet .sheet-id .eyebrow");
+  await expect(id).toContainText(/· \$16\.3B$/);
+  await expect(id).not.toContainText(/\$15\.\d+T/);
+});

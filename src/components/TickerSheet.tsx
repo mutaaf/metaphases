@@ -4,7 +4,7 @@ import type { Factor, Reaction, TickerResponse } from "../../shared/types";
 import { useTicker } from "../lib/api";
 import { co, curOf, heldVia, nameOf, ETF_ASOF } from "../lib/data";
 import { daysBetween, fmtLong, todayISO } from "../lib/dates";
-import { currencyName, eps, epsIn, isUsd, money, moneyIn, pct } from "../lib/format";
+import { currencyName, eps, epsIn, isUsd, mcap, money, moneyIn, pct } from "../lib/format";
 import { actions, useStore } from "../lib/store";
 import { BASE } from "../lib/router";
 import { AiPreviewMount } from "./ai/mount";
@@ -130,6 +130,8 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   const c = co(symbol);
   const name = data?.profile?.name ?? nameOf(symbol);
   const estCur = data?.next?.currency ?? curOf(symbol);
+  // Market value: a tracked company's comes from the universe, in dollars (0042). Finnhub's profile figure is
+  // in the profiled listing's currency and its label can be wrong (SQM "USD" 15.1T pesos, BABA "CNY" in USD).
   const via = heldVia(symbol, holdings);
   const direct = holdings.find((h) => h.s === symbol);
   const today = todayISO();
@@ -164,7 +166,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
         <header className="sheet-head">
           <Tile s={symbol} size={56} force="logo" />
           <div className="sheet-id">
-            <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{data?.profile?.marketCap && (isUsd(estCur) || !isUsd(data.profile.currency)) ? ` · ${moneyIn(data.profile.marketCap * 1e6, data.profile.currency)}` : ""}</span>
+            <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{c ? (c.mc > 0 ? ` · ${mcap(c.mc)}` : "") : data?.profile?.marketCap && (isUsd(estCur) || !isUsd(data.profile.currency)) ? ` · ${moneyIn(data.profile.marketCap * 1e6, data.profile.currency)}` : ""}</span>
             <h2>{name}</h2>
             {everyday && <p className="sheet-does">{whatTheyDo(name, data?.profile?.industry ?? c?.ind)}</p>}
             {data?.quote ? (
