@@ -77,6 +77,8 @@ export interface TickerResponse {
   setup: { score: number | null; grade: Grade | null; factors: Factor[]; trend: string; rsi: number | null; atrPct: number | null; from52wHigh: number | null };
   history: Reaction[];
   expectedMove: number | null; // mean |move| across recent prints
+  /** 0060: the two calendars give the next report different sessions, so past moves aren't measured on either feed's word. `session` is the one the stock's own moves point to ("" = no clear answer: every move reads "—"). */
+  moveSession?: { feed: Session; nasdaq: Session; session: Session };
   beatRate: { beats: number; total: number } | null;
   street: { buy: number; hold: number; sell: number; period: string; buyPctChange3m: number | null } | null;
   spark: number[]; // ~6 months of closes

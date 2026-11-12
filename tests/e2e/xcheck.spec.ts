@@ -59,3 +59,26 @@ test("a sheet with no disagreement has no note", async ({ page }) => {
   await expect(page.locator(".next-card h3")).toBeVisible();
   await expect(page.getByTestId("nc-xcheck")).toHaveCount(0);
 });
+
+// 0060: a session the two calendars disagree on doesn't set the typical move on either feed's word.
+for (const [inferred, text] of [
+  ["bmo", "Because the two calendars disagree on the time, the typical move is measured on the day this stock has usually moved after a report: the report day itself (as for a report before the open)."],
+  ["", "Because the two calendars disagree on the time, and the stock's past moves don't settle it, we can't tell which day the market reacted, so past moves show “—”."],
+] as const) {
+  test(`a contested session says how the typical move was measured (${inferred || "unknown"})`, async ({ page }) => {
+    await page.route("**/api/ticker/ADI", async (r) => {
+      const body = JSON.parse(fx("ticker-NVDA.json").replaceAll('"NVDA"', '"ADI"'));
+      body.next = { ...body.next, date: "2026-11-24", session: "amc", quarter: 4, year: 2026, nasdaq: { date: "2026-11-24", session: "bmo" } };
+      body.moveSession = { feed: "amc", nasdaq: "bmo", session: inferred };
+      if (!inferred) { body.expectedMove = null; body.history = body.history.map((h: { move: number | null }) => ({ ...h, move: null })); }
+      await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    });
+    await page.goto("./t/ADI");
+    const card = page.locator(".next-card");
+    await expect(card.getByTestId("nc-xcheck")).toBeVisible();
+    await expect(card.getByTestId("nc-movesession")).toHaveText(text);
+    if (!inferred) await expect(card.locator(".nc-stats dd").nth(2)).toHaveText("—");
+    await noSideScroll(page);
+    await page.screenshot({ path: test.info().outputPath(`contested-${inferred || "unknown"}.png`) });
+  });
+}

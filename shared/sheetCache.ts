@@ -69,7 +69,8 @@ export function borrowHistory(built: TickerResponse, s: StaleSheet, today: strin
     ...built,
     history: has ? built.history : s.data.history,
     beatRate: built.beatRate ?? s.data.beatRate,
-    expectedMove: built.expectedMove ?? s.data.expectedMove,
+    // 0060: a contested session with no answer is a deliberate null, never filled from an earlier read.
+    expectedMove: built.moveSession && !built.moveSession.session ? built.expectedMove : built.expectedMove ?? s.data.expectedMove,
     warnings: [`${EARLIER_PAST} from ${whenOf(s, today)}; the market data service is busy right now.`, ...built.warnings.filter((w) => w !== "Earnings history unavailable.")],
   };
 }

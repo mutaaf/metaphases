@@ -1,12 +1,12 @@
 ---
 id: 0060
 title: A contested session never sets the typical move (Deere ±1.6% shown, ±7.9% real; ADI ±1.7% vs ±3.2%), and ADI's announced 7:00 am release is used
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-12
-pr:
+pr: 101
 by: critic
 ---
 
@@ -58,3 +58,19 @@ for h in d['history'][:4]:
 
 ## Out of scope
 Changing which feed wins the *date* (0015 and 0059 already flag it). Revenue basis. Sessions both feeds agree on.
+
+## Built (builder, 2026-11-12)
+Option (a), with (b) as its fallback. `shared/reaction.ts` `contestedSession`: when Finnhub and Nasdaq give the next report's date different timed sessions (`isContested`; dmh is never compared) and no company override decides it, the habit is the session whose reaction day carries the larger close-to-close move in at least 3 of the last 4 reports with both moves measurable, from the sheet's own chart closes. Fewer than 3 measurable reports or no clear winner gives "" (every move "—", no typical move, nothing in og:description). Under a contested session a feed row's own session doesn't override the inferred habit (it's the same feed's word).
+- The next report's Nasdaq day is now read on demand (shared `nq:x:v1:<day>` cache) even when Finnhub gives a session, so the contest is caught without waiting for the 0015 window (LESSONS 2026-11-11). Bounded as in 0057: within 45 days, 2.5 s timeout, failure memory.
+- `/api/ticker` carries `moveSession: { feed, nasdaq, session }`; the sheet's next-report card and The Read say how the typical move was measured, or why it's "—".
+- `kidsWhy` follows the same rule (its 3-month closes rarely settle it, so it says "not sure" rather than guess).
+- ADI added to `data/date-overrides.json` (Tue Nov 24, bmo). The analog.com release answers 503 to the sandbox; its text ("at 7:00 a.m. Eastern time on Tuesday, November 24, 2026") was read through the search index, and a Webull/Barchart copy agrees. No company notice found for DE.
+- Sheet cache keys bumped (`tk:v7`, `tk:stale:v6`).
+Tests: `tests/unit/contestedSession.test.ts` (ADI, DE, WMG shapes, no winner, on-demand read, agreement, ADI override), e2e `xcheck.spec.ts` (both notes at 390×844 and 1440×900).
+
+Self-review fixes (same PR):
+- **The contest is remembered per company** (`ms:v1:<SYM>`, 60-day cache, used for 30 days after the report date). The day after a report, Finnhub's `symbol=` has dropped the row and Nasdaq's day calendar has wiped the session, so without it the just-reported move went back to Finnhub's session. The memo also covers a Nasdaq timeout before the report. A current agreement between the feeds, or a company override for that date, always wins over the memo. It's an edge cache, so a colo that never built the sheet before the report doesn't have it.
+- The AI context says the time is unconfirmed and how moves were measured (enum-checked values only).
+- `borrowHistory` never fills a deliberate "—" typical move from an earlier read.
+- No price history means no `moveSession` and no copy about past moves.
+- Known cost: a sheet whose next report is within 45 days and isn't in the 0015 window now waits for one Nasdaq day read on a cold cache (≤ 2.5 s, shared 6 h per day per colo; timeouts aren't remembered, as in 0059).

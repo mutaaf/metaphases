@@ -21,7 +21,7 @@ import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
-import { reactionMove, sessionHabit } from "../shared/reaction";
+import { contestedSession, isContested, reactionMove, sessionHabit } from "../shared/reaction";
 import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
@@ -277,6 +277,12 @@ async function nasdaqDayOnDemand(day: string, today: string, ctx: ExecutionConte
   }
 }
 
+/** 0060: a session the two calendars disagreed on, remembered per company for MS_DAYS after the report. */
+interface ContestMemo { date: string; feed: Session; nasdaq: Session }
+const MS_KEY = (sym: string) => CAL(`ms:v1:${sym}`);
+const MS_DAYS = 30;
+const MS_TTL = 60 * 86400;
+
 /** The background fill's timeout: Nasdaq's day calendar answers in 1.2–3.3 s (0059), so 2.5 s lost whole days. */
 const NQX_BUILD_TIMEOUT = 4000;
 const WHEN_LONG: Record<Session, string> = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "" };
@@ -469,11 +475,11 @@ function slimMetric(raw: any) {
 /**
  * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
  * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
- * (`tk:stale:v5:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
+ * (`tk:stale:v6:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
  */
 async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
-  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v6:${symbol}`)}`);
-  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v5:${symbol}`)}`);
+  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v7:${symbol}`)}`);
+  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v6:${symbol}`)}`);
   const hit = await caches.default.match(key);
   if (hit) { const data = (await hit.json()) as TickerResponse; return { data, ttl: sheetTtl(data) }; }
   const built = await buildTicker(symbol, env, ctx);
@@ -543,17 +549,49 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // shared, cached call per day), so the habit never waits for the window to reach that date. 0059: inside the
   // window, that day joins the cross-check too, so the sheet's session matches the calendar's.
   const inWin = !!nqWin && nqWin.loaded.includes(nextE?.date ?? ""); // the window already answered for that day
-  const nqNextDay = nextE && !nextE.source && !nextE.hour && !inWin ? await nasdaqDayOnDemand(nextE.date, today, ctx) : null;
+  // 0060: also when Finnhub gives a session, so a session the two calendars disagree on is caught without waiting.
+  const nqNextDay = nextE && !nextE.source && nextE.hour !== "dmh" && !inWin ? await nasdaqDayOnDemand(nextE.date, today, ctx) : null;
   const nqNextHour = nqNextDay?.[symbol];
   if (xcheck && nqNextDay) nqWin = withDay(nqWin, today, nextE.date, nqNextDay);
+  const fhNextHour = nextE?.hour as string | undefined;
+  const nqOnNext = nextE && !nextE.source ? nqNextHour ?? (nqWin?.loaded.includes(nextE.date) ? nqWin.idx[symbol]?.find((l) => l.d === nextE.date)?.h : undefined) : undefined;
   if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) nextE.hour = c.h; }
-  const habit: Session = sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
+  // Past prints: Nasdaq gives the report dates (newest first).
+  const rows: any[] = nasdaq?.data?.earningsSurpriseTable?.rows ?? [];
+  const barDates = chart ? chart.t.map(nyDate) : []; // computed once per build
+  const closeOn = (day: string, offset: number) => {
+    if (!chart) return null;
+    const dates = barDates;
+    let i = dates.findIndex((d) => d >= day);
+    if (i < 0) return null;
+    if (dates[i] !== day && offset === 0) return null;
+    i += offset;
+    return i >= 0 && i < chart.c.length ? chart.c[i] : null;
+  };
+  // 0060: the two calendars give the next report different sessions (and no company notice settles it). Neither
+  // feed wins blindly: the stock's own past moves say which day the market reacts on, or the moves read "—".
+  // The contest is remembered per company (MS_KEY) past the report day: once the date passes, Finnhub's `symbol=`
+  // drops the row and Nasdaq wipes its session, so neither feed can show it again, and a Nasdaq timeout must not
+  // bring back one feed's session as fact.
+  let contest: ContestMemo | null = nextE && !nextE.source && isContested(fhNextHour, nqOnNext) ? { date: nextE.date, feed: fhNextHour as Session, nasdaq: nqOnNext as Session } : null;
+  if (contest) ctx.waitUntil(putJson(MS_KEY(symbol), contest, MS_TTL));
+  else {
+    const memo = await readJson<ContestMemo>(MS_KEY(symbol));
+    // Only while nothing current answers it: the report it was about has passed (and the company didn't date it
+    // since), or it's still ahead and Nasdaq can't say right now. A current agreement always wins.
+    const settled = !!nextE && nextE.date === memo?.date && (!!nextE.source || (nqOnNext === "bmo" || nqOnNext === "amc"));
+    const ov = memo ? activeOverrides(OVERRIDES, today)[symbol] : undefined;
+    if (memo && !settled && !(ov && ov.date === memo.date) && memo.date >= addDays(today, -MS_DAYS) && (memo.date < today || memo.date === nextE?.date)) contest = memo;
+  }
+  const contested = !!contest;
+  const habit: Session = contest
+    ? contestedSession(contest.feed, contest.nasdaq, rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null), closeOn)
+    : sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
   const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
   const lastSnap = sameEpsUnit(symbol, lastSnapRaw, lastE?.epsEstimate) ? lastSnapRaw : null;
 
   // Finnhub's estimates for foreign filers are in the reporting currency; Nasdaq's history is USD.
-  const rows: any[] = nasdaq?.data?.earningsSurpriseTable?.rows ?? [];
   const currency = estimateCurrency({
     estimateCurrency: profile?.estimateCurrency, currency: profile?.currency, known: U[symbol]?.ec,
     country: profile?.country || U[symbol]?.c, epsE: nextE?.epsEstimate ?? null,
@@ -621,23 +659,14 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
 
   // 0057: a dated row's own session, else the habit. A company-dated row (override) without a session is unknown:
   // never filled from a feed's guess.
-  const ownSession = (row: { hour?: string; source?: unknown }): Session => (row.hour as Session) || (row.source ? "" : habit);
+  // 0060: under a contested session, a feed row's own session is that same feed's word, so the inferred habit stands.
+  const ownSession = (row: { hour?: string; source?: unknown }): Session => row.source ? ((row.hour || "") as Session) : contested ? habit : (row.hour as Session) || habit;
   // Past prints: Nasdaq gives report dates; Finnhub gives estimate/actual. Join on order (both newest-first).
   // Finnhub figures only fill gaps when they're in dollars too.
   const history: Reaction[] = [];
   // 0058: each row's actual as Finnhub reports it (the company's measure, the basis of Finnhub's upcoming estimate).
   const fhActual = new Map<Reaction, number | null>();
   const keep = (h: Reaction, fa: unknown) => { fhActual.set(h, typeof fa === "number" && Number.isFinite(fa) ? fa : null); return h; };
-  const barDates = chart ? chart.t.map(nyDate) : []; // computed once per build
-  const closeOn = (day: string, offset: number) => {
-    if (!chart) return null;
-    const dates = barDates;
-    let i = dates.findIndex((d) => d >= day);
-    if (i < 0) return null;
-    if (dates[i] !== day && offset === 0) return null;
-    i += offset;
-    return i >= 0 && i < chart.c.length ? chart.c[i] : null;
-  };
   rows.slice(0, 8).forEach((r, i) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");
     const date = `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
@@ -740,6 +769,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     : readEstimate(name, pending ? pending.eE : upNext?.epsEstimate, currency, history[0] ? fhActual.get(history[0]) ?? null : null);
   if (estLine) read.push(estLine);
   if (beatRate) read.push(`It has beaten the estimate in ${beats} of its last ${judged.length} reports.`);
+  // 0060: say how past moves were measured when the two calendars disagree on the time.
+  if (contested && chart && history.length) read.push(habit
+    ? `The two calendars disagree on the time, so past moves are measured on the day the stock has usually moved: ${habit === "bmo" ? "the report day, as for a report before the open" : "the day after, as for a report after the close"}.`
+    : "The two calendars disagree on the time, and the stock's past moves don't settle it, so we can't tell which day the market reacted.");
   if (expectedMove != null) read.push(`The stock has moved about ±${expectedMove.toFixed(1)}% on a typical report${out ? "." : " — that's the size of swing to be ready for."}`);
   if (setup.grade && !out) read.push(`Into the print it's in ${/^[aeiou]/i.test(setup.trend) ? "an" : "a"} ${setup.trend.toLowerCase()}${setup.rsi != null ? ` with RSI ${setup.rsi.toFixed(0)}` : ""}.`);
   if (compass.grade) read.push(`As a long-term holding it grades ${compass.grade} on Compass quality.`);
@@ -754,6 +787,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
+    ...(contest && chart ? { moveSession: { feed: contest.feed, nasdaq: contest.nasdaq, session: habit } } : {}),
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
     quarters: quartersFrom(quarterly, profile?.shareOutstanding ?? null),
@@ -1007,13 +1041,21 @@ async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Respo
   // 0057: the same habit as the sheet (Finnhub's next, Nasdaq's listing for that date, Finnhub's last).
   const up = cal.filter((e) => e.date >= today).sort((x, y) => x.date.localeCompare(y.date))[0];
   const last = cal.filter((e) => e.date < today).sort((x, y) => y.date.localeCompare(x.date))[0];
-  const nqUp = up && !up.source && !up.hour ? (await nasdaqDayOnDemand(up.date, today, ctx))?.[s] : undefined;
-  const habit = sessionHabit(up?.hour, nqUp, last?.hour);
+  const nqUp = up && !up.source && up.hour !== "dmh" ? (await nasdaqDayOnDemand(up.date, today, ctx))?.[s] : undefined;
+  const nqRows = (nq?.data?.earningsSurpriseTable?.rows ?? []) as any[];
+  // 0060: a session the two calendars disagree on is settled by the stock's own past moves, as on the sheet, or left unknown.
+  const contested = !!up && !up.source && isContested(up.hour, nqUp);
+  const closeOn = (day: string, off: number) => { const d = stock?.d ?? [], i = d.indexOf(day); return i < 0 ? null : stock?.c[i + off] ?? null; };
+  const habit = contested
+    ? contestedSession(up.hour as Session, nqUp as Session, nqRows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null), closeOn)
+    : sessionHabit(up?.hour, nqUp, last?.hour);
   const num = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[$,]/g, "")); return Number.isFinite(n) ? n : null; };
-  const reports = ((nq?.data?.earningsSurpriseTable?.rows ?? []) as any[]).map((r) => {
+  const reports = nqRows.map((r) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");
     const date = `${yy}-${(mm ?? "").padStart(2, "0")}-${(dd ?? "").padStart(2, "0")}`;
-    return { date, eA: num(r.eps), eE: num(r.consensusForecast), hour: ((cal.find((e) => e.date === date)?.hour || habit) || "") as "bmo" | "amc" | "dmh" | "" };
+    const row = cal.find((e) => e.date === date);
+    const hour = row?.source ? row.hour || "" : contested ? habit : row?.hour || habit;
+    return { date, eA: num(r.eps), eE: num(r.consensusForecast), hour: (hour || "") as "bmo" | "amc" | "dmh" | "" };
   });
   const input = buildWhyInput({ s, nick: co.nick, range, stock, spy, sector, reports, dividends: stock?.div ?? [] });
   return json({ input, why: whyMoved(input, today), warnings }, 900);
