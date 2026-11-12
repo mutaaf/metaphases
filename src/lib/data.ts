@@ -3,7 +3,9 @@ import etfRaw from "../../data/etf_holdings.json";
 import type { EarningsEvent } from "../../shared/types";
 import { epsVerdict, isReit, revenueVerdict } from "../../shared/compare";
 
-export interface Co { n: string; logo: string; mc: number; ind: string; sec: string; c: string; web: string; sp: boolean; ec?: string }
+/** `mc` is market value in USD millions (0 = unknown). A cap Finnhub gives in the listing's currency
+ *  (Toyota on Tokyo) keeps that figure in `mcL`/`mcCur`, converted at `fx` (USD per unit) on `fxAt`. */
+export interface Co { n: string; logo: string; mc: number; ind: string; sec: string; c: string; web: string; sp: boolean; ec?: string; mcCur?: string; mcL?: number; fx?: number; fxAt?: string }
 // Non-S&P names carry Finnhub industry labels; fold them into the 11 GICS sectors.
 const GICS: Record<string, string> = {
   Technology: "Information Technology", Semiconductors: "Information Technology", "Financial Services": "Financials", Banking: "Financials",

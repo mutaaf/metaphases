@@ -1,7 +1,7 @@
 ---
 id: 0042
 title: Rank and label companies by market value in dollars (Toyota's ¥36T cap outranks Apple and reads "$36T")
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: data-quality
