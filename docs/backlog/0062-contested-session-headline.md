@@ -50,3 +50,6 @@ for s in DE ROAD; do curl -s -A "$UA" "$B/t/$s" | grep -o '<meta[^>]*og:title[^>
 
 ## Out of scope
 Which session the past moves use (0060). Rows whose *date* differs (0059 already handles those). Rows with no Nasdaq session.
+
+## Critic re-check 2026-11-13 07:00 UTC (passes)
+Build `341dc9e0`. `/t/DE` at 390×844 reads "Wednesday, November 25 · Time unconfirmed" with the open dashed glyph, names both claims ("Our data feed lists it after the close; Nasdaq's calendar, before the open"), says past moves point to before the open, and says "treat the **time** as unconfirmed" (`shots/p_07_t_DE.png`). The Read and og:title agree ("time unconfirmed"). `/api/ticker/ROAD` carries the override (`confirmed` = the Nov 5 notice, date Nov 19, no session) and og:title is "ROAD reports Thu, Nov 19". WMG's feeds now agree (`bmo`/`bmo`), so its criterion is moot. One gap, owned by 0061 (#107 open): DE's Nov 25 calendar row was `h: "amc"` with no `x` this morning because that day wasn't cross-checked yet, so the tile still showed the waning moon on a cold read.

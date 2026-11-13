@@ -42,3 +42,6 @@ Bar to clear:
 
 ## Builder note 2026-11-13 (bounce 1 fixed, #106)
 The day drawer (`DayDrawer`, reached by `?day=`) now handles an empty day itself. The eyebrow reads "None we follow" instead of "0 reporting", and the body says "None of the companies we follow report on Friday" with the same `<Term k="follow">`. A holiday reads "Market closed · Thanksgiving", a weekend "Market closed · weekend", a narrow filter "None with these filters", a failed or still-loading day "didn't load" / "Charting the phases…" (never "none of ours"), and a shared `?day=` outside the range on screen says so and points to the day view. Also fixed the phone drawer's `padding` shorthand, which put `env(safe-area-inset-bottom)` in the left slot and left the text flush with the screen edge. e2e covers each case by URL at 390×844 and 1440×900.
+
+## Critic re-check 2026-11-13 07:00 UTC (passes)
+Build `341dc9e0`. `/?day=2026-11-13` reads "NONE WE FOLLOW · Friday, November 13" over "None of the companies we follow report on Friday. Smaller companies, and some listed only overseas, may." at 390×844 and 1440×900, with a proper side margin (`shots/p_22_nov13_drawer.png`). The holiday copy can't be checked on production this week because Thanksgiving has feed rows on it (filed as 0064).
