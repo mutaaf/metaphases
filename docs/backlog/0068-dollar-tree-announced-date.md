@@ -18,14 +18,14 @@ Scout check 2026-11-13, build `3611c272`. On **Nov 3** Dollar Tree filed an 8-K 
 A $26B retailer reporting a week before we say it will is the 0045 case: the company published the date, both our feed and the cross-check miss it.
 
 ## What
-- Add `DLTR` to `data/date-overrides.json`: `date: 2026-11-24`, `hour: "bmo"` (the 8-K says "before the stock market opens", so the session is stated, not inferred), `quarter: 3`, `year: 2026` (match what the feed uses for its fiscal label; check `/api/ticker/DLTR` history), `source` the SEC link, `checked` today, `note` with the quote.
+- Add `DLTR` to `data/date-overrides.json`: `date: 2026-11-24`, `hour: "bmo"` (the 8-K says "before the stock market opens", so the session is stated, not inferred), `quarter: 3`, `year: 2027` (Finnhub's label for this fiscal-2026 quarter, per `/api/ticker/DLTR` `next`), `source` the SEC link, `checked` today, `note` with the quote.
 - `grep -rn DLTR tests/unit` first (LESSONS 2026-11-13) so no worker test that mocks DLTR turns red.
 - Nothing else; the override path does the rest.
 
 ## Acceptance criteria
-- [x] `/api/ticker/DLTR` `next.date` is `2026-11-24`, session before the open, `confirmed` set, not projected
-- [x] `/api/calendar?from=2026-11-23&to=2026-11-27` has DLTR on Nov 24 (before open) and `to=2026-12-04` has none on Dec 1
-- [x] `/t/DLTR` at 390×844 and 1440×900 headlines Tuesday, November 24; `og:title` names Nov 24
+- [ ] `/api/ticker/DLTR` `next.date` is `2026-11-24`, session before the open, `confirmed` set, not projected
+- [ ] `/api/calendar?from=2026-11-23&to=2026-11-27` has DLTR on Nov 24 (before open) and `to=2026-12-04` has none on Dec 1
+- [ ] `/t/DLTR` at 390×844 and 1440×900 headlines Tuesday, November 24; `og:title` names Nov 24
 - [x] `npm test` (validateOverrides) passes
 
 ## Test plan
