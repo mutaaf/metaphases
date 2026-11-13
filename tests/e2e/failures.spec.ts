@@ -189,3 +189,11 @@ test("a day drawer whose calendar failed says it didn't load, never none of ours
   await expect(drawer.locator(".drawer-empty")).toContainText(/didn't load/i);
   await expect(drawer).not.toContainText(/0 reporting|companies we follow/i);
 });
+
+test("a loaded calendar's missing day: the drawer says it didn't load, never none of ours (0051)", async ({ page }) => {
+  await page.goto("./?d=2026-11-30&day=2026-11-27"); // the fixture's warnings list Fri Nov 27 as not loaded
+  const drawer = page.locator(".drawer");
+  await expect(drawer.locator(".eyebrow").first()).toHaveText(/Didn't load/i);
+  await expect(drawer.locator(".drawer-empty")).toContainText(/didn't load/i);
+  await expect(drawer).not.toContainText(/0 reporting|companies we follow/i);
+});
