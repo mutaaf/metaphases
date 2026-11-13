@@ -1,12 +1,12 @@
 ---
 id: 0063
 title: Use the date Marvell announced (Tue Dec 1); every surface puts it on Thanksgiving, Thu Nov 26
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-13
-pr:
+pr: 109
 by: critic
 ---
 
