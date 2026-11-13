@@ -46,7 +46,7 @@ function ReportCard({ s, today }: { s: Extract<Story, { kind: "report" }>; today
       <span className="st-why">{why}</span>
       <div className="st-co"><Tile s={s.e.s} size={64} force="logo" /><div><h2>{name}</h2><span className="eyebrow">{s.e.s}</span></div></div>
       <p className="st-does">{whatTheyDo(name, data?.profile?.industry ?? UNIVERSE[s.e.s]?.ind)}</p>
-      <p className="st-when"><Phase h={s.e.h} size={26} /> {s.e.c ? "Report date not confirmed yet" : <>Reports {whenPlain(s.e.d, s.e.h, today)}</>}</p>
+      <p className="st-when">{s.e.c ? <Phase h="" size={26} projected /> : <Phase h={s.e.h} size={26} />} {s.e.c ? "Report date not confirmed yet" : <>Reports {whenPlain(s.e.d, s.e.h, today)}</>}</p>
       <dl className="st-stats">
         <div><dt>Wall Street expects</dt><dd>{s.e.eE != null ? `${epsIn(s.e.eE, curOf(s.e.s))} a share` : "—"}{s.e.eE != null && !isUsd(curOf(s.e.s)) && <span className="muted small"> in {currencyName(curOf(s.e.s))}, not dollars</span>}</dd></div>
         <div><dt>How much it moves</dt><dd>{data ? (data.expectedMove != null ? `±${data.expectedMove.toFixed(1)}%` : "—") : <Skeleton w={70} h={22} />}</dd></div>

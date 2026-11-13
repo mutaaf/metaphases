@@ -78,7 +78,10 @@ export function WeekBrief({ week, current, cal, calLoading, calError, macro, mac
                     <button className="brief-co" onClick={() => setParam("t", t.s)} onMouseEnter={() => prefetchTicker(t.s)}>
                       <Tile s={t.s} size={30} />
                       <span className="brief-id"><b>{t.s}</b><span className="muted">{nameOf(t.s)}</span></span>
-                      <span className="brief-when-co"><Day d={t.d} /><Phase h={t.h} size={12} /></span>
+                      {t.c
+                        // 0064: projected onto a market holiday, so no day or session is stated.
+                        ? <span className="brief-when-co muted small" data-testid="brief-unconfirmed" title={`Our data feed projects ${t.c}, when markets are closed`}>Date not confirmed <Phase h="" size={12} projected /></span>
+                        : <span className="brief-when-co"><Day d={t.d} /><Phase h={t.h} size={12} /></span>}
                       <span className="eyebrow brief-mc" title="Market value">{mcap(t.mc)}</span>
                     </button>
                   </li>

@@ -8,6 +8,7 @@ import { co, curOf, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultO
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { noResultYet } from "../../shared/pending";
 import { eventProjected } from "../../shared/projected";
+import { splitClosed } from "../../shared/closedRows";
 import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
@@ -99,6 +100,8 @@ function DayCell({ day, events, inMonth, today, next, macro, onOpen, unknown }: 
   const isNext = day === next;
   const past = day < today;
   const reported = events.filter((e) => e.eA != null).length;
+  // 0064: a row projected onto a holiday isn't reporting that day, so it isn't counted.
+  const dated = splitClosed(events).dated.length;
   return (
     <div className={`cell ${inMonth ? "" : "out"} ${isNext ? "next" : ""} ${past ? "past" : ""} ${holiday ? "holiday" : ""}`} onClick={events.length ? onOpen : undefined} role={events.length ? "button" : undefined} tabIndex={events.length ? 0 : -1} onKeyDown={(e) => e.key === "Enter" && events.length && onOpen()}>
       <div className="cell-head">
@@ -107,7 +110,7 @@ function DayCell({ day, events, inMonth, today, next, macro, onOpen, unknown }: 
         ) : (
           <span className="cell-date"><span className="cell-wd">{WEEKDAYS[(d.getDay() + 6) % 7]} · </span>{MON3[d.getMonth()]} <b>{String(d.getDate()).padStart(2, "0")}</b></span>
         )}
-        {events.length > 0 && !isNext && <span className="cell-count">{String(events.length).padStart(2, "0")}</span>}
+        {dated > 0 && !isNext && <span className="cell-count">{String(dated).padStart(2, "0")}</span>}
       </div>
       {macro.length > 0 && (
         <div className="cell-macro">{macro.map((m) => <span key={m.key} className={`mtag kind-${m.kind}`} title={m.blurb}>{m.name}</span>)}</div>
@@ -164,7 +167,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         ? <span className="erow-num" data-testid="nq-actual" title={`Our data feed's figure is ${epsIn(e.eA, cur)}. This is Nasdaq's figure on the same basis as the estimate, and the result is judged on that pair.`}><span className="eyebrow">Nasdaq actual</span>{epsIn(j.act, cur)}</span>
         : <span className="erow-num"><span className="eyebrow">{e.eA != null ? "Actual" : "Rev est"}</span>{e.eA != null ? epsIn(e.eA, cur) : moneyIn(e.rE, cur)}</span>; })()}
       <span className="erow-res">
-        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : e.eA != null && epsOf(e).pending ? <span className="chip chip-nores" data-testid="eps-pending" title="This estimate is Nasdaq's, and Nasdaq posts its result on the same basis a day or two after the report. Until then we don't call it a beat or a miss.">Judging soon</span> : noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : PHASE_LABEL[e.h]}</span>}
+        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : e.eA != null && epsOf(e).pending ? <span className="chip chip-nores" data-testid="eps-pending" title="This estimate is Nasdaq's, and Nasdaq posts its result on the same basis a day or two after the report. Until then we don't call it a beat or a miss.">Judging soon</span> : !e.c && noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : e.c ? "Unconfirmed" : PHASE_LABEL[e.h]}</span>}
       </span>
     </button>
   );
@@ -172,16 +175,42 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
 
 function groupBySession(evs: EarningsEvent[]) {
   const order: EarningsEvent["h"][] = ["bmo", "dmh", "amc", ""];
-  return order.map((h) => ({ h, list: evs.filter((e) => e.h === h) })).filter((g) => g.list.length);
+  const { dated } = splitClosed(evs);
+  return order.map((h) => ({ h, list: dated.filter((e) => e.h === h) })).filter((g) => g.list.length);
+}
+
+// 0064: rows our feed projects onto a market holiday. Never counted as reporting, never under a session.
+function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compact?: boolean }) {
+  const { unconfirmed } = splitClosed(events);
+  if (!unconfirmed.length) return null;
+  const holiday = unconfirmed[0].c;
+  if (compact) return (
+    <div className="wsess" data-testid="unconfirmed-group">
+      <span className="eyebrow sess-mini"><Phase h="" size={10} projected /> Date not confirmed</span>
+      {unconfirmed.slice(0, 14).map((e) => (
+        <button key={e.s} className="wrow wrow-projected" title={`${nameOf(e.s)}: our data feed projects ${holiday}, when markets are closed; date not confirmed`} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
+          <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eE, curOf(e.s))}</span>
+        </button>
+      ))}
+      {unconfirmed.length > 14 && <span className="muted small">+{unconfirmed.length - 14} more</span>}
+    </div>
+  );
+  return (
+    <section className="sess" data-testid="unconfirmed-group">
+      <h3 className="sess-head"><Phase h="" size={14} projected /> <Term k="unconfirmed">Date not confirmed</Term> <span className="muted">· {unconfirmed.length}</span></h3>
+      <p className="muted small sess-note">Our data feed projects {unconfirmed.length === 1 ? "this report" : "these reports"} on {holiday}, when markets are closed, so {unconfirmed.length === 1 ? "it's" : "they're"} likely not the real date. The real date is probably a nearby trading day.</p>
+      {unconfirmed.map((e) => <EventRow key={e.s} e={e} />)}
+    </section>
+  );
 }
 
 // The drawer has its own shareable URL (?day=), so an empty day there gets the same
 // guidance as the grid, never a blank under "0 reporting" (0051, 0026).
 type DrawerUnknown = "loading" | "failed" | "outside";
-function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean) {
+function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean, unconfirmed = false) {
   const holiday = HOLIDAY[day];
   const dow = parse(day).getDay();
-  if (holiday) return { eyebrow: "Market closed", body: <>Market closed · {holiday}. No companies report while the exchanges are shut.</> };
+  if (holiday) return { eyebrow: "Market closed", body: unconfirmed ? <>Market closed · {holiday}. The exchanges are shut, so the dates below aren't confirmed.</> : <>Market closed · {holiday}. No companies report while the exchanges are shut.</> };
   if (dow === 0 || dow === 6) return { eyebrow: "Market closed", body: <>Market closed · weekend. Companies report on trading days.</> };
   if (unknown === "loading") return { eyebrow: "Loading", body: <>Charting the phases…</> };
   // A shared ?day= outside the range on screen: we haven't read it, so we don't claim anything.
@@ -196,13 +225,15 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
   useDialog(ref, onClose);
   const { prefs } = useStore();
   const openDayView = () => { onClose(); actions.setPref("view", "day"); setParam("d", day); };
-  const empty = events.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector);
+  // 0064: holiday rows aren't reporting that day, so a holiday with only those still reads "Market closed".
+  const dated = splitClosed(events).dated;
+  const empty = dated.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector, events.length > 0);
   return (
     <div className="drawer-scrim" onClick={onClose}>
       <aside className="drawer" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Earnings on ${fmtLong(day)}`}>
         <header className="drawer-head">
           <div>
-            <span className="eyebrow">{empty ? empty.eyebrow : `${events.length} reporting`}</span>
+            <span className="eyebrow">{empty ? empty.eyebrow : `${dated.length} reporting`}</span>
             <h2>{fmtLong(day)}</h2>
           </div>
           <div className="drawer-actions">
@@ -217,8 +248,8 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
         })()}
         {(() => {
           // 0007: dates the company hasn't announced (Nasdaq disagreements have their own note above).
-          const n = events.filter((e) => e.x !== "differs" && e.eA == null && eventProjected(e, todayISO())).length;
-          return n > 0 && <Notice><Term k="unconfirmed">{n === 1 ? "One date here is projected" : n === events.length ? "These dates are projected" : `${n} dates here are projected`}</Term>: {n === 1 ? "the company hasn't" : "the companies haven't"} announced {n === 1 ? "it" : "them"} yet, so {n === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>;
+          const n = dated.filter((e) => e.x !== "differs" && e.eA == null && eventProjected(e, todayISO())).length;
+          return n > 0 && <Notice><Term k="unconfirmed">{n === 1 ? "One date here is projected" : n === dated.length ? "These dates are projected" : `${n} dates here are projected`}</Term>: {n === 1 ? "the company hasn't" : "the companies haven't"} announced {n === 1 ? "it" : "them"} yet, so {n === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>;
         })()}
         {empty && <p className="empty-big drawer-empty">{empty.body}</p>}
         {groupBySession(events).map((g) => (
@@ -227,6 +258,7 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
             {g.list.map((e) => <EventRow key={e.s} e={e} />)}
           </section>
         ))}
+        <UnconfirmedGroup events={events} />
       </aside>
     </div>
   );
@@ -423,9 +455,10 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
 
 function WeekColumn({ day, events, next, macro, failed, loaded, checking = false }: { day: string; events: EarningsEvent[]; next: string; macro: MacroEvent[]; failed?: boolean; loaded?: boolean; checking?: boolean }) {
   const d = parse(day);
+  const dated = splitClosed(events).dated.length;
   return (
     <div className={`wcol ${day === next ? "next" : ""}`}>
-      <div className="cell-head"><span className="cell-date">{MON3[d.getMonth()]} <b>{String(d.getDate()).padStart(2, "0")}</b></span>{!failed && <span className="cell-count">{events.length}</span>}</div>
+      <div className="cell-head"><span className="cell-date">{MON3[d.getMonth()]} <b>{String(d.getDate()).padStart(2, "0")}</b></span>{!failed && !(HOLIDAY[day] && !dated) && <span className="cell-count">{dated}</span>}</div>
       {macro.map((m) => <span key={m.key} className={`mtag kind-${m.kind}`}>{m.name}</span>)}
       {HOLIDAY[day] && <span className="empty-tag">Market closed · {HOLIDAY[day]}</span>}
       {failed && !HOLIDAY[day] && !events.length && <span className="empty-tag unknown-tag">Didn't load</span>}
@@ -441,6 +474,7 @@ function WeekColumn({ day, events, next, macro, failed, loaded, checking = false
           {g.list.length > 14 && <span className="muted small">+{g.list.length - 14} more</span>}
         </div>
       ))}
+      <UnconfirmedGroup events={events} compact />
     </div>
   );
 }
@@ -463,6 +497,7 @@ function DayView({ day, events, loading, macro, failed, checking = false }: { da
           {g.list.map((e) => <EventRow key={e.s} e={e} />)}
         </section>
       ))}
+      <UnconfirmedGroup events={events} />
     </div>
   );
 }
