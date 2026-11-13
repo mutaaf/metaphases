@@ -47,10 +47,10 @@
   .erow { grid-template-columns: 34px minmax(0, 1fr) 76px 84px; }
   .erow > .eyebrow, .erow-num:nth-of-type(2) { display: none; }
   .two-col .erow { grid-template-columns: 34px minmax(0, 1fr) 76px 84px; }
-  .drawer { padding: 0 16px 40px env(safe-area-inset-bottom); border-left: 0; }
+  .drawer { padding: 0 16px calc(40px + env(safe-area-inset-bottom)); border-left: 0; }
   .sheet-head { grid-template-columns: auto 1fr; padding-top: 16px; }
   .sheet-actions { grid-column: 1 / -1; }
-  .sheet-actions .btn-box { flex: 1; justify-content: center; }
+  .sheet-actions .btn-box { flex: 1; min-width: 0; justify-content: center; }
   .nc-stats dd { font-size: 18px; }
   .sheet-actions .btn-box.sq { flex: 0 0 44px; }
   /* Glossary pops in the next-report card span the card instead of hanging off the right edge. */

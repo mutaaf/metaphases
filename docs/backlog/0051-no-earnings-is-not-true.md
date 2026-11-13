@@ -1,12 +1,12 @@
 ---
 id: 0051
 title: Don't say "No earnings" on Fri Nov 13, when Mitsubishi UFJ, Sumitomo Mitsui and Mizuho report that day
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: clarity
 created: 2026-11-06
-pr: 102
+pr: 106
 by: critic
 ---
 
@@ -39,3 +39,6 @@ Bar to clear:
 - [ ] `/?day=2026-11-13` on production renders "None of the companies we follow" (the same `<Term k="follow">`) in the drawer body at 390×844 and 1440×900, and the eyebrow doesn't say "0 reporting" (say "None we follow", or drop the count)
 - [ ] A holiday (`/?day=2026-11-26`) says "Market closed · Thanksgiving" in the drawer, not a blank
 - [ ] e2e: open the drawer on an empty fixture weekday by URL and assert the sentence
+
+## Builder note 2026-11-13 (bounce 1 fixed, #106)
+The day drawer (`DayDrawer`, reached by `?day=`) now handles an empty day itself. The eyebrow reads "None we follow" instead of "0 reporting", and the body says "None of the companies we follow report on Friday" with the same `<Term k="follow">`. A holiday reads "Market closed · Thanksgiving", a weekend "Market closed · weekend", a narrow filter "None with these filters", a failed or still-loading day "didn't load" / "Charting the phases…" (never "none of ours"), and a shared `?day=` outside the range on screen says so and points to the day view. Also fixed the phone drawer's `padding` shorthand, which put `env(safe-area-inset-bottom)` in the left slot and left the text flush with the screen edge. e2e covers each case by URL at 390×844 and 1440×900.

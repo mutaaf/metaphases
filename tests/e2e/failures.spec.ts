@@ -148,3 +148,44 @@ test("with a narrow filter an empty day says so, not that none of ours report (0
   await expect(cell.locator(".empty-tag")).toHaveText(/None with these filters/i);
   await expect(cell).not.toContainText("companies we follow");
 });
+
+// 0051 bounce 1: the day drawer, opened by its own shareable URL, is never a blank "0 reporting".
+for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+  test(`an empty day's drawer says none of ours report, not "0 reporting" (0051, ${vp.width}px)`, async ({ page }) => {
+    await page.setViewportSize(vp);
+    await page.goto("./?day=2026-11-13");
+    const drawer = page.locator(".drawer");
+    await expect(drawer.locator(".drawer-empty")).toContainText("None of the companies we follow report on Friday");
+    await expect(drawer.locator(".eyebrow").first()).toHaveText(/None we follow/i);
+    await expect(drawer).not.toContainText(/0 reporting/i);
+    await drawer.getByRole("button", { name: /None of the companies we follow/i }).click();
+    await expect(drawer.locator(".term-pop")).toContainText("S&P 500");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    // The drawer keeps a side gutter on a phone: the text never touches the screen edge.
+    const box = await drawer.locator(".drawer-empty").boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(12);
+  });
+}
+
+test("a holiday's drawer says the market is closed, not a blank (0051)", async ({ page }) => {
+  await page.goto("./?day=2026-11-26");
+  const drawer = page.locator(".drawer");
+  await expect(drawer.locator(".eyebrow").first()).toHaveText(/Market closed/i);
+  await expect(drawer.locator(".drawer-empty")).toContainText("Market closed · Thanksgiving");
+  await expect(drawer).not.toContainText(/0 reporting|companies we follow/i);
+});
+
+test("an empty day's drawer under a narrow filter says so, not none of ours (0051)", async ({ page }) => {
+  await page.addInitScript(() => { try { const k = "metaphases:v1"; const cur = JSON.parse(localStorage.getItem(k) || "{}"); localStorage.setItem(k, JSON.stringify({ ...cur, prefs: { ...(cur.prefs || {}), filter: "watch" } })); } catch {} });
+  await page.goto("./?day=2026-11-13");
+  await expect(page.locator(".drawer .drawer-empty")).toContainText("None with these filters");
+  await expect(page.locator(".drawer")).not.toContainText(/0 reporting|companies we follow/i);
+});
+
+test("a day drawer whose calendar failed says it didn't load, never none of ours (0051)", async ({ page }) => {
+  await page.route("**/api/calendar**", (r) => r.fulfill(BUSY));
+  await page.goto("./?day=2026-11-13");
+  const drawer = page.locator(".drawer");
+  await expect(drawer.locator(".drawer-empty")).toContainText(/didn't load/i);
+  await expect(drawer).not.toContainText(/0 reporting|companies we follow/i);
+});
