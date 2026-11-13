@@ -41,8 +41,6 @@ describe("0045 company dates in data/date-overrides.json", () => {
     const out = applyToRows("MRVL", [{ symbol: "MRVL", date: "2026-11-26", hour: "", quarter: 3, year: 2027, epsEstimate: 1.1138 }], FILE, "2026-11-13");
     expect(out).toEqual([expect.objectContaining({ date: "2026-12-01", hour: "", quarter: 3, year: 2027, epsEstimate: 1.1138 })]);
     expect(FILE.MRVL?.hour).toBeUndefined();
-    const [row] = flagClosed([ev("MRVL", "2026-12-01", { o: FILE.MRVL?.source })]);
-    expect(row.c).toBeUndefined();
   });
   it("TSN: Mon Nov 16 before the open, not after the close", () => {
     const out = applyToRows("TSN", [{ symbol: "TSN", date: "2026-11-16", hour: "amc", quarter: 4, year: 2026, epsEstimate: 0.6 }], FILE, today);
@@ -94,6 +92,38 @@ describe("0045 closed-day projections through the worker", () => {
     expect(r.next).toMatchObject({ date: "2026-11-26", closed: "Thanksgiving" });
     expect(r.read[0]).toMatch(/not confirmed/i);
     expect(r.read[0]).not.toMatch(/reports Q3 on/);
+  });
+});
+
+describe("0063 MRVL's company date through the worker", () => {
+  const mrvl = { ...holRow, symbol: "MRVL" };
+  beforeEach(() => {
+    pending = [];
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-13T15:00:00Z"));
+    (globalThis as any).caches = { default: new MemCache() };
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      const url = new URL(u);
+      if (url.pathname.endsWith("/calendar/earnings")) return new Response(JSON.stringify({ earningsCalendar: [mrvl] }));
+      return new Response("{}", { status: 404 });
+    }));
+  });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("/api/calendar has MRVL on Tue Dec 1, not on Thanksgiving, and not flagged closed", async () => {
+    const r = await get("/api/calendar?from=2026-11-23&to=2026-12-04");
+    const rows = r.events.filter((e: any) => e.s === "MRVL");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ d: "2026-12-01", h: "", o: FILE.MRVL?.source });
+    expect(rows[0].c).toBeUndefined();
+  });
+
+  it("/api/ticker/MRVL: next is Dec 1, from the company, with no closed-day flag", async () => {
+    const r = await get("/api/ticker/MRVL");
+    expect(r.next).toMatchObject({ date: "2026-12-01" });
+    expect(r.next.closed).toBeUndefined();
+    expect(r.read[0]).toMatch(/Tuesday, Dec 1/);
+    expect(r.read[0]).not.toMatch(/date is not confirmed|Thanksgiving|November 26/);
   });
 });
 
