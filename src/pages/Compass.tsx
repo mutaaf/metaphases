@@ -111,7 +111,10 @@ export default function CompassPage() {
               <h4 className="eyebrow">Every report that touches your money</h4>
               {exposure.map(({ e, dollars, via }) => (
                 <button key={e.s + e.d} className="ex-row" onClick={() => setParam("t", e.s)}>
-                  <span className="ex-date">{fmtShort(e.d)} <Phase h={e.h} size={11} /></span>
+                  {e.c
+                    // 0064: projected onto a market holiday, so not a real date yet.
+                    ? <span className="ex-date ex-unconfirmed" data-testid="ex-unconfirmed" title={`Our data feed projects ${fmtShort(e.d)} (${e.c}), when markets are closed`}>Date not confirmed <Phase h="" size={11} projected /></span>
+                    : <span className="ex-date">{fmtShort(e.d)} <Phase h={e.h} size={11} /></span>}
                   <Tile s={e.s} size={30} />
                   <span className="erow-id"><b>{e.s}</b><span className="muted">{nameOf(e.s)}</span></span>
                   <span className="ex-via muted small">{via.join(" + ")}</span>

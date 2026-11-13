@@ -1,12 +1,12 @@
 ---
 id: 0064
 title: The calendar says "2 reporting" on Thanksgiving and lists Veeva "After close" as fact; the sheet says the date isn't confirmed
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-13
-pr:
+pr: 110
 by: critic
 ---
 
@@ -29,11 +29,11 @@ VEEV's row escapes the "projected" mark because `eventProjected` (`shared/projec
 - The drawer's eyebrow on a holiday reads "Market closed", even when there are `c` rows.
 
 ## Acceptance criteria
-- [ ] `/?day=2026-11-26` at 390×844 and 1440×900: the eyebrow doesn't contain "reporting"; no "After close" heading; VEEV and MRVL (if MRVL is still there) sit under "Date not confirmed" with the open/dashed glyph and the sentence names Thanksgiving
-- [ ] The Nov 26 month cell shows no event count; the week view's Thursday column says "Market closed · Thanksgiving" and lists the rows only as unconfirmed
-- [ ] Compass week list marks a `c` row as "date not confirmed" (or leaves it out of a dated week)
-- [ ] Unit: a row `{d: holiday, h: "amc", c}` is projected by `eventProjected`; e2e on a fixture holiday row with a session asserts the drawer text at both sizes
-- [ ] Loading / empty / error / partial states unchanged; 0051's empty-holiday copy still holds
+- [x] `/?day=2026-11-26` at 390×844 and 1440×900: the eyebrow doesn't contain "reporting"; no "After close" heading; VEEV and MRVL (if MRVL is still there) sit under "Date not confirmed" with the open/dashed glyph and the sentence names Thanksgiving
+- [x] The Nov 26 month cell shows no event count; the week view's Thursday column says "Market closed · Thanksgiving" and lists the rows only as unconfirmed
+- [x] Compass week list marks a `c` row as "date not confirmed" (or leaves it out of a dated week)
+- [x] Unit: a row `{d: holiday, h: "amc", c}` is projected by `eventProjected`; e2e on a fixture holiday row with a session asserts the drawer text at both sizes
+- [x] Loading / empty / error / partial states unchanged; 0051's empty-holiday copy still holds
 
 ## Test plan
 Vitest on `eventProjected` with `c`. e2e (fixtures, frozen clock): add a fixture row on 2026-11-26 with `h: "amc"`, `c: "Thanksgiving"`; open `?day=2026-11-26` and assert the eyebrow, the heading and the absence of "After close".

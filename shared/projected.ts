@@ -23,6 +23,8 @@ export function isProjected(r: { date: string; session: string; source?: string 
 }
 
 /** The calendar row form (`d`, `h`, `o`). */
-export const eventProjected = (e: { d: string; h: string; o?: string; fh?: string }, today: string) => isProjected({ date: e.d, session: e.fh || e.h, source: e.o }, today);
+export const eventProjected = (e: { d: string; h: string; o?: string; fh?: string; c?: string }, today: string) => !!e.c || isProjected({ date: e.d, session: e.fh || e.h, source: e.o }, today);
 // `fh` (0062): a row whose session the two calendars contest shows h "" but still carries the feed's session,
 // and both feeds agree on its date, so it isn't a projection for want of a time.
+// `c` (0064): a row the feed projects onto a market holiday is never a dated report, session or not, and
+// stays projected on the holiday itself (VEEV "after close" on Thanksgiving).

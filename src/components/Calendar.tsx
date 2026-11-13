@@ -8,6 +8,7 @@ import { co, curOf, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultO
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { noResultYet } from "../../shared/pending";
 import { eventProjected } from "../../shared/projected";
+import { splitClosed } from "../../shared/closedRows";
 import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
@@ -99,6 +100,8 @@ function DayCell({ day, events, inMonth, today, next, macro, onOpen, unknown }: 
   const isNext = day === next;
   const past = day < today;
   const reported = events.filter((e) => e.eA != null).length;
+  // 0064: a row projected onto a holiday isn't reporting that day, so it isn't counted.
+  const dated = splitClosed(events).dated.length;
   return (
     <div className={`cell ${inMonth ? "" : "out"} ${isNext ? "next" : ""} ${past ? "past" : ""} ${holiday ? "holiday" : ""}`} onClick={events.length ? onOpen : undefined} role={events.length ? "button" : undefined} tabIndex={events.length ? 0 : -1} onKeyDown={(e) => e.key === "Enter" && events.length && onOpen()}>
       <div className="cell-head">
@@ -107,7 +110,7 @@ function DayCell({ day, events, inMonth, today, next, macro, onOpen, unknown }: 
         ) : (
           <span className="cell-date"><span className="cell-wd">{WEEKDAYS[(d.getDay() + 6) % 7]} · </span>{MON3[d.getMonth()]} <b>{String(d.getDate()).padStart(2, "0")}</b></span>
         )}
-        {events.length > 0 && !isNext && <span className="cell-count">{String(events.length).padStart(2, "0")}</span>}
+        {dated > 0 && !isNext && <span className="cell-count">{String(dated).padStart(2, "0")}</span>}
       </div>
       {macro.length > 0 && (
         <div className="cell-macro">{macro.map((m) => <span key={m.key} className={`mtag kind-${m.kind}`} title={m.blurb}>{m.name}</span>)}</div>
@@ -172,7 +175,33 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
 
 function groupBySession(evs: EarningsEvent[]) {
   const order: EarningsEvent["h"][] = ["bmo", "dmh", "amc", ""];
-  return order.map((h) => ({ h, list: evs.filter((e) => e.h === h) })).filter((g) => g.list.length);
+  const { dated } = splitClosed(evs);
+  return order.map((h) => ({ h, list: dated.filter((e) => e.h === h) })).filter((g) => g.list.length);
+}
+
+// 0064: rows our feed projects onto a market holiday. Never counted as reporting, never under a session.
+function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compact?: boolean }) {
+  const { unconfirmed } = splitClosed(events);
+  if (!unconfirmed.length) return null;
+  const holiday = unconfirmed[0].c;
+  if (compact) return (
+    <div className="wsess" data-testid="unconfirmed-group">
+      <span className="eyebrow sess-mini"><Phase h="" size={10} projected /> Date not confirmed</span>
+      {unconfirmed.slice(0, 14).map((e) => (
+        <button key={e.s} className="wrow wrow-projected" title={`${nameOf(e.s)}: our data feed projects ${holiday}, when markets are closed; date not confirmed`} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
+          <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eE, curOf(e.s))}</span>
+        </button>
+      ))}
+      {unconfirmed.length > 14 && <span className="muted small">+{unconfirmed.length - 14} more</span>}
+    </div>
+  );
+  return (
+    <section className="sess" data-testid="unconfirmed-group">
+      <h3 className="sess-head"><Phase h="" size={14} projected /> <Term k="unconfirmed">Date not confirmed</Term> <span className="muted">· {unconfirmed.length}</span></h3>
+      <p className="muted small sess-note">Our data feed projects {unconfirmed.length === 1 ? "this" : "these"} on {holiday}, when markets are closed, so it isn't the real date. The company will likely report on a nearby trading day.</p>
+      {unconfirmed.map((e) => <EventRow key={e.s} e={e} />)}
+    </section>
+  );
 }
 
 // The drawer has its own shareable URL (?day=), so an empty day there gets the same
@@ -196,13 +225,15 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
   useDialog(ref, onClose);
   const { prefs } = useStore();
   const openDayView = () => { onClose(); actions.setPref("view", "day"); setParam("d", day); };
-  const empty = events.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector);
+  // 0064: holiday rows aren't reporting that day, so a holiday with only those still reads "Market closed".
+  const dated = splitClosed(events).dated;
+  const empty = dated.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector);
   return (
     <div className="drawer-scrim" onClick={onClose}>
       <aside className="drawer" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Earnings on ${fmtLong(day)}`}>
         <header className="drawer-head">
           <div>
-            <span className="eyebrow">{empty ? empty.eyebrow : `${events.length} reporting`}</span>
+            <span className="eyebrow">{empty ? empty.eyebrow : `${dated.length} reporting`}</span>
             <h2>{fmtLong(day)}</h2>
           </div>
           <div className="drawer-actions">
@@ -217,8 +248,8 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
         })()}
         {(() => {
           // 0007: dates the company hasn't announced (Nasdaq disagreements have their own note above).
-          const n = events.filter((e) => e.x !== "differs" && e.eA == null && eventProjected(e, todayISO())).length;
-          return n > 0 && <Notice><Term k="unconfirmed">{n === 1 ? "One date here is projected" : n === events.length ? "These dates are projected" : `${n} dates here are projected`}</Term>: {n === 1 ? "the company hasn't" : "the companies haven't"} announced {n === 1 ? "it" : "them"} yet, so {n === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>;
+          const n = dated.filter((e) => e.x !== "differs" && e.eA == null && eventProjected(e, todayISO())).length;
+          return n > 0 && <Notice><Term k="unconfirmed">{n === 1 ? "One date here is projected" : n === dated.length ? "These dates are projected" : `${n} dates here are projected`}</Term>: {n === 1 ? "the company hasn't" : "the companies haven't"} announced {n === 1 ? "it" : "them"} yet, so {n === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>;
         })()}
         {empty && <p className="empty-big drawer-empty">{empty.body}</p>}
         {groupBySession(events).map((g) => (
@@ -227,6 +258,7 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
             {g.list.map((e) => <EventRow key={e.s} e={e} />)}
           </section>
         ))}
+        <UnconfirmedGroup events={events} />
       </aside>
     </div>
   );
@@ -423,9 +455,10 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
 
 function WeekColumn({ day, events, next, macro, failed, loaded, checking = false }: { day: string; events: EarningsEvent[]; next: string; macro: MacroEvent[]; failed?: boolean; loaded?: boolean; checking?: boolean }) {
   const d = parse(day);
+  const dated = splitClosed(events).dated.length;
   return (
     <div className={`wcol ${day === next ? "next" : ""}`}>
-      <div className="cell-head"><span className="cell-date">{MON3[d.getMonth()]} <b>{String(d.getDate()).padStart(2, "0")}</b></span>{!failed && <span className="cell-count">{events.length}</span>}</div>
+      <div className="cell-head"><span className="cell-date">{MON3[d.getMonth()]} <b>{String(d.getDate()).padStart(2, "0")}</b></span>{!failed && !(HOLIDAY[day] && !dated) && <span className="cell-count">{dated}</span>}</div>
       {macro.map((m) => <span key={m.key} className={`mtag kind-${m.kind}`}>{m.name}</span>)}
       {HOLIDAY[day] && <span className="empty-tag">Market closed · {HOLIDAY[day]}</span>}
       {failed && !HOLIDAY[day] && !events.length && <span className="empty-tag unknown-tag">Didn't load</span>}
@@ -441,6 +474,7 @@ function WeekColumn({ day, events, next, macro, failed, loaded, checking = false
           {g.list.length > 14 && <span className="muted small">+{g.list.length - 14} more</span>}
         </div>
       ))}
+      <UnconfirmedGroup events={events} compact />
     </div>
   );
 }
@@ -463,6 +497,7 @@ function DayView({ day, events, loading, macro, failed, checking = false }: { da
           {g.list.map((e) => <EventRow key={e.s} e={e} />)}
         </section>
       ))}
+      <UnconfirmedGroup events={events} />
     </div>
   );
 }

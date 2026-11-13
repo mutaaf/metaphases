@@ -5,7 +5,7 @@ import { addDays } from "./dates";
 import { HOLIDAYS } from "../../shared/market";
 import type { Co } from "./data";
 
-export interface BriefReporter { s: string; name: string; d: string; h: Session; mc: number }
+export interface BriefReporter { s: string; name: string; d: string; h: Session; mc: number; c?: string }
 export interface Brief {
   week: string[]; // Mon…Fri
   total: number; // every company reporting this week (share classes count once)
@@ -57,7 +57,7 @@ export function buildBrief(
     .filter((e) => universe[e.s])
     .sort((a, b) => universe[b.s].mc - universe[a.s].mc || a.s.localeCompare(b.s))
     .filter((e) => { const n = universe[e.s].n; return seen.has(n) ? false : (seen.add(n), true); });
-  const top = ranked.slice(0, 5).map((e) => ({ s: e.s, name: universe[e.s].n, d: e.d, h: e.h, mc: universe[e.s].mc }));
+  const top = ranked.slice(0, 5).map((e) => ({ s: e.s, name: universe[e.s].n, d: e.d, h: e.h, mc: universe[e.s].mc, ...(e.c ? { c: e.c } : {}) }));
 
   const spNames = new Set(evs.filter((e) => universe[e.s]?.sp).map((e) => universe[e.s].n));
   const big = largestSP(universe, 10);
