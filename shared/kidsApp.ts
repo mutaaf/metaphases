@@ -8,8 +8,8 @@ export const MOON_CLUB_APP = {
   /** e.g. "https://testflight.apple.com/join/AbCd1234". Null until Beta App Review approves the public link. */
   testflight: "https://testflight.apple.com/join/yW7rzq7P" as string | null,
   /** The App Store listing, once Moon Club is released: "https://apps.apple.com/us/app/moon-club/id6829860949"
-   *  (check the slug on the live listing). Null while the first version is in review. */
-  appStore: null as string | null,
+   *  (the slug is checked against the live listing). Live since November 2026. */
+  appStore: "https://apps.apple.com/us/app/moon-club/id6829860949" as string | null,
   /** App Store Connect "provider token" (pt=, digits): App Analytics → Acquisition → Campaigns → Generate a
    *  campaign link, copy the pt value (moon-club docs/LINKS.md). Null = links carry no campaign credit. */
   providerToken: null as string | null,

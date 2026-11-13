@@ -80,6 +80,10 @@ kbd { font: 500 10px var(--mono); border: 1px solid var(--line-2); padding: 1px 
 .top-search { margin-left: auto; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-left: 1px solid var(--line); font: 400 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); min-width: 230px; }
 .top-search:hover { color: var(--ink); }
 .top-icon { display: grid; place-items: center; width: 52px; border-left: 1px solid var(--line); }
+/* The Moon Club app: one tap to its page (/app/, a static page, so a full load). */
+.top-app { display: flex; align-items: center; gap: 9px; padding: 0 16px; border-left: 1px solid var(--line); font: 400 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; text-decoration: none; color: var(--ink); white-space: nowrap; }
+.top-app img { width: 22px; height: 22px; border-radius: 6px; }
+.top-app:hover { color: var(--accent); }
 .top-icon:hover { color: var(--accent); }
 
 /* ── Frame ── */
