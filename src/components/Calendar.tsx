@@ -167,7 +167,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         ? <span className="erow-num" data-testid="nq-actual" title={`Our data feed's figure is ${epsIn(e.eA, cur)}. This is Nasdaq's figure on the same basis as the estimate, and the result is judged on that pair.`}><span className="eyebrow">Nasdaq actual</span>{epsIn(j.act, cur)}</span>
         : <span className="erow-num"><span className="eyebrow">{e.eA != null ? "Actual" : "Rev est"}</span>{e.eA != null ? epsIn(e.eA, cur) : moneyIn(e.rE, cur)}</span>; })()}
       <span className="erow-res">
-        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : e.eA != null && epsOf(e).pending ? <span className="chip chip-nores" data-testid="eps-pending" title="This estimate is Nasdaq's, and Nasdaq posts its result on the same basis a day or two after the report. Until then we don't call it a beat or a miss.">Judging soon</span> : noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : PHASE_LABEL[e.h]}</span>}
+        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : e.eA != null && epsOf(e).pending ? <span className="chip chip-nores" data-testid="eps-pending" title="This estimate is Nasdaq's, and Nasdaq posts its result on the same basis a day or two after the report. Until then we don't call it a beat or a miss.">Judging soon</span> : !e.c && noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : e.c ? "Unconfirmed" : PHASE_LABEL[e.h]}</span>}
       </span>
     </button>
   );
@@ -198,7 +198,7 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
   return (
     <section className="sess" data-testid="unconfirmed-group">
       <h3 className="sess-head"><Phase h="" size={14} projected /> <Term k="unconfirmed">Date not confirmed</Term> <span className="muted">· {unconfirmed.length}</span></h3>
-      <p className="muted small sess-note">Our data feed projects {unconfirmed.length === 1 ? "this" : "these"} on {holiday}, when markets are closed, so it isn't the real date. The company will likely report on a nearby trading day.</p>
+      <p className="muted small sess-note">Our data feed projects {unconfirmed.length === 1 ? "this report" : "these reports"} on {holiday}, when markets are closed, so {unconfirmed.length === 1 ? "it's" : "they're"} likely not the real date. The real date is probably a nearby trading day.</p>
       {unconfirmed.map((e) => <EventRow key={e.s} e={e} />)}
     </section>
   );
@@ -207,10 +207,10 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
 // The drawer has its own shareable URL (?day=), so an empty day there gets the same
 // guidance as the grid, never a blank under "0 reporting" (0051, 0026).
 type DrawerUnknown = "loading" | "failed" | "outside";
-function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean) {
+function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean, unconfirmed = false) {
   const holiday = HOLIDAY[day];
   const dow = parse(day).getDay();
-  if (holiday) return { eyebrow: "Market closed", body: <>Market closed · {holiday}. No companies report while the exchanges are shut.</> };
+  if (holiday) return { eyebrow: "Market closed", body: unconfirmed ? <>Market closed · {holiday}. The exchanges are shut, so the dates below aren't confirmed.</> : <>Market closed · {holiday}. No companies report while the exchanges are shut.</> };
   if (dow === 0 || dow === 6) return { eyebrow: "Market closed", body: <>Market closed · weekend. Companies report on trading days.</> };
   if (unknown === "loading") return { eyebrow: "Loading", body: <>Charting the phases…</> };
   // A shared ?day= outside the range on screen: we haven't read it, so we don't claim anything.
@@ -227,7 +227,7 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
   const openDayView = () => { onClose(); actions.setPref("view", "day"); setParam("d", day); };
   // 0064: holiday rows aren't reporting that day, so a holiday with only those still reads "Market closed".
   const dated = splitClosed(events).dated;
-  const empty = dated.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector);
+  const empty = dated.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector, events.length > 0);
   return (
     <div className="drawer-scrim" onClick={onClose}>
       <aside className="drawer" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Earnings on ${fmtLong(day)}`}>

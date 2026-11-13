@@ -40,11 +40,12 @@ export default function CompassPage() {
       const dollars = (direct?.v ?? 0) + v.reduce((a, x) => a + x.dollars, 0);
       if (dollars > 0) rows.push({ e, dollars, via: [...(direct ? ["direct"] : []), ...v.map((x) => x.etf)] });
     }
-    return rows.sort((a, b) => a.e.d.localeCompare(b.e.d));
+    // 0064: a row projected onto a market holiday has no real date yet, so it sorts last.
+    return rows.sort((a, b) => Number(!!a.e.c) - Number(!!b.e.c) || a.e.d.localeCompare(b.e.d));
   }, [data, holdings]);
   const weeks = useMemo(() => {
     const w: Record<string, { dollars: number; names: string[] }> = {};
-    for (const r of exposure) { const k = weekOf(r.e.d)[0]; (w[k] ??= { dollars: 0, names: [] }); w[k].dollars += r.dollars; w[k].names.push(r.e.s); }
+    for (const r of exposure) { if (r.e.c) continue; const k = weekOf(r.e.d)[0]; (w[k] ??= { dollars: 0, names: [] }); w[k].dollars += r.dollars; w[k].names.push(r.e.s); }
     return Object.entries(w).sort();
   }, [exposure]);
   const maxW = Math.max(1, ...weeks.map(([, v]) => v.dollars));

@@ -8,7 +8,8 @@
 //      feed carries a session (critique 2026-11-01-0506 #3).
 // A date from data/date-overrides.json (the company's own announcement, `o` / `source`) is always confirmed,
 // with or without a session (QXO's 8-K named the day only). A date that has arrived is not called projected:
-// the report-day states (0039) and the overdue / closed-day states (0038, 0045) speak for those.
+// the report-day states (0039) and the overdue / closed-day states (0038, 0045) speak for those. The one
+// exception is a calendar row the feed projects onto a market holiday (`c`, 0064): projected whatever its session.
 
 /** Days ahead beyond which a feed date is treated as projected (see above). */
 export const CONFIRM_HORIZON_DAYS = 21;

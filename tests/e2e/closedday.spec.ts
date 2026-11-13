@@ -35,7 +35,9 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) 
     const group = drawer.getByTestId("unconfirmed-group");
     await expect(group.locator(".sess-head")).toContainText("Date not confirmed");
     await expect(group.locator(".sess-head .phase-projected")).toHaveCount(1);
-    await expect(group).toContainText("Our data feed projects these on Thanksgiving, when markets are closed");
+    await expect(group).toContainText("Our data feed projects these reports on Thanksgiving, when markets are closed, so they're likely not the real date");
+    // 0051's holiday copy holds, softened so it doesn't contradict the rows under it.
+    await expect(drawer.locator(".drawer-empty")).toHaveText("Market closed · Thanksgiving. The exchanges are shut, so the dates below aren't confirmed.");
     await expect(group.locator(".erow", { hasText: "VEEV" })).toHaveCount(1);
     await expect(group.locator(".erow", { hasText: "MRVL" })).toHaveCount(1);
     // The generic "projected" note isn't repeated on top of the group's own line.
@@ -83,6 +85,28 @@ test("Compass marks a holding's Thanksgiving row as date not confirmed, with no 
   const row = page.locator(".ex-row", { hasText: "MRVL" });
   await expect(row.getByTestId("ex-unconfirmed")).toContainText("Date not confirmed");
   await expect(row.locator(".ex-date")).not.toContainText("Nov 26");
+  // No date, so it sorts after the dated rows and stays out of the week bars.
+  await expect(page.locator(".ex-row").last()).toContainText("MRVL");
+  await expect(page.locator(".wk-names", { hasText: "MRVL" })).toHaveCount(0);
   await noSideScroll(page);
-  await page.screenshot({ path: test.info().outputPath("closedday-compass-390.png") });
+  await row.scrollIntoViewIfNeeded();
+  await row.screenshot({ path: test.info().outputPath("closedday-compass-390.png") });
+});
+
+test("a normal trading day next to the holiday keeps its count, session groups and \"N reporting\"", async ({ page }) => {
+  await page.goto("./?d=2026-11-02&day=2026-11-02");
+  const drawer = page.locator(".drawer[role=dialog]");
+  await expect(drawer.locator(".drawer-head .eyebrow")).toHaveText(/^\d+ reporting$/);
+  await expect(drawer.locator(".sess-head", { hasText: "After close" })).toHaveCount(1);
+  await expect(drawer.getByTestId("unconfirmed-group")).toHaveCount(0);
+});
+
+test("the week brief names no day for a Thanksgiving row", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`./?d=${HOL}`);
+  await page.getByRole("button", { name: "week view" }).click();
+  const brief = page.locator(".brief-head");
+  if ((await brief.getAttribute("aria-expanded")) !== "true") await brief.click();
+  await expect(page.locator(".brief-co", { hasText: "MRVL" }).getByTestId("brief-unconfirmed")).toContainText("Date not confirmed");
+  await noSideScroll(page);
 });
