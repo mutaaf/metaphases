@@ -1,7 +1,7 @@
 import type { CalendarResponse, MacroResponse, TickerResponse } from "../../shared/types";
 import { useEffect, useState } from "react";
 import { BASE } from "./router";
-import { needsRetry } from "./partial";
+import { retryDelay } from "./partial";
 import { settleContested } from "../../shared/contestedTime";
 
 const mem = new Map<string, Promise<unknown>>();
@@ -26,9 +26,11 @@ async function fetchCalendarRaw(path: string): Promise<CalendarResponse> {
   const u = new URL(path, location.origin);
   const from = u.searchParams.get("from")!, to = u.searchParams.get("to")!;
   if (!from || !to || isoAdd(from, CAL_CHUNK_DAYS) > to) return fetchJson(path);
+  // A background re-read (`_r`) must reach the worker, not the browser's copy of the chunk it's re-reading.
+  const r = u.searchParams.get("_r");
   const chunks: [string, string][] = [];
   for (let d = from; d <= to; d = isoAdd(d, CAL_CHUNK_DAYS)) { const e = isoAdd(d, CAL_CHUNK_DAYS - 1); chunks.push([d, e < to ? e : to]); }
-  const parts = await Promise.allSettled(chunks.map(([f, t]) => fetchJson(`${BASE}/api/calendar?from=${f}&to=${t}`) as Promise<CalendarResponse>));
+  const parts = await Promise.allSettled(chunks.map(([f, t]) => fetchJson(`${BASE}/api/calendar?from=${f}&to=${t}${r ? `&_r=${r}` : ""}`) as Promise<CalendarResponse>));
   if (parts.every((p) => p.status === "rejected")) throw (parts[0] as PromiseRejectedResult).reason;
   const seen = new Set<string>();
   const out: CalendarResponse = { from, to, events: [], asOf: new Date().toISOString(), warnings: [] };
@@ -37,6 +39,7 @@ async function fetchCalendarRaw(path: string): Promise<CalendarResponse> {
     out.warnings.push(...(p.value.warnings ?? []));
     if (p.value.pending) out.pending = Math.max(out.pending ?? 0, p.value.pending); // one global count, repeated per chunk
     if (p.value.unchecked) out.unchecked = Math.max(out.unchecked ?? 0, p.value.unchecked); // 0015: same, for the Nasdaq cross-check
+    if (p.value.uncheckedDays?.length) out.uncheckedDays = [...new Set([...(out.uncheckedDays ?? []), ...p.value.uncheckedDays])].sort(); // 0061: per chunk
     for (const e of p.value.events ?? []) {
       const k = `${e.s}|${e.d}`;
       if (e.d < from || e.d > to || seen.has(k)) continue;
@@ -71,8 +74,9 @@ export function useApi<T>(path: string | null): Loadable<T> {
         (data) => {
           if (!live) return;
           setSt({ data, error: null, loading: false });
-          // Partial result (some upstream calls were rate-limited): quietly retry twice.
-          if (needsRetry(data as { warnings?: string[] }) && attempt < 2) timer = setTimeout(() => load(`${path}${path.includes("?") ? "&" : "?"}_r=${attempt + 1}`, attempt + 1), 4000 * (attempt + 1));
+          // Partial result (some upstream calls were rate-limited, or days on screen not cross-checked yet): quietly ask again.
+          const wait = retryDelay(data as { warnings?: string[]; uncheckedDays?: string[] }, attempt);
+          if (wait != null) timer = setTimeout(() => load(`${path}${path.includes("?") ? "&" : "?"}_r=${attempt + 1}`, attempt + 1), wait);
         },
         (e) => {
           if (!live) return;

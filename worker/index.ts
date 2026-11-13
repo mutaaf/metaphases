@@ -295,7 +295,7 @@ const WHEN_LONG: Record<Session, string> = { bmo: "before the opening bell", amc
  * NQX_PER_BUILD fetched ones (if this request takes the per-colo lock). Returns null when there's nothing to
  * compare against.
  */
-async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean): Promise<NqWindow | null> {
+async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean, want?: (d: string) => boolean): Promise<NqWindow | null> {
   const folded = await readJson<NqWindow>(NQX_IDX(today));
   if (folded) return folded;
   const days = windowDays(today);
@@ -306,7 +306,9 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
     await caches.default.put(NQX_LOCK, new Response("1", { headers: { "Cache-Control": "public, max-age=60" } })).catch(() => {});
     const failed = (await readJson<Record<string, number>>(NQX_FAIL)) ?? {};
     const now = Date.now();
-    const take = missing.filter((d) => !(failed[d] > now)).slice(0, NQX_PER_BUILD);
+    // 0061: the days the request is showing come first (then nearest first), so a cold week view fills itself.
+    const first = (d: string) => (want?.(d) ? 0 : 1);
+    const take = missing.filter((d) => !(failed[d] > now)).sort((a, b) => first(a) - first(b) || a.localeCompare(b)).slice(0, NQX_PER_BUILD);
     // 0059: the fill runs after the response (its 4 s timeout never delays the calendar); the next read has the days.
     if (take.length) ctx.waitUntil((async () => {
       const got = await pool(take, 2, (d) => fetchNasdaqDay(d, NQX_BUILD_TIMEOUT));
@@ -429,14 +431,21 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
   // A Nasdaq failure leaves the events as Finnhub has them. It isn't a calendar failure, so it's not a warning:
   // warnings make the client say "busy" and retry (0047). `unchecked` counts the days that couldn't be compared.
   let unchecked = 0;
+  let uncheckedDays: string[] = [];
   if (to >= today && from <= addDays(windowEnd(today), XCHECK_REACH)) {
     // Only ranges overlapping the window may fetch; later ranges (the month view fires several at once) read the cache.
-    const w = await nasdaqWindow(today, ctx, from <= windowEnd(today)).catch(() => null);
+    const inRange = (d: string) => d >= from && d <= to;
+    const w = await nasdaqWindow(today, ctx, from <= windowEnd(today), inRange).catch(() => null);
     if (w) fixed = crossCheck(fixed, w);
     unchecked = windowDays(today).length - (w?.loaded.length ?? 0);
+    // 0061: the days on screen that haven't been compared yet, so the client says "still checking" and asks again,
+    // instead of showing a cold read as if it had been checked.
+    const done = new Set(w?.loaded ?? []);
+    uncheckedDays = windowDays(today).filter((d) => inRange(d) && !done.has(d));
   }
-  const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings, ...(pending ? { pending } : {}), ...(unchecked ? { unchecked } : {}) };
-  return json(body, 600);
+  const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings, ...(pending ? { pending } : {}), ...(unchecked ? { unchecked } : {}), ...(uncheckedDays.length ? { uncheckedDays } : {}) };
+  // An unchecked answer must not sit in the browser for 10 minutes: the next read is the checked one.
+  return json(body, uncheckedDays.length ? 30 : 600);
 }
 
 // ── Yahoo candles ───────────────────────────────────────────────────────

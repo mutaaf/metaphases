@@ -1,12 +1,12 @@
 ---
 id: 0061
 title: The first calendar read after a quiet spell carries no cross-check (0 of 103 rows flagged, then 70 of 103 ninety seconds later)
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-12
-pr:
+pr: 107
 by: critic
 ---
 
@@ -34,3 +34,6 @@ Vitest: calendar route with an empty window cache returns `unchecked > 0`; clien
 
 ## Out of scope
 Which feed wins a contested date or session (0015, 0059, 0060).
+
+## Builder note 2026-11-13 (#107)
+The first option, plus a nudge to the worker. `/api/calendar` now returns `uncheckedDays`: the requested days inside the 0015 window that Nasdaq's day calendar hasn't been read for yet (an outage counts too). Such an answer is cached 30 s, not 600, and the background build fetches the requested range's days first (still 2 days per colo per minute, ≤ 2 in flight, no new calls). The client merges `uncheckedDays` across week chunks, shows "Still comparing N days' dates and times with Nasdaq's calendar…" above the grid, labels a blank-session group on those days "Checking time…" (week column, day view, drawer) instead of "Time TBD", and re-reads every 30 s up to 6 times (`retryDelay` in `src/lib/partial.ts`), passing `_r` through to the week chunks so a re-read reaches the worker. A cron warm-up would need `wrangler.jsonc` (frozen), so it isn't part of this.
