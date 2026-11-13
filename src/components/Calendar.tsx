@@ -175,16 +175,34 @@ function groupBySession(evs: EarningsEvent[]) {
   return order.map((h) => ({ h, list: evs.filter((e) => e.h === h) })).filter((g) => g.list.length);
 }
 
-export function DayDrawer({ day, events, macro, onClose }: { day: string; events: EarningsEvent[]; macro: MacroEvent[]; onClose: () => void }) {
+// The drawer has its own shareable URL (?day=), so an empty day there gets the same
+// guidance as the grid, never a blank under "0 reporting" (0051, 0026).
+type DrawerUnknown = "loading" | "failed" | "outside";
+function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean) {
+  const holiday = HOLIDAY[day];
+  const dow = parse(day).getDay();
+  if (holiday) return { eyebrow: "Market closed", body: <>Market closed · {holiday}. No companies report while the exchanges are shut.</> };
+  if (dow === 0 || dow === 6) return { eyebrow: "Market closed", body: <>Market closed · weekend. Companies report on trading days.</> };
+  if (unknown === "loading") return { eyebrow: "Loading", body: <>Charting the phases…</> };
+  // A shared ?day= outside the range on screen: we haven't read it, so we don't claim anything.
+  if (unknown === "outside") return { eyebrow: "Not on screen", body: <>This day isn't in the range on screen. Open the day view to see who reports.</> };
+  if (unknown === "failed") return { eyebrow: "Didn't load", body: <>This day's earnings didn't load, so we can't say who reports. Try again in a moment.</> };
+  if (narrowed) return { eyebrow: "None with these filters", body: <>None with these filters report on {WEEKDAY_LONG[dow]}. Try <b>Everything</b>.</> };
+  return { eyebrow: "None we follow", body: <><Term k="follow">{NONE_OURS}</Term> report on {WEEKDAY_LONG[dow]}. Smaller companies, and some listed only overseas, may.</> };
+}
+
+export function DayDrawer({ day, events, macro, onClose, unknown }: { day: string; events: EarningsEvent[]; macro: MacroEvent[]; onClose: () => void; unknown?: DrawerUnknown }) {
   const ref = useRef<HTMLElement>(null);
   useDialog(ref, onClose);
+  const { prefs } = useStore();
   const openDayView = () => { onClose(); actions.setPref("view", "day"); setParam("d", day); };
+  const empty = events.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector);
   return (
     <div className="drawer-scrim" onClick={onClose}>
       <aside className="drawer" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Earnings on ${fmtLong(day)}`}>
         <header className="drawer-head">
           <div>
-            <span className="eyebrow">{events.length} reporting</span>
+            <span className="eyebrow">{empty ? empty.eyebrow : `${events.length} reporting`}</span>
             <h2>{fmtLong(day)}</h2>
           </div>
           <div className="drawer-actions">
@@ -202,6 +220,7 @@ export function DayDrawer({ day, events, macro, onClose }: { day: string; events
           const n = events.filter((e) => e.x !== "differs" && e.eA == null && eventProjected(e, todayISO())).length;
           return n > 0 && <Notice><Term k="unconfirmed">{n === 1 ? "One date here is projected" : n === events.length ? "These dates are projected" : `${n} dates here are projected`}</Term>: {n === 1 ? "the company hasn't" : "the companies haven't"} announced {n === 1 ? "it" : "them"} yet, so {n === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>;
         })()}
+        {empty && <p className="empty-big drawer-empty">{empty.body}</p>}
         {groupBySession(events).map((g) => (
           <section key={g.h} className="sess">
             <h3 className="sess-head"><Phase h={g.h} size={14} /> {PHASE_LABEL[g.h]} <span className="muted">· {g.list.length}</span></h3>
@@ -387,7 +406,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
           )}
         </div>
       )}
-      {openDay && <DayDrawer day={openDay} events={byDay[openDay] ?? []} macro={macroByDay[openDay] ?? []} onClose={closeDrawer} />}
+      {openDay && <DayDrawer day={openDay} events={byDay[openDay] ?? []} unknown={covered(openDay) ? (failedDays.has(openDay) ? "failed" : undefined) : error ? "failed" : loading ? "loading" : "outside"} macro={macroByDay[openDay] ?? []} onClose={closeDrawer} />}
     </>
   );
 }
