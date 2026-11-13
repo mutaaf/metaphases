@@ -3,7 +3,8 @@
 // Cloudflare's zone-level Web Analytics auto-install injects a beacon
 // (`static.cloudflareinsights.com/beacon.min.js`, reporting to `cloudflareinsights.com/cdn-cgi/rum`) into
 // HTML at the edge, after the Worker answers, so it never appears in the repo. AGENTS.md forbids analytics
-// anywhere and kids pages promise "no data, no analytics". This policy is the guarantee: scripts may come
+// except the operator's same-origin Box Office tag on grown-up pages (shared/insights.ts), and kids pages
+// promise "no data, no analytics". This policy is the guarantee: scripts may come
 // only from our own origin (plus the one inline theme script, by hash), and the page may connect only to
 // our own origin, so the injected beacon can neither load nor report. Hosts mirror AGENTS.md § Invariants;
 // adding one needs an operator `proposal/`.

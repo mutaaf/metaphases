@@ -11,6 +11,7 @@ import { AiSpark, MoonLoader } from "../components/ai/mount";
 import { brainLabel, openAiSettings, streamAi, useAiSettings } from "../lib/ai";
 import { tickerContext } from "../lib/aiContext";
 import { useTicker } from "../lib/api";
+import { track } from "../lib/insights";
 import { curOf, heldVia, nameOf, UNIVERSE } from "../lib/data";
 import { fmtShort, todayISO } from "../lib/dates";
 import { currencyName, epsIn, isUsd, money } from "../lib/format";
@@ -32,6 +33,7 @@ function AiTake({ data, flags, caption, owned }: { data: TickerResponse; flags: 
   useEffect(() => () => abort.current?.abort(), []);
   async function write() {
     setBusy(true); setError(null); setText("");
+    track("hype_check", { ticker: data.symbol }); // the public ticker only, never the caption
     abort.current = new AbortController();
     let out = "";
     try {

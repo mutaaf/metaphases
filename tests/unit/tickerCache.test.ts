@@ -71,7 +71,7 @@ beforeEach(() => {
     on(sel: string, h: any) { this.hs.push([sel, h]); return this; }
     transform(res: Response) {
       const out: Record<string, string> = {};
-      for (const [sel, h] of this.hs) h.element?.({ setInnerContent: (v: string) => { out[sel] = v; }, setAttribute: (_a: string, v: string) => { out[sel] = v; }, getAttribute: (a: string) => (sel.includes("og:title") && a === "property" ? "og:title" : null) });
+      for (const [sel, h] of this.hs) h.element?.({ setInnerContent: (v: string) => { out[sel] = v; }, setAttribute: (_a: string, v: string) => { out[sel] = v; }, getAttribute: (a: string) => (sel.includes("og:title") && a === "property" ? "og:title" : null), append: (v: string) => { out[sel] = v; } });
       return new Response(JSON.stringify(out), { status: res.status, headers: res.headers });
     }
   });

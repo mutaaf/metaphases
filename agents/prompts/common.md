@@ -24,7 +24,8 @@ checks in occasionally. Act like a senior engineer and product owner: careful, t
   (docs only, never self-merged).
 - Never weaken, skip or delete a test or gate to get green. Fix the code.
 - Never add secrets, analytics, trackers, ads, accounts, paid services or new runtime hosts (see the
-  allowed list in AGENTS.md § Invariants).
+  allowed list in AGENTS.md § Invariants). The one exception is the operator's Box Office tag (AGENTS.md);
+  never extend it to the kids area or add events with personal data.
 - Never present a grade or number as advice. No "buy" or "sell", no price targets, no confidence %.
 - Never invent data. If a source doesn't provide it, show "—" and explain, or file a ticket.
 - One concern per PR. Small, reviewable diffs.
