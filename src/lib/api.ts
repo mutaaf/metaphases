@@ -53,6 +53,8 @@ function get<T>(path: string): Promise<T> {
   if (!mem.has(path)) {
     const p = (path.startsWith(`${BASE}/api/calendar?`) ? fetchCalendar(path) : fetchJson(path)) as Promise<unknown>;
     p.catch(() => mem.delete(path));
+    // 0061: a partial or not-yet-checked answer isn't kept for the tab's life, or a revisit would replay it.
+    p.then((d) => { const v = d as { warnings?: unknown[]; uncheckedDays?: unknown[] } | null; if (v?.warnings?.length || v?.uncheckedDays?.length) mem.delete(path); }, () => {});
     mem.set(path, p);
   }
   return mem.get(path) as Promise<T>;
@@ -60,8 +62,13 @@ function get<T>(path: string): Promise<T> {
 
 /** `status` is the HTTP status of a failed load (0 for a network failure): 404 means "not found", anything else
  *  means "busy", and a busy service must never be described as a fact about the thing we asked for (0026). */
-export interface Loadable<T> { data: T | null; error: string | null; loading: boolean; status?: number; retry?: () => void }
-export function useApi<T>(path: string | null): Loadable<T> {
+export interface Loadable<T> {
+  data: T | null; error: string | null; loading: boolean; status?: number; retry?: () => void;
+  /** A quiet re-read is scheduled (a partial result, or days still being cross-checked). False once the answer is final. */
+  retrying?: boolean;
+}
+/** `recheck`: also re-read while days on screen haven't been cross-checked with Nasdaq (0061; the calendar page only). */
+export function useApi<T>(path: string | null, { recheck = false }: { recheck?: boolean } = {}): Loadable<T> {
   const [st, setSt] = useState<Loadable<T>>({ data: null, error: null, loading: !!path });
   const [nonce, setNonce] = useState(0);
   useEffect(() => {
@@ -73,9 +80,9 @@ export function useApi<T>(path: string | null): Loadable<T> {
       get<T>(p).then(
         (data) => {
           if (!live) return;
-          setSt({ data, error: null, loading: false });
           // Partial result (some upstream calls were rate-limited, or days on screen not cross-checked yet): quietly ask again.
-          const wait = retryDelay(data as { warnings?: string[]; uncheckedDays?: string[] }, attempt);
+          const wait = retryDelay(data as { warnings?: string[]; uncheckedDays?: string[] }, attempt, recheck);
+          setSt({ data, error: null, loading: false, retrying: wait != null });
           if (wait != null) timer = setTimeout(() => load(`${path}${path.includes("?") ? "&" : "?"}_r=${attempt + 1}`, attempt + 1), wait);
         },
         (e) => {
@@ -83,18 +90,18 @@ export function useApi<T>(path: string | null): Loadable<T> {
           // A transient edge failure (e.g. a cold cache over the CPU budget) usually succeeds a moment later: retry once quietly.
           if (attempt === 0) { timer = setTimeout(() => load(p, 1), 1200); return; }
           // A failed background retry of a partial result keeps what already loaded (0026).
-          if (p !== path) { setSt((s) => (s.data ? { ...s, loading: false } : s)); return; }
+          if (p !== path) { setSt((s) => (s.data ? { ...s, loading: false, retrying: false } : s)); return; }
           setSt({ data: null, error: String(e.message ?? e), loading: false, status: typeof e?.status === "number" ? e.status : 0 });
         },
       );
     load(path, 0);
     return () => { live = false; clearTimeout(timer); };
-  }, [path, nonce]);
+  }, [path, nonce, recheck]);
   return { ...st, retry: () => setNonce((n) => n + 1) };
 }
 
 export const calendarPath = (from: string, to: string) => `${BASE}/api/calendar?from=${from}&to=${to}`;
-export const useCalendar = (from: string, to: string) => useApi<CalendarResponse>(calendarPath(from, to));
+export const useCalendar = (from: string, to: string, recheck = false) => useApi<CalendarResponse>(calendarPath(from, to), { recheck });
 export const useMacro = () => useApi<MacroResponse>(`${BASE}/api/macro`);
 export const useTicker = (s: string | null) => useApi<TickerResponse>(s ? `${BASE}/api/ticker/${s}` : null);
 export const prefetchTicker = (s: string) => { get(`${BASE}/api/ticker/${s}`).catch(() => {}); };

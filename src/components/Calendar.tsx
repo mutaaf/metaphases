@@ -3,7 +3,7 @@ import { track } from "../lib/insights";
 import type { EarningsEvent, MacroEvent } from "../../shared/types";
 import { EARLY_CLOSE, HOLIDAYS } from "../../shared/market";
 import { useCalendar, useMacro, prefetchTicker } from "../lib/api";
-import { missingDays } from "../lib/partial";
+import { checkingOf, missingDays } from "../lib/partial";
 import { co, curOf, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { noResultYet } from "../../shared/pending";
@@ -278,7 +278,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const weeks = useMemo(() => (view === "month" ? monthWeeks(a.getFullYear(), a.getMonth()) : [weekOf(anchor)]), [anchor, view]);
   const from = weeks[0][0];
   const to = weeks[weeks.length - 1][4];
-  const { data, loading, error, retry } = useCalendar(view === "month" ? from : addDays(weekOf(anchor)[0], 0), view === "month" ? to : weekOf(anchor)[4]);
+  const { data, loading, error, retry, retrying } = useCalendar(view === "month" ? from : addDays(weekOf(anchor)[0], 0), view === "month" ? to : weekOf(anchor)[4], true);
   const macro = useMacro();
   const all = data?.events ?? [];
   const filtered = useFiltered(all);
@@ -310,7 +310,9 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const unknownDay = (d: string) => (covered(d) ? undefined : error ? "failed" as const : "loading" as const);
   const failedDays = useMemo(() => new Set(data ? missingDays(data.warnings ?? [], data.from, data.to) : []), [data]);
   // 0061: days on screen the Nasdaq cross-check hasn't reached yet (useApi re-reads until they're in).
-  const checkingDays = useMemo(() => new Set(data && !data.warnings.length ? data.uncheckedDays ?? [] : []), [data]);
+  const unchecked = useMemo(() => new Set(data && !data.warnings.length ? checkingOf(data.uncheckedDays) : []), [data]);
+  // Still checking only while a re-read is coming; after the last one, those times are the feed's alone.
+  const checkingDays = retrying ? unchecked : new Set<string>();
   const byDay = useMemo(() => {
     const m: Record<string, EarningsEvent[]> = {};
     for (const e of filtered) (m[e.d] ??= []).push(e);
@@ -382,12 +384,15 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       {error && !loading && <Notice tone="error">{error} Your watchlist and holdings are safe. <button className="btn btn-box" onClick={retry}>Try again</button></Notice>}
       {data && data.warnings.length > 0 && (
         <Notice tone="warn">
-          {failedDays.size === 0 ? "Part of the calendar didn't load yet — the market data service is busy." : failedDays.size === 1 ? `${fmtLong([...failedDays][0])} didn't load yet — the market data service is busy.` : `${failedDays.size} days didn't load yet — the market data service is busy.`} Retrying in the background; everything else is current.
+          {failedDays.size === 0 ? "Part of the calendar didn't load yet — the market data service is busy." : failedDays.size === 1 ? `${fmtLong([...failedDays][0])} didn't load yet — the market data service is busy.` : `${failedDays.size} days didn't load yet — the market data service is busy.`} {retrying ? "Retrying in the background; everything else is current." : <>Everything else is current. <button className="link" onClick={retry}>Try again</button></>}
         </Notice>
       )}
-      {checkingDays.size > 0 && (
-        <Notice>Still comparing {checkingDays.size === 1 ? `${fmtLong([...checkingDays][0])}'s` : `${checkingDays.size} days'`} dates and times with Nasdaq's calendar. A time or a <Term k="xcheck">“Nasdaq” note</Term> may fill in over the next few minutes.</Notice>
-      )}
+      {unchecked.size > 0 && (() => {
+        const which = unchecked.size === 1 ? `${WEEKDAY_LONG[parse([...unchecked][0]).getDay()]}'s` : `${unchecked.size} days'`;
+        return retrying
+          ? <Notice>Still comparing {which} dates and times with Nasdaq's calendar. A time or a <Term k="xcheck">“Nasdaq” note</Term> may fill in over the next few minutes.</Notice>
+          : <Notice>We couldn't compare {which} dates and times with Nasdaq's calendar just now, so they're our data feed's alone. <button className="link" onClick={retry}>Check again</button></Notice>;
+      })()}
       {data && !data.warnings.length && (data.pending ?? 0) > 0 && (
         <Notice>Some overseas companies' report dates are still being checked, so a few may be missing for now.</Notice>
       )}
