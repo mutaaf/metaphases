@@ -42,7 +42,7 @@ The thresholds in `shared/grades.ts` must stay identical to Market Digest's `GRA
   - AI never auto-spends: previews generate only on a tap. AI UI is lazy-loaded.
   - Client side: `static2.finnhub.io` (logos), `fonts.googleapis.com`, `fonts.gstatic.com`.
   - Adding a host requires an operator `proposal/`.
-- **No analytics, trackers, ads, accounts or paid services.** User state stays in localStorage behind try/catch.
+- **No analytics, trackers, ads, accounts or paid services**, with one operator-approved exception (2026-11-12): **Box Office** (mutaafaziz.com/boxoffice, the owner's same-origin PostHog relay; honours GPC/DNT, truncates IPs, masks inputs in replays). The worker (`withInsights`, `shared/insights.ts`) appends its tag last in `<body>` on grown-up pages and the guide only, **never on `/kids` or `/kids/*`**; `navigate()` reaches the kids area with a full page load when analytics is running, so Moon Club never has it in memory. Custom events (`src/lib/insights.ts`) carry public values only: `ticker_view` {ticker, lens}, `calendar_view` {view}, `hype_check` {ticker}; never names, captions, holdings or ids. User state stays in localStorage behind try/catch.
 - **Kids surfaces (`/kids*`, `src/pages/Kids.tsx`, `shared/kids*.ts`) are child-directed:**
   - Pretend money only. Never a buy/sell/broker link, a payment, or anything a kid could spend.
   - No data: no accounts, no names, no analytics; progress lives in `localStorage` (`metaphases:kids:v1`) only.

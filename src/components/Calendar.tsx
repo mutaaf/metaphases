@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { track } from "../lib/insights";
 import type { EarningsEvent, MacroEvent } from "../../shared/types";
 import { EARLY_CLOSE, HOLIDAYS } from "../../shared/market";
 import { useCalendar, useMacro, prefetchTicker } from "../lib/api";
@@ -253,6 +254,8 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const anchor = param("d") ?? nextTradingDay(today);
   const a = parse(anchor);
   const view = prefs.view;
+  // Box Office: which way people read the calendar (month, week or one day, phase by phase).
+  useEffect(() => { track("calendar_view", { view }); }, [view]);
   const weeks = useMemo(() => (view === "month" ? monthWeeks(a.getFullYear(), a.getMonth()) : [weekOf(anchor)]), [anchor, view]);
   const from = weeks[0][0];
   const to = weeks[weeks.length - 1][4];

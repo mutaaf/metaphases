@@ -13,6 +13,7 @@ import { IcsButtons, Peers, PriceChart, QuarterTrend } from "./Depth";
 import { whatTheyDo } from "../lib/plain";
 import { isEveryday, LensNote } from "./Everyday";
 import { navigate } from "../lib/router";
+import { track } from "../lib/insights";
 import { isDated } from "../../shared/pending";
 import { nextTimeContested, shownSession } from "../../shared/contestedTime";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
@@ -144,6 +145,8 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   const sheetRef = useRef<HTMLElement>(null);
   useDialog(sheetRef, onClose, { initialFocus: "self" });
 
+  // Box Office: tickers are public, so the symbol is fine; the lens says which reader opened it.
+  useEffect(() => { track("ticker_view", { ticker: symbol, lens: everyday ? "everyday" : "trader" }); }, [symbol]);
   useEffect(() => {
     const prev = document.title;
     document.title = `${symbol} earnings: the full read · Metaphases`;

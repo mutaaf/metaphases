@@ -32,6 +32,7 @@ import { shownSession } from "../shared/contestedTime";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
+import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
 
 interface Env {
@@ -947,6 +948,12 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
   return PAGES[path] ?? null;
 }
 
+/** Box Office analytics: the loader, last in <body>, on grown-up pages only. Never on the kids area (Moon Club). */
+export function withInsights(res: Response, p: string): Response {
+  if (isKidsPath(p) || typeof HTMLRewriter === "undefined" || !(res.headers.get("Content-Type") ?? "").toLowerCase().includes("text/html")) return res;
+  return new HTMLRewriter().on("body", { element(el) { el.append(INSIGHTS_TAG, { html: true }); } }).transform(res);
+}
+
 async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(req.url);
   // Fetch the directory URL, not index.html: the asset layer 307s "index.html" to its directory.
@@ -954,7 +961,8 @@ async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Resp
   // CSP. A 304 has no Content-Type, and would let a pre-CSP cached copy keep running without the policy.
   const res = await env.ASSETS.fetch(new Request(new URL(`${BASE}/`, url), { method: "GET" }));
   const meta = await shareMeta(url, env, ctx);
-  if (!meta) return res;
+  const p = url.pathname.slice(BASE.length) || "/";
+  if (!meta) return withInsights(res, p);
   const canonical = `${SITE}${url.pathname}${url.search}`;
   const set = (attr: string) => ({ element(el: Element) { el.setAttribute(attr, attr === "href" ? canonical : el.getAttribute("property")?.endsWith("description") || el.getAttribute("name")?.endsWith("description") ? meta.desc : el.getAttribute("property") === "og:url" ? canonical : meta.title); } });
   return new HTMLRewriter()
@@ -969,6 +977,8 @@ async function page(req: Request, env: Env, ctx: ExecutionContext): Promise<Resp
     .on('link[rel="icon"]', { element(el) { if (meta.kids) el.setAttribute("href", el.getAttribute("type") === "image/png" ? `${BASE}/kids-icon-512.png` : `${BASE}/kids-icon.svg`); } })
     .on('link[rel="apple-touch-icon"]', { element(el) { if (meta.kids) el.setAttribute("href", `${BASE}/kids-apple-touch-icon.png`); } })
     .on('meta[name="apple-mobile-web-app-title"]', { element(el) { if (meta.kids) el.setAttribute("content", "Moon Club"); } })
+    // Box Office analytics, last in <body>: grown-up pages only, never the kids area.
+    .on("body", { element(el) { if (!meta.kids && !isKidsPath(p)) el.append(INSIGHTS_TAG, { html: true }); } })
     .transform(new Response(res.body, { status: 200, headers: (() => { const h = new Headers(res.headers); h.set("Content-Type", "text/html; charset=utf-8"); h.set("Cache-Control", `public, max-age=${Math.min(300, meta.ttl ?? 300)}`); return h; })() }));
 }
 
@@ -1247,7 +1257,7 @@ export default {
       if (p.startsWith("/api/")) return json({ error: "Not found" }, 0);
       // The guide is a real static page (public/guide/index.html), readable without JS; the SPA shell must not catch it.
       if (p === "/guide" || p === "/guide/index.html") return Response.redirect(`${url.origin}${BASE}/guide/`, 301);
-      if (p === "/guide/") return secureHtml(await env.ASSETS.fetch(new Request(new URL(`${BASE}/guide/`, url), { method: "GET" })));
+      if (p === "/guide/") return secureHtml(withInsights(await env.ASSETS.fetch(new Request(new URL(`${BASE}/guide/`, url), { method: "GET" })), p));
       const isPage = req.method === "GET" && !/\.[a-z0-9]{2,12}$/i.test(p);
       // 0036: every HTML response carries the CSP that blocks Cloudflare's edge-injected analytics beacon.
       if (isPage) return secureHtml(await page(req, env, ctx));
