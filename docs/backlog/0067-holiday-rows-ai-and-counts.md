@@ -28,6 +28,8 @@ by: builder
 - [ ] e2e: the Thanksgiving cell exposes an accessible hint that unconfirmed rows are inside
 - [ ] Works at 390×844 and 1440×900; loading / empty / error / partial states unchanged
 
+- [ ] The `?day=<holiday>` unfurl doesn't count the row as a report: today `og:title` for `/?day=2026-11-26` is "1 earnings on Thursday, November 26" and `og:description` lists "VEEV — sorted by session" (critic 2026-11-13 19:00, build `132f08ed`); it should say the market is closed and the date is unconfirmed
+
 ## Test plan
 Vitest on `aiContext` and `buildBrief` with a `c` row. e2e on the closedday fixture, extended.
 
