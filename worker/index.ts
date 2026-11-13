@@ -28,6 +28,7 @@ import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
+import { shownSession } from "../shared/contestedTime";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
@@ -761,7 +762,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const when = upNext.hour ? WHEN_LONG[upNext.hour as Session] ?? "" : nqNext ? "" : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
     const nqWhen = nqNext ? (nqNext.date === upNext.date ? (nqNext.session ? `it ${WHEN_LONG[nqNext.session]} that day` : "it at another time that day") : `${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}`) : "";
-    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${when}${nqNext ? `, but that's unconfirmed: Nasdaq's calendar lists ${nqWhen}` : ""}.`.replace(" .", ".").replace(" ,", ","));
+    // 0062: same day, other session: lead with the day and call the time unconfirmed, as the sheet's headline does.
+    if (nqNext && nqNext.date === upNext.date && nqNext.session && upNext.hour && nqNext.session !== upNext.hour)
+      read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)}, time unconfirmed: our data feed says ${WHEN_LONG[upNext.hour as Session]}, Nasdaq's calendar ${WHEN_LONG[nqNext.session]}.`);
+    else read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${when}${nqNext ? `, but that's unconfirmed: Nasdaq's calendar lists ${nqWhen}` : ""}.`.replace(" .", ".").replace(" ,", ","));
   }
   const estLine = duePending ? null
     : ffo ? ((pending ? pending.eE : upNext?.epsEstimate) != null ? `${name} is a REIT whose recent results came in on a different measure from the feed's estimate (usually funds from operations against net income a share), so we don't quote the estimate as the bar.` : null)
@@ -1082,13 +1086,19 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
   const results = await pool(syms, 6, (sym) =>
     cached<any>(`fh:ics:${sym}:${today}`, 21600, ctx, () => getJson(`${FH}/calendar/earnings?symbol=${sym}&from=${today}&to=${to}&token=${env.FINNHUB_API_KEY}`)),
   );
+  // 0062: the cached 0015 window (no new upstream calls). A session Nasdaq lists differently on the same day isn't
+  // stated in the summary.
+  const nqWin = await nasdaqWindow(today, ctx, false).catch(() => null);
   const items: IcsItem[] = [];
   results.forEach((r, i) => {
     if (r.status !== "fulfilled") return;
     const sym = syms[i];
     for (const e of applyToRows(sym, r.value?.earningsCalendar ?? [], OVERRIDES, today)) {
       if (e.date < today) continue;
-      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: (e.hour || "") as Session, quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}), ...(isProjected({ date: e.date, session: e.hour || "", source: e.source }, today) ? { projected: true } : {}) });
+      const feedH = (e.hour || "") as Session;
+      const c = nqWin && !e.source ? crossOne(sym, e.date, feedH, nqWin) : null;
+      const contestedH = c?.x === "differs" && c.xd === e.date && !!c.xh;
+      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: contestedH ? "" : feedH, quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}), ...(isProjected({ date: e.date, session: e.hour || "", source: e.source }, today) ? { projected: true } : {}) });
     }
   });
   items.sort((a, b) => a.date.localeCompare(b.date));
@@ -1145,7 +1155,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const svg = await cached(`story:svg:v4:${kind}:${day}`, 21600, ctx, async () => {
+    const svg = await cached(`story:svg:v5:${kind}:${day}`, 21600, ctx, async () => {
       if (kind === "kids") return storyKidsSvg();
       const rc = kind.match(/^kids-recap:(\d+)\.(\d+)\.(\d+)\.(n|-?[\d.]+)\.(\d)$/);
       if (rc) {
@@ -1160,8 +1170,9 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
         return storyTickerSvg({
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
           // 0007: a projected date is "expected around", with no session glyph.
-          when: isDated(d.next) ? (d.next.projected && !d.next.nasdaq ? `expected around ${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (not yet confirmed)` : whenPlain(d.next.date, d.next.session, day)) : d.next ? "date not confirmed yet" : "date not announced yet",
-          session: isDated(d.next) && d.next.projected && !d.next.nasdaq ? "" : d.next?.session ?? "", epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
+          when: isDated(d.next) ? (d.next.projected && !d.next.nasdaq ? `expected around ${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (not yet confirmed)` : whenPlain(d.next.date, shownSession(d.next), day)) : d.next ? "date not confirmed yet" : "date not announced yet",
+          // 0062: a session the two calendars contest is drawn as unknown.
+          session: isDated(d.next) && d.next.projected && !d.next.nasdaq ? "" : shownSession(d.next), epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
           beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, ...(reportedCard(d, day) ?? {}),
         });
       }
@@ -1174,7 +1185,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
       }
       throw new Error("no story");
     });
-    const key = new Request(`https://cache.metaphases.internal/story-png-v2-${encodeURIComponent(kind)}-${day}`);
+    const key = new Request(`https://cache.metaphases.internal/story-png-v3-${encodeURIComponent(kind)}-${day}`);
     const hit = await caches.default.match(key);
     if (hit) return hit;
     const { renderPng } = await import("./og");

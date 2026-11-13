@@ -139,7 +139,9 @@ describe("0059 self-review: the card, slow answers, and the same-day case", () =
     cacheDays({ "2026-11-16": { QQYP: "amc" } });
     const t = await sheet("QQYP");
     expect(t.next).toMatchObject({ date: "2026-11-16", session: "bmo", nasdaq: { date: "2026-11-16", session: "amc" } });
-    expect(t.read.join(" ")).toContain("Monday, Nov 16 before the opening bell, but that's unconfirmed: Nasdaq's calendar lists it after the close that day.");
+    // 0062: the day leads and the time is called unconfirmed; neither session is stated as fact.
+    expect(t.read.join(" ")).toContain("QQYP reports Q3 on Monday, Nov 16, time unconfirmed: our data feed says before the opening bell, Nasdaq's calendar after the close.");
+    expect(t.read.join(" ")).not.toMatch(/Nov 16 before the opening bell, but/);
     expect(tickerShareTitle("QQYP", "Q", t.next)).toBe("QQYP reports Mon, Nov 16, time unconfirmed · Metaphases");
     expect(tickerShareDesc("Q", t)).toMatch(/^Q — report time unconfirmed \(the feed and Nasdaq list Mon, Nov 16 in different sessions\)/);
   });

@@ -19,6 +19,7 @@ import { movePlain, whatTheyDo, whenPlain } from "../lib/plain";
 import { BASE, param, setParam } from "../lib/router";
 import { actions, useStore } from "../lib/store";
 import { shareStory } from "./Today";
+import { shownSession } from "../../shared/contestedTime";
 
 const EXAMPLES = ["$NVDA", "Palantir", "Everyone on TikTok is buying $TSLA and Robinhood 🚀"];
 
@@ -87,7 +88,7 @@ function HypeCard({ sym, caption }: { sym: string; caption: string }) {
       </header>
       <p className="hc-does"><b>What it is:</b> {whatTheyDo(name, data.profile?.industry ?? UNIVERSE[sym]?.ind)}</p>
       <dl className="hc-facts">
-        <div><dt>Next report</dt><dd>{data.next?.status === "results-pending" ? "Results expected, none in yet" : data.next?.closed || data.next?.overdue ? "Not confirmed yet" : data.next ? data.next.projected && !data.next.nasdaq ? <><Phase h={data.next.session} size={14} projected /> Around {fmtShort(data.next.date)} <span className="muted small">(not confirmed by the company yet)</span></> : <><Phase h={data.next.session} size={14} /> {whenPlain(data.next.date, data.next.session, today)}</> : "Not announced yet"}</dd></div>
+        <div><dt>Next report</dt><dd>{data.next?.status === "results-pending" ? "Results expected, none in yet" : data.next?.closed || data.next?.overdue ? "Not confirmed yet" : data.next ? data.next.projected && !data.next.nasdaq ? <><Phase h={data.next.session} size={14} projected /> Around {fmtShort(data.next.date)} <span className="muted small">(not confirmed by the company yet)</span></> : <><Phase h={shownSession(data.next)} size={14} /> {whenPlain(data.next.date, shownSession(data.next), today)}</> : "Not announced yet"}</dd></div>
         <div><dt><Term k="compass">Quality grade</Term></dt><dd><GradeBadge g={data.compass.grade} /> <span className="muted small">long-term business quality</span></dd></div>
         <div><dt><Term k="expectedmove">Earnings-day swing</Term></dt><dd>{movePlain(data.expectedMove)}</dd></div>
         {data.next?.epsE != null && data.next.status !== "results-pending" && <div><dt><Term k="consensus">Wall Street expects</Term></dt><dd>{epsIn(data.next.epsE, data.next.currency ?? curOf(sym))} a share this quarter{!isUsd(data.next.currency ?? curOf(sym)) && <> <span className="muted small">(in <Term k="reportingcurrency">{currencyName(data.next.currency ?? curOf(sym))}</Term>, not dollars)</span></>}</dd></div>}

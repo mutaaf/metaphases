@@ -11,6 +11,8 @@ test.beforeEach(async ({ page }) => {
   for (const e of cal.events) {
     if (e.s === "AXON" && e.d === "2026-11-02") Object.assign(e, { x: "differs", xd: "2026-11-05", xh: "amc" });
     if (e.s === "CEG" && e.d === "2026-11-09") Object.assign(e, { x: "agree" });
+    // 0062: same date, other session (DE/ROAD-shaped): Finnhub "amc", Nasdaq "bmo".
+    if (e.s === "AMAT" && e.d === "2026-11-12") Object.assign(e, { x: "differs", xd: "2026-11-12", xh: "bmo" });
   }
   await page.route("**/api/calendar**", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(cal) }));
 });
@@ -82,3 +84,55 @@ for (const [inferred, text] of [
     await page.screenshot({ path: test.info().outputPath(`contested-${inferred || "unknown"}.png`) });
   });
 }
+
+// 0062: a session the two calendars contest is never headlined as fact.
+test("a contested session: the sheet headlines \"Time unconfirmed\" with the unknown glyph and names both", async ({ page }) => {
+  await page.route("**/api/ticker/ZZCT", async (r) => {
+    const body = JSON.parse(fx("ticker-NVDA.json").replaceAll('"NVDA"', '"ZZCT"'));
+    body.next = { ...body.next, date: "2026-11-11", session: "amc", quarter: 4, year: 2026, nasdaq: { date: "2026-11-11", session: "bmo" } };
+    body.moveSession = { feed: "amc", nasdaq: "bmo", session: "bmo" };
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/ZZCT");
+  const card = page.locator(".next-card");
+  await expect(card.locator("h3")).toHaveText("Wednesday, November 11");
+  await expect(card.getByTestId("nc-session")).toHaveText(/^Time unconfirmed · in 11 days$/);
+  await expect(card).not.toContainText("After close");
+  await expect(card.locator(".nc-phase .phase-tbd")).toHaveCount(1);
+  await expect(card.locator(".phase-amc, .phase-bmo")).toHaveCount(0);
+  await expect(card.getByTestId("nc-xcheck")).toHaveText("Two calendars disagree. Our data feed lists it after the close; Nasdaq's calendar, before the open. Past moves point to before the open. Treat the time as unconfirmed until the company announces it.");
+  await noSideScroll(page);
+  await page.screenshot({ path: test.info().outputPath("contested-sheet.png") });
+});
+
+test("a contested session: the grid tile shows the unknown glyph and the drawer names both sessions", async ({ page }) => {
+  await page.goto("./?d=2026-11-12");
+  const tile = page.locator('.tbtn[title*="(AMAT)"]').first();
+  await expect(tile).toBeVisible();
+  await expect(tile.locator(".phase-tbd")).toHaveCount(1);
+  await expect(tile.locator(".phase-amc")).toHaveCount(0);
+  await expect(tile).not.toHaveClass(/tbtn-projected/); // both feeds agree on the date
+  await page.goto("./?d=2026-11-12&day=2026-11-12");
+  const drawer = page.locator(".drawer[role=dialog]");
+  const amat = drawer.locator(".erow", { hasText: "AMAT" });
+  await expect(amat.locator(".erow-x")).toHaveText("Feed: after close · Nasdaq: before open");
+  expect(await amat.locator(".erow-x").evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  // Listed with the unconfirmed times, not under "After close".
+  expect(await amat.evaluate((el) => el.closest(".sess")?.querySelector(".sess-head")?.textContent?.trim())).toMatch(/^Time TBD/);
+  await noSideScroll(page);
+  await page.screenshot({ path: test.info().outputPath("contested-drawer.png") });
+});
+
+test("a contested session: Hype Check says the time isn't confirmed, with the unknown glyph", async ({ page }) => {
+  await page.route("**/api/ticker/NVDA", async (r) => {
+    const body = JSON.parse(fx("ticker-NVDA.json"));
+    body.next = { ...body.next, date: "2026-11-04", session: "amc", nasdaq: { date: "2026-11-04", session: "bmo" } };
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./check?text=%24NVDA");
+  const next = page.locator(".hc-card .hc-facts div", { hasText: "Next report" }).locator("dd");
+  await expect(next).toContainText("time not confirmed yet");
+  await expect(next).not.toContainText("after the market closes");
+  await expect(next.locator(".phase-tbd")).toHaveCount(1);
+  await noSideScroll(page);
+});

@@ -8,6 +8,7 @@ import { GradeBadge, Icon, Phase, Skeleton, Term, Tile } from "../components/bit
 import { PageHero } from "../components/Hero";
 import { IcsButtons } from "../components/Depth";
 import { isDated } from "../../shared/pending";
+import { shownSession } from "../../shared/contestedTime";
 
 export const POPULAR = ["AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "NFLX"];
 
@@ -22,7 +23,7 @@ function WatchRow({ s, buy, note }: { s: string; buy?: number; note?: string }) 
       <span className="wl-id"><b>{s}</b><span className="muted">{data?.profile?.name ?? nameOf(s)}</span>{note && <span className="wl-note">“{note}”</span>}</span>
       <span className="wl-next">
         {loading && !data ? <Skeleton w={90} /> : data?.justReported ? <span className="muted small">Reported {data.justReported.date === today ? "today" : fmtShort(data.justReported.date)}</span> : data?.next?.status === "results-pending" ? <span className="muted small">Results expected, none in yet</span> : data?.next?.closed || data?.next?.overdue ? <span className="muted small">Date not confirmed</span> : data?.next ? (
-          <><Phase h={data.next.session} size={14} projected={!!data.next.projected && !data.next.nasdaq} /> <span><b>{data.next.projected && !data.next.nasdaq ? "~" : ""}{fmtShort(data.next.date)}</b><span className="eyebrow">{n === 0 ? "today" : `in ${n}d`}</span></span></>
+          <><Phase h={shownSession(data.next)} size={14} projected={!!data.next.projected && !data.next.nasdaq} /> <span><b>{data.next.projected && !data.next.nasdaq ? "~" : ""}{fmtShort(data.next.date)}</b><span className="eyebrow">{n === 0 ? "today" : `in ${n}d`}</span></span></>
         ) : <span className="muted small">No date yet</span>}
       </span>
       <span className="wl-num"><span className="eyebrow">Price</span>{data?.quote ? `$${data.quote.price.toFixed(2)}` : "—"}</span>
