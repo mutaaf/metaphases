@@ -1267,6 +1267,9 @@ export default {
       // The guide is a real static page (public/guide/index.html), readable without JS; the SPA shell must not catch it.
       if (p === "/guide" || p === "/guide/index.html") return Response.redirect(`${url.origin}${BASE}/guide/`, 301);
       if (p === "/guide/") return secureHtml(withInsights(await env.ASSETS.fetch(new Request(new URL(`${BASE}/guide/`, url), { method: "GET" })), p));
+      // The Moon Club app page is a static parallax page too (public/app/index.html). No analytics: it's Moon Club's.
+      if (p === "/app" || p === "/app/index.html") return Response.redirect(`${url.origin}${BASE}/app/`, 301);
+      if (p === "/app/") return secureHtml(await env.ASSETS.fetch(new Request(new URL(`${BASE}/app/`, url), { method: "GET" })));
       const isPage = req.method === "GET" && !/\.[a-z0-9]{2,12}$/i.test(p);
       // 0036: every HTML response carries the CSP that blocks Cloudflare's edge-injected analytics beacon.
       if (isPage) return secureHtml(await page(req, env, ctx));

@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Moon Club for iPhone, iPhone Duo and iPad</title>
+<meta name="description" content="Moon Club turns the stock market into a game: candles, trends and boss quizzes with pretend money. On the App Store for iPhone, iPhone Duo and iPad." />
+<link rel="canonical" href="https://mutaafaziz.com/metaphases/app/" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Metaphases" />
+<meta property="og:url" content="https://mutaafaziz.com/metaphases/app/" />
+<meta property="og:title" content="Moon Club: learn the market like a game" />
+<meta property="og:description" content="Candles, trends and boss quizzes with pretend money. On the App Store for iPhone, iPhone Duo and iPad." />
+<meta property="og:image" content="https://mutaafaziz.com/metaphases/app/og.jpg" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="apple-itunes-app" content="app-id=6829860949" />
+<link rel="icon" href="/metaphases/kids-icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/metaphases/kids-apple-touch-icon.png" />
+<meta name="theme-color" content="#EDEAE2" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#0F0E22" media="(prefers-color-scheme: dark)" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Instrument+Serif:ital@0;1&family=Martian+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet" />
+<!-- Motion: scroll-driven animations where the browser has them (.sd), else motion.js scrubs the same CSS animations
+     by scroll (.sdjs). Reduced motion (or no script) gets neither: a static, readable page. ?sd=0 forces the fallback. -->
+<script src="motion.js"></script>
+<style>
+  :root {
+    --bg: #edeae2; --paper: #f5f3ee; --ink: #111114; --ink-2: #3b3a37; --ink-3: #5f5b53;
+    --hair: rgba(17, 17, 20, 0.14); --hair-2: rgba(17, 17, 20, 0.07);
+    --accent: #2346d8; --gold: #b7790d; --rose: #c8405c; --violet: #5a45e6;
+    --moon-lit: #f3bd45; --moon-dark: #d9d3ee; --glass: rgba(245, 243, 238, 0.86);
+    --sky-1: #e6e1f4; --sky-2: #edeae2; --sky-3: #f2e6d3; --star: #2a2550;
+    --display: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif; --serif: "Instrument Serif", ui-serif, Georgia, serif;
+    --mono: "Martian Mono", ui-monospace, monospace; --round: "Fredoka", "Schibsted Grotesk", sans-serif;
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1); --gut: max(16px, env(safe-area-inset-left)); --bar: 58px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f0e22; --paper: #17153a; --ink: #fff6d6; --ink-2: rgba(255, 246, 214, 0.8); --ink-3: rgba(214, 208, 244, 0.72);
+      --hair: rgba(255, 246, 214, 0.16); --hair-2: rgba(255, 246, 214, 0.08);
+      --accent: #9bb0ff; --gold: #ffc75a; --rose: #ff7f92; --violet: #8a78ff;
+      --moon-lit: #ffd77a; --moon-dark: #221d4e; --glass: rgba(20, 18, 48, 0.86);
+      --sky-1: #0b0a1c; --sky-2: #141238; --sky-3: #2a2260; --star: #fff6d6;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); -webkit-text-size-adjust: 100%; }
+  body { margin: 0; color: var(--ink-2); background: var(--bg); font: 16px/1.6 var(--display); -webkit-font-smoothing: antialiased; overflow-x: clip; }
+  a { color: var(--ink); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  img { display: block; max-width: 100%; }
+  .wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding-left: var(--gut); padding-right: max(16px, env(safe-area-inset-right)); }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* ---------- the sky: fixed, stars at two depths, an aurora, and a moon that fills as you read ---------- */
+  .sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+    background: radial-gradient(90% 60% at 80% 0%, color-mix(in srgb, var(--violet) 16%, transparent), transparent 70%),
+      linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 55%, var(--sky-3) 100%); }
+  .sky::after { content: ""; position: absolute; inset: 0; background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 0); background-size: 22px 22px; opacity: 0.8; }
+  .sky i { position: absolute; left: 0; right: 0; top: 0; height: 170%; display: block; }
+  .stars-far, .stars-near { color: var(--star); }
+  .stars-far { background-image: radial-gradient(1px 1px at 12% 8%, currentColor 60%, transparent 61%), radial-gradient(1px 1px at 33% 21%, currentColor 60%, transparent 61%), radial-gradient(1px 1px at 58% 5%, currentColor 60%, transparent 61%), radial-gradient(1px 1px at 81% 17%, currentColor 60%, transparent 61%), radial-gradient(1px 1px at 92% 33%, currentColor 60%, transparent 61%), radial-gradient(1px 1px at 7% 41%, currentColor 60%, transparent 61%), radial-gradient(1px 1px at 46% 37%, currentColor 60%, transparent 61%), radial-gradient(1px 1px at 69% 49%, currentColor 60%, transparent 61%), radial-gradient(1px 1px at 24% 58%, currentColor 60%, transparent 61%);
+    background-size: 420px 420px; opacity: 0.45; }
+  .stars-near { background-image: radial-gradient(1.6px 1.6px at 18% 14%, currentColor 60%, transparent 61%), radial-gradient(1.4px 1.4px at 74% 9%, currentColor 60%, transparent 61%), radial-gradient(1.8px 1.8px at 52% 46%, currentColor 60%, transparent 61%), radial-gradient(1.4px 1.4px at 88% 61%, currentColor 60%, transparent 61%), radial-gradient(1.6px 1.6px at 31% 77%, currentColor 60%, transparent 61%);
+    background-size: 640px 640px; opacity: 0.55; -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 80%); mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 80%); }
+  @media (prefers-color-scheme: dark) { .stars-far { opacity: 0.8; } .stars-near { opacity: 0.9; } .sky::after { opacity: 0.35; } }
+  .sky .aurora { height: 100%; top: -10%;
+    background: radial-gradient(40% 22% at 22% 30%, color-mix(in srgb, var(--violet) 26%, transparent), transparent 70%),
+      radial-gradient(36% 18% at 62% 24%, color-mix(in srgb, var(--rose) 18%, transparent), transparent 70%),
+      radial-gradient(30% 16% at 84% 40%, color-mix(in srgb, #3ba3ff 18%, transparent), transparent 70%);
+    filter: blur(8px); opacity: 0.9; }
+  main, .top, footer { position: relative; z-index: 1; }
+
+  /* moons: a lit right half, then a dark ellipse that shrinks (crescent to half) and a lit one that grows (half to full) */
+  .moon { display: block; overflow: visible; }
+  .moon .m-base, .moon .m-dark { fill: var(--moon-dark); }
+  .moon .m-half, .moon .m-lit { fill: var(--moon-lit); }
+  .moon .m-rim { fill: none; stroke: color-mix(in srgb, var(--moon-lit) 55%, transparent); stroke-width: 1.4; }
+  .moon .m-dark, .moon .m-lit { transform-box: fill-box; transform-origin: center; }
+  .moon .m-dark { transform: scaleX(0.3); }
+  .moon .m-lit { transform: scaleX(0); }
+  .sky-moon { position: absolute; top: calc(var(--bar) + 2.5vh); right: 2.5vw; width: clamp(44px, 5.5vw, 76px); filter: drop-shadow(0 0 28px color-mix(in srgb, var(--moon-lit) 45%, transparent)); }
+
+  /* ---------- top bar: the CTA lives here too, always one tap away ---------- */
+  .top { position: sticky; top: 0; z-index: 20; height: calc(var(--bar) + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top);
+    background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); border-bottom: 1px solid var(--hair-2); }
+  .top .wrap { height: var(--bar); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font: 700 19px/1 var(--round); letter-spacing: -0.01em; white-space: nowrap; }
+  .brand img { width: 32px; height: 32px; border-radius: 8px; box-shadow: 0 4px 12px -4px rgba(42, 34, 96, 0.5); }
+  .brand small { font: 400 10px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin-left: 2px; }
+  .top nav { display: flex; align-items: center; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 999px; font: 600 13px/1 var(--display); text-decoration: none; white-space: nowrap; color: var(--ink-2); border: 1px solid var(--hair); transition: color 0.2s, border-color 0.2s, transform 0.2s var(--ease); }
+  .pill:hover { color: var(--ink); border-color: var(--ink-3); }
+  .pill.solid { color: #fff; background: #000; border-color: #000; }
+  .pill.solid:hover { transform: translateY(-1px); }
+  .pill svg { width: 16px; height: 16px; }
+  @media (prefers-color-scheme: dark) { .pill.solid { border-color: rgba(255, 246, 214, 0.38); } }
+
+  /* ---------- type: Metaphases' grotesk + serif italic, Moon Club's rounded wordmark ---------- */
+  .eyebrow { display: inline-flex; align-items: center; gap: 10px; margin: 0; font: 500 11px/1.4 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); }
+  .eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: #2fae6b; flex: none; }
+  .fx .eyebrow i { animation: live 2.4s var(--ease) infinite; }
+  @keyframes live { 0% { box-shadow: 0 0 0 0 rgba(47, 174, 107, 0.5); } 70%, 100% { box-shadow: 0 0 0 9px rgba(47, 174, 107, 0); } }
+  h1 { margin: 18px 0 0; font: 800 clamp(42px, 6.2vw, 80px)/0.95 var(--display); letter-spacing: -0.045em; color: var(--ink); text-wrap: balance; }
+  h1 em, h2 em { font: italic 400 1.08em/0.8 var(--serif); letter-spacing: -0.02em; color: var(--accent); }
+  h1 .wm { font: 700 1em/1 var(--round); letter-spacing: -0.03em; color: var(--ink); }
+  h2 { margin: 16px 0 0; font: 800 clamp(30px, 4.8vw, 58px)/1 var(--display); letter-spacing: -0.04em; color: var(--ink); text-wrap: balance; }
+  h3 { margin: 0; font: 700 19px/1.25 var(--display); letter-spacing: -0.015em; color: var(--ink); }
+  .lede { margin: 18px 0 0; max-width: 31em; font-size: clamp(17px, 1.8vw, 20px); line-height: 1.5; color: var(--ink-2); }
+  .k { display: block; margin-bottom: 10px; font: 500 11px/1 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); }
+
+  /* ---------- the App Store button ---------- */
+  .get { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; margin-top: 28px; }
+  .store { position: relative; display: inline-flex; align-items: center; gap: 12px; min-height: 62px; padding: 10px 24px 10px 16px; border-radius: 16px; overflow: hidden;
+    color: #fff; background: #000; text-decoration: none; border: 1px solid #000;
+    box-shadow: 0 16px 40px -16px color-mix(in srgb, var(--violet) 70%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease); }
+  @media (prefers-color-scheme: dark) { .store { border-color: rgba(255, 246, 214, 0.4); } }
+  .store:hover, .store:focus-visible { transform: translateY(-2px); box-shadow: 0 22px 48px -16px color-mix(in srgb, var(--violet) 85%, transparent); }
+  .store svg { width: 30px; height: 30px; flex: none; }
+  .store span { display: grid; line-height: 1.05; }
+  .store small { font: 500 11px/1.2 var(--display); letter-spacing: 0.02em; opacity: 0.85; }
+  .store b { font: 600 23px/1.1 var(--display); letter-spacing: -0.02em; }
+  .fx .store::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 215, 122, 0.45) 50%, transparent 65%); transform: translateX(-120%); animation: sheen 5s var(--ease) 1.2s infinite; }
+  @keyframes sheen { 0%, 72% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+  .facts-mini { font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+  .facts-mini b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- devices: our own outlines ---------- */
+  .ph { --pw: 200px; width: var(--pw); padding: calc(var(--pw) * 0.034); border-radius: calc(var(--pw) * 0.16);
+    background: linear-gradient(150deg, #3a3854 0%, #11101f 32%, #1a1830 70%, #34314f 100%);
+    box-shadow: 0 calc(var(--pw) * 0.2) calc(var(--pw) * 0.36) calc(var(--pw) * -0.12) rgba(15, 14, 34, 0.75), 0 0 0 1px rgba(255, 246, 214, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
+  .ph img { width: 100%; height: auto; aspect-ratio: 506 / 1100; object-fit: cover; border-radius: calc(var(--pw) * 0.128); background: #0f0e22; }
+  .shut-ph { --sw: 220px; width: var(--sw); padding: calc(var(--sw) * 0.034); border-radius: calc(var(--sw) * 0.12);
+    background: linear-gradient(150deg, #3a3854 0%, #11101f 32%, #1a1830 70%, #34314f 100%);
+    box-shadow: 0 40px 70px -34px rgba(15, 14, 34, 0.8), 0 0 0 1px rgba(255, 246, 214, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
+  .shut-ph img { width: 100%; height: auto; aspect-ratio: 687 / 1000; object-fit: cover; border-radius: calc(var(--sw) * 0.09); }
+  .pad { --iw: 420px; width: var(--iw); padding: calc(var(--iw) * 0.032); border-radius: calc(var(--iw) * 0.07);
+    background: linear-gradient(150deg, #3a3854 0%, #11101f 30%, #1a1830 70%, #34314f 100%);
+    box-shadow: 0 50px 90px -40px rgba(15, 14, 34, 0.85), 0 0 0 1px rgba(255, 246, 214, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
+  .pad img { width: 100%; height: auto; aspect-ratio: 1050 / 1400; object-fit: cover; border-radius: calc(var(--iw) * 0.04); }
+
+  .tag { position: absolute; display: flex; align-items: center; gap: 9px; padding: 10px 14px; white-space: nowrap; font: 600 12.5px/1.25 var(--display); color: var(--ink);
+    border: 1px solid var(--hair); border-radius: 14px; background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 18px 40px -20px rgba(15, 14, 34, 0.55); }
+  .tag small { display: block; font-weight: 400; font-size: 11px; color: var(--ink-3); }
+  .tag svg { width: 18px; height: 18px; flex: none; color: var(--gold); }
+  .tag.mono { font: 500 10px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+  .tag.mono b { color: var(--rose); font-weight: 500; }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; min-height: calc(100svh - var(--bar)); display: grid; overflow: clip; }
+  .hero > .wrap { position: relative; z-index: 3; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 56px); align-items: center;
+    padding-top: clamp(28px, 6vh, 72px); padding-bottom: clamp(48px, 9vh, 104px); }
+  .h-glow { position: absolute; z-index: 1; right: -8vw; top: 4%; width: min(820px, 70vw); aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, color-mix(in srgb, var(--moon-lit) 30%, transparent) 0%, color-mix(in srgb, var(--violet) 16%, transparent) 38%, transparent 66%); }
+  .h-ring { position: absolute; z-index: 1; right: 4vw; top: 10%; width: min(600px, 52vw); aspect-ratio: 1; pointer-events: none; opacity: 0.6; }
+  .h-ring circle { fill: none; stroke: var(--ink); stroke-opacity: 0.12; }
+  .h-devs { position: relative; width: min(600px, 100%); aspect-ratio: 1.02; justify-self: end; }
+  .h-duo { position: absolute; left: 4%; top: 2%; perspective: 1400px; }
+  .h-duo .shut-ph { --sw: min(290px, 22vw); transform: rotateY(18deg) rotateX(5deg) rotateZ(-4deg); }
+  .h-ph { position: absolute; right: 4%; bottom: 0; perspective: 1400px; }
+  .h-ph .ph { --pw: min(232px, 17vw); transform: rotateY(-16deg) rotateX(4deg) rotateZ(3deg); }
+  .h-devs .tag.t1 { left: -4%; bottom: 16%; }
+  .h-devs .tag.t2 { right: -2%; top: 34%; }
+  .h-devs .tag.t3 { left: 38%; top: -6%; }
+  .fx .h-devs .dv { animation: rise 1.2s var(--ease) both; }
+  .fx .h-devs .h-ph .dv { animation-delay: 0.16s; }
+  .fx .h-copy > * { animation: rise 0.9s var(--ease) both; }
+  .fx .h-copy > :nth-child(2) { animation-delay: 0.06s; } .fx .h-copy > :nth-child(3) { animation-delay: 0.12s; } .fx .h-copy > :nth-child(4) { animation-delay: 0.18s; }
+  @keyframes rise { from { opacity: 0; translate: 0 26px; } }
+  .scroll-cue { position: absolute; left: 50%; bottom: 16px; z-index: 3; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 10px; font: 500 10px/1 var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: var(--ink-3); }
+  .scroll-cue i { width: 1px; height: 32px; background: linear-gradient(180deg, transparent, var(--ink-2)); }
+  .fx .scroll-cue i { animation: drip 2.2s var(--ease) infinite; transform-origin: top; }
+  @keyframes drip { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+
+  section { position: relative; }
+  .sec { padding: clamp(72px, 12vh, 140px) 0; }
+
+  /* ---------- the Duo ---------- */
+  .duo-intro { padding-top: clamp(72px, 12vh, 150px); }
+  .duo-stage { position: relative; max-width: 1180px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) 0 var(--gut); }
+  .duo-scene, .duo-words, .duo-rail, .duo-tags, .duo-floor { display: none; }
+  /* static (reduced motion, no script): the four poses as cards */
+  .duo-steps { list-style: none; margin: 44px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .step { border: 1px solid var(--hair-2); border-radius: 22px; padding: 18px; background: color-mix(in srgb, var(--paper) 88%, transparent); }
+  .step .still { width: auto; max-height: 380px; margin: 0 auto 18px; border-radius: 16px; }
+  .step p { margin: 8px 0 0; font-size: 15px; line-height: 1.55; }
+
+  .fx .duo-track { height: 520svh; }
+  .fx .duo-stage { position: sticky; top: calc(var(--bar) + env(safe-area-inset-top)); height: calc(100svh - var(--bar) - env(safe-area-inset-top)); overflow: clip;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); grid-template-rows: minmax(0, 1fr) auto; column-gap: clamp(24px, 4vw, 64px);
+    padding: 0 max(24px, env(safe-area-inset-right)) 28px max(24px, env(safe-area-inset-left)); max-width: 1320px; margin: 0 auto; }
+  .fx .duo-words { display: flex; position: absolute; left: 0; top: 50%; width: 400%; translate: 0 -58%; pointer-events: none; z-index: 0; }
+  .fx .duo-words span { flex: 0 0 25%; text-align: center; font: italic 400 clamp(84px, 17vw, 260px)/1 var(--serif); letter-spacing: -0.02em; white-space: nowrap;
+    color: transparent; -webkit-text-stroke: 1px color-mix(in srgb, var(--ink) 14%, transparent); }
+  .fx .duo-floor { display: block; position: absolute; left: 50%; bottom: 2%; width: min(1100px, 130vw); height: 40%; translate: -50% 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(50% 40% at 50% 46%, color-mix(in srgb, var(--violet) 22%, transparent), transparent 72%); }
+  .fx .duo-floor svg { width: 100%; height: 100%; }
+  .duo-floor ellipse { fill: none; stroke: var(--ink); }
+  .fx .duo-scene { display: grid; place-items: center; grid-row: 1 / 3; grid-column: 1; position: relative; z-index: 1; perspective: 2200px; perspective-origin: 50% 40%; }
+  .fx .duo-steps { grid-row: 1; grid-column: 2; align-self: center; display: grid; grid-template-columns: 1fr; margin: 0; gap: 0; position: relative; z-index: 2; }
+  .fx .step { grid-area: 1 / 1; border: 0; background: none; padding: 0; }
+  .fx .step .still { display: none; }
+  .fx .step h3 { font: 800 clamp(24px, 2.6vw, 34px)/1.08 var(--display); letter-spacing: -0.035em; }
+  .fx .step h3 em { font: italic 400 1.1em/1 var(--serif); color: var(--accent); letter-spacing: -0.01em; }
+  .fx .step p { font-size: 16px; margin-top: 12px; color: var(--ink-2); }
+  .fx .duo-rail { display: flex; grid-row: 2; grid-column: 2; gap: 14px; align-items: center; position: relative; z-index: 2; padding-top: 18px; }
+  .duo-rail .bar { position: relative; flex: 1; height: 2px; background: var(--hair); border-radius: 2px; overflow: hidden; }
+  .duo-rail .bar i { position: absolute; inset: 0; background: linear-gradient(90deg, var(--violet), var(--rose), var(--gold)); transform-origin: left; transform: scaleX(0); }
+  .duo-rail .lbls { display: flex; gap: 12px; font: 500 10px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
+  .duo-rail .lbls span { color: var(--ink); opacity: 0.35; }
+  .fx .duo-tags { display: block; position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  .duo-tags .tag { opacity: 0; }
+  .dt1 { left: 10%; top: 16%; } .dt2 { left: 4%; top: 22%; } .dt3 { left: 48%; bottom: 12%; } .dt4 { left: 6%; bottom: 14%; } .dt5 { left: 44%; top: 8%; }
+
+  /* the rig: a closed phone that turns edge-on, then the open Duo turning in to face you as its cover swings open */
+  .duo-scene { --W: min(34vw, 500px, calc((100svh - var(--bar) - 170px) * 0.703)); --H: calc(var(--W) / 0.703); }
+  .rig { --b: calc(var(--W) * 0.028); --R: calc(var(--W) * 0.07);
+    position: relative; z-index: 1; width: var(--W); height: var(--H); transform-style: preserve-3d; }
+  .hmoon { position: absolute; z-index: 0; width: calc(var(--H) * 0.56); left: calc(50% + var(--W) * 0.14); top: calc(50% - var(--H) * 0.58); filter: drop-shadow(0 0 40px color-mix(in srgb, var(--moon-lit) 40%, transparent)); }
+  .hmoon .moon .m-dark { transform: scaleX(1); }
+  .readout { position: absolute; z-index: 4; left: calc(50% - var(--W) * 0.5); top: calc(50% - var(--H) * 0.5 - 40px); display: grid; font: 500 10px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+  .readout span { grid-area: 1 / 1; opacity: 0; padding: 8px 11px; border-radius: 999px; border: 1px solid var(--hair); background: var(--glass); white-space: nowrap; }
+  .readout b { color: var(--gold); font-weight: 500; }
+  .shut { position: absolute; z-index: 2; left: 50%; top: 50%; width: calc(var(--H) * 0.86 * 0.687); height: calc(var(--H) * 0.86); margin: calc(var(--H) * -0.43) 0 0 calc(var(--H) * -0.43 * 0.687);
+    padding: calc(var(--W) * 0.024); border-radius: calc(var(--W) * 0.085); background: linear-gradient(150deg, #3a3854 0%, #11101f 32%, #1a1830 70%, #34314f 100%);
+    box-shadow: 0 40px 80px -40px rgba(15, 14, 34, 0.85), inset 0 0 0 1px rgba(255, 255, 255, 0.08); will-change: transform; }
+  .shut img { width: 100%; height: 100%; object-fit: cover; border-radius: calc(var(--W) * 0.065); }
+  .book { position: absolute; z-index: 2; inset: 0; transform-style: preserve-3d; will-change: transform; }
+  .half { position: absolute; top: 0; width: 50%; height: 100%; transform-style: preserve-3d; will-change: transform; }
+  .half.l { left: 0; transform-origin: 100% 50%; }
+  .half.r { left: 50%; transform-origin: 0 50%; }
+  .face, .half.l { background: linear-gradient(160deg, #3a3854 0%, #11101f 34%, #1a1830 68%, #34314f 100%); }
+  .half.l { border-radius: var(--R) 0 0 var(--R); box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.08), 0 40px 80px -40px rgba(15, 14, 34, 0.85); }
+  .face { position: absolute; inset: 0; -webkit-backface-visibility: hidden; backface-visibility: hidden; border-radius: 0 var(--R) var(--R) 0; box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.08), 0 40px 80px -40px rgba(15, 14, 34, 0.85); }
+  .face.back { transform: rotateY(180deg); border-radius: var(--R) 0 0 var(--R); display: grid; place-items: center; }
+  .face.back svg { width: 46%; opacity: 0.85; }
+  .scr { position: absolute; overflow: hidden; background: #0f0e22; }
+  .half.l > .scr { inset: var(--b) 0 var(--b) var(--b); border-radius: calc(var(--R) * 0.7) 0 0 calc(var(--R) * 0.7); }
+  .face.front > .scr { inset: var(--b) var(--b) var(--b) 0; border-radius: 0 calc(var(--R) * 0.7) calc(var(--R) * 0.7) 0; }
+  .half.l > .scr::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 2px; z-index: 5; background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.3) 50%, rgba(255, 255, 255, 0.1)); }
+  img.lay { position: absolute; top: 0; height: 100%; width: 200%; max-width: none; object-fit: cover; }
+  .half.l img.lay { left: 0; } .face img.lay { left: -100%; }
+  .glass { position: absolute; inset: 0; z-index: 4; background: radial-gradient(120% 90% at 30% 20%, #17153a, #07061a); }
+
+  /* ---------- iPhone ---------- */
+  .phones { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(12px, 3vw, 44px); margin-top: clamp(44px, 8vh, 88px); align-items: start; }
+  .phones figure { margin: 0; display: grid; justify-items: center; gap: 22px; }
+  .phones .ph { --pw: min(250px, 26vw); }
+  .phones figure:nth-child(2) { margin-top: clamp(40px, 9vh, 120px); }
+  .phones figcaption { max-width: 290px; justify-self: stretch; }
+  .phones figcaption p, .phone-caps p { margin: 6px 0 0; font-size: 15px; }
+  .phone-caps { display: none; list-style: none; padding: 0; margin: 28px 0 0; gap: 18px; }
+
+  /* ---------- iPad ---------- */
+  .ipad { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
+  .ipad-stage { position: relative; perspective: 1600px; justify-self: center; }
+  .ipad-stage .pad { --iw: min(460px, 40vw); }
+  .ipad-stage .tag.t1 { left: -14%; top: 22%; }
+  .ipad-stage .tag.t2 { right: -10%; bottom: 16%; }
+  .facts { list-style: none; padding: 0; margin: 26px 0 0; border-top: 1px solid var(--hair-2); }
+  .facts li { padding: 14px 0; border-bottom: 1px solid var(--hair-2); font-size: 15px; display: grid; grid-template-columns: 9em 1fr; gap: 16px; }
+  .facts b { font: 500 10px/2 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+
+  /* ---------- zeros: three numbers drifting at three speeds ---------- */
+  .zeros { overflow: clip; }
+  .nums { display: grid; gap: clamp(26px, 5vh, 56px); margin-top: clamp(36px, 6vh, 72px); }
+  .num { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: end; gap: clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--hair-2); padding-bottom: clamp(18px, 3vh, 30px); }
+  .num b { font: 700 clamp(64px, 13vw, 176px)/0.86 var(--round); color: var(--ink); letter-spacing: -0.03em; white-space: nowrap; }
+  .num b small { font: 500 0.13em/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin-left: 0.4em; vertical-align: 0.6em; }
+  .num:nth-child(2) b { color: transparent; -webkit-text-stroke: 1.5px var(--ink); }
+  .num p { margin: 0 0 0.5em; font-size: 16px; max-width: 24em; }
+  .num p strong { display: block; color: var(--ink); font-weight: 700; }
+
+  /* ---------- phases: the Metaphases thread ---------- */
+  .phases { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: clamp(6px, 1.4vw, 18px); margin-top: 36px; }
+  .phases .moon { width: 100%; }
+  .kin { margin-top: 26px; font-size: 15px; }
+  .kin a { color: var(--accent); text-underline-offset: 3px; }
+
+  /* ---------- end ---------- */
+  .end { margin-top: clamp(28px, 5vh, 48px); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 24px 32px;
+    padding: clamp(24px, 4vw, 44px); border: 1px solid var(--hair); border-radius: 28px;
+    background: radial-gradient(80% 140% at 100% 0%, color-mix(in srgb, var(--violet) 22%, transparent), transparent 60%), color-mix(in srgb, var(--paper) 90%, transparent); }
+  .end .moon { width: clamp(72px, 9vw, 112px); filter: drop-shadow(0 0 30px color-mix(in srgb, var(--moon-lit) 55%, transparent)); }
+  .end .moon .m-dark { transform: scaleX(0); } .end .moon .m-lit { transform: scaleX(1); }
+  .end p { margin: 0; font: 800 clamp(22px, 3vw, 34px)/1.12 var(--display); letter-spacing: -0.03em; color: var(--ink); }
+  .end p em { font: italic 400 1.1em/1 var(--serif); color: var(--accent); }
+  footer { padding: 36px 0 calc(56px + env(safe-area-inset-bottom)); }
+  .fine { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink-3); max-width: 66em; }
+  .fine a { color: var(--ink-2); text-underline-offset: 2px; }
+
+  /* ---------- tablets and phones ---------- */
+  @media (max-width: 900px) {
+    .scroll-cue { display: none; }
+    .hero { min-height: 0; }
+    .hero > .wrap { grid-template-columns: 1fr; align-content: start; gap: 8px; padding-bottom: 64px; }
+    .h-devs { justify-self: center; width: min(520px, 100%); aspect-ratio: 1.2; margin-top: 26px; }
+    .h-duo { left: 6%; }
+    .h-duo .shut-ph { --sw: min(250px, 40vw); }
+    .h-ph .ph { --pw: min(200px, 33vw); }
+    .h-devs .tag.t3 { display: none; }
+    .h-glow { right: -30vw; top: 36%; width: 120vw; }
+    .h-ring { right: -10vw; top: 42%; width: 90vw; }
+    .fx .duo-track { height: 480svh; }
+    .fx .duo-stage { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto auto; padding: 0 var(--gut) calc(16px + env(safe-area-inset-bottom)); }
+    .fx .duo-scene { grid-row: 1; grid-column: 1; }
+    .fx .duo-steps { grid-row: 2; grid-column: 1; align-self: end; }
+    .fx .duo-rail { grid-row: 3; grid-column: 1; padding-top: 12px; }
+    .fx .duo-scene { --W: min(72vw, 420px, calc((100svh - var(--bar) - 330px) * 0.703)); }
+    .fx .step h3 { font-size: clamp(21px, 5.4vw, 28px); }
+    .fx .step p { font-size: 15px; margin-top: 6px; line-height: 1.45; }
+    .duo-steps { grid-template-columns: 1fr; }
+    .duo-tags .tag { top: 10px; bottom: auto; left: auto; right: 0; }
+    .duo-tags :is(.dt3, .dt5) { display: none; }
+    .readout { left: 0; top: 10px; }
+    .hmoon { left: calc(50% + var(--W) * 0.02); top: calc(50% - var(--H) * 0.56); }
+    .fx .duo-floor { bottom: 30%; height: 34%; }
+    .ipad { grid-template-columns: 1fr; }
+    .ipad-stage { order: 2; margin-top: 12px; }
+    .ipad-stage .pad { --iw: min(420px, 76vw); }
+    .phases { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .end { grid-template-columns: auto minmax(0, 1fr); }
+    .end .store { grid-column: 1 / -1; justify-self: start; }
+  }
+  @media (max-width: 560px) {
+    .brand small, .top .web { display: none; }
+    h1 { margin-top: 14px; }
+    .lede { margin-top: 14px; }
+    .get { margin-top: 22px; }
+    .hero .store { width: 100%; justify-content: center; }
+    .h-devs { aspect-ratio: 1.05; }
+    .h-devs .tag { font-size: 11.5px; padding: 8px 11px; }
+    .h-devs .tag.t1 { left: 0; bottom: 6%; } .h-devs .tag.t2 { right: 0; top: 0; }
+    .phones { gap: 10px; }
+    .phones .ph { --pw: min(150px, 29vw); }
+    .phones figcaption { display: none; }
+    .phone-caps { display: grid; }
+    .duo-tags .tag { font-size: 11px; padding: 7px 10px; }
+    .duo-tags .tag small { display: none; }
+    .facts li { grid-template-columns: 1fr; gap: 2px; }
+    .ipad-stage .tag.t1 { left: -4%; } .ipad-stage .tag.t2 { right: -4%; }
+    .num { grid-template-columns: 1fr; gap: 8px; }
+    .end { grid-template-columns: 1fr; }
+    .end .store { width: 100%; justify-content: center; }
+    .sky-moon { top: calc(var(--bar) + 14px); right: 14px; width: 34px; }
+    .hero .eyebrow { padding-right: 40px; }
+  }
+  @media (max-width: 360px) {
+    .pill { padding: 0 12px; }
+    .store b { font-size: 20px; }
+    .fx .step p { font-size: 14px; }
+  }
+  /* short landscape screens: captions stand beside the device */
+  @media (max-height: 520px) and (min-width: 600px) {
+    .fx .duo-stage { grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); grid-template-rows: minmax(0, 1fr) auto; padding-bottom: 10px; }
+    .fx .duo-scene { grid-row: 1 / 3; grid-column: 1; }
+    .fx .duo-steps { grid-row: 1; grid-column: 2; align-self: center; }
+    .fx .duo-rail { grid-row: 2; grid-column: 2; }
+    .fx .duo-scene { --W: calc((100svh - var(--bar) - 40px) * 0.703); }
+    .fx .step p { font-size: 13px; }
+  }
+
+  /* ---------- motion: scroll-scrubbed keyframes (transform and opacity only) ----------
+     .t-root: the page's scroll; .t-sec: the section crossing the viewport (cover); .t-duo: the Duo's sticky track (contain). */
+  .fx :is(.t-root, .t-sec, .t-duo) { animation-duration: 1ms; animation-timing-function: linear; animation-fill-mode: both; }
+  .fx :is(.t-sec, .duo-words, .h-duo, .h-ph) { will-change: transform; }
+  .sd :is(.t-root, .t-sec, .t-duo) { animation-duration: auto; }
+  .sd .t-root { animation-timeline: scroll(root block); }
+  .sd [data-tl] { view-timeline: --sec block; }
+  .sd .t-sec { animation-timeline: --sec; animation-range: cover 0% cover 100%; }
+  .sd .duo-track { view-timeline: --duo block; }
+  .sd .t-duo { animation-timeline: --duo; animation-range: contain 0% contain 100%; }
+  .sdjs :is(.t-root, .t-sec, .t-duo) { animation-duration: 1000ms; animation-play-state: paused; }
+
+  /* the sky: stars drift at two speeds; the moon waxes from crescent to full over the whole page */
+  .fx .stars-far { animation-name: x-stars-far; }
+  .fx .stars-near { animation-name: x-stars-near; }
+  .fx .aurora { animation-name: x-aurora; }
+  .fx .sky-moon .m-dark { animation-name: x-sky-dark; }
+  .fx .sky-moon .m-lit { animation-name: x-sky-lit; }
+  .fx .sky-moon { animation-name: x-sky-moon; }
+  @keyframes x-stars-far { to { transform: translate3d(0, -14vh, 0); } }
+  @keyframes x-stars-near { to { transform: translate3d(0, -44vh, 0); } }
+  @keyframes x-aurora { 0% { transform: translate3d(0, 0, 0) scale(1); } 100% { transform: translate3d(-6vw, -20vh, 0) scale(1.15); } }
+  @keyframes x-sky-dark { 0% { transform: scaleX(0.7); } 45%, 100% { transform: scaleX(0); } }
+  @keyframes x-sky-lit { 0%, 45% { transform: scaleX(0); } 96%, 100% { transform: scaleX(1); } }
+  @keyframes x-sky-moon { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, 14vh, 0); } }
+
+  /* hero: still while it fills the screen, then every layer leaves at its own speed */
+  .fx .h-glow { animation-name: x-h-glow; }
+  .fx .h-ring { animation-name: x-h-ring; }
+  .fx .h-copy { animation-name: x-h-copy; }
+  .fx .h-duo { animation-name: x-h-duo; }
+  .fx .h-ph { animation-name: x-h-ph; }
+  .fx .h-devs .t1 { animation-name: x-h-tag1; }
+  .fx .h-devs .t2 { animation-name: x-h-tag2; }
+  .fx .h-devs .t3 { animation-name: x-h-tag3; }
+  .fx .scroll-cue { animation-name: x-fade-out; }
+  @keyframes x-h-glow { 0%, 50% { transform: translate3d(0, 0, 0) scale(1); } 100% { transform: translate3d(0, 18vh, 0) scale(1.1); } }
+  @keyframes x-h-ring { 0%, 50% { transform: translate3d(0, 0, 0) rotate(0deg); } 100% { transform: translate3d(0, 10vh, 0) rotate(24deg); } }
+  @keyframes x-h-copy { 0%, 50% { transform: translate3d(0, 0, 0); opacity: 1; } 100% { transform: translate3d(0, -6vh, 0); opacity: 0.15; } }
+  @keyframes x-h-duo { 0%, 50% { transform: translate3d(0, 0, 0) rotate(0deg); } 100% { transform: translate3d(-3vw, -14vh, 0) rotate(-4deg); } }
+  @keyframes x-h-ph { 0%, 50% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, -28vh, 0); } }
+  @keyframes x-h-tag1 { 0%, 50% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, -40vh, 0); } }
+  @keyframes x-h-tag2 { 0%, 50% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, -52vh, 0); } }
+  @keyframes x-h-tag3 { 0%, 50% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, -34vh, 0); } }
+  @keyframes x-fade-out { 0%, 50% { opacity: 1; } 56%, 100% { opacity: 0; } }
+
+  /* the Duo: closed → opening (the moon fills with the hinge) → open, the atlas → held like a book, the storybook.
+     Percent of the sticky track. The closed phone turns edge-on at 16%, exactly where the open Duo turns in. */
+  .fx .shut { animation-name: x-shut; }
+  .fx .book { animation-name: x-book; }
+  .fx .half.l { animation-name: x-half-l; }
+  .fx .half.r { animation-name: x-half-r; }
+  .fx .face.front { animation-name: x-face-front; }
+  .fx .face.back { animation-name: x-face-back; }
+  .fx .lay.atlas { animation-name: x-lay-atlas; }
+  .fx .lay.story { animation-name: x-lay-story; }
+  .fx .glass { animation-name: x-glass; }
+  .fx .hmoon { animation-name: x-hmoon; }
+  .fx .hmoon .m-dark { animation-name: x-hm-dark; }
+  .fx .hmoon .m-lit { animation-name: x-hm-lit; }
+  .fx .readout .r1 { animation-name: x-r1; } .fx .readout .r2 { animation-name: x-r2; } .fx .readout .r3 { animation-name: x-r3; } .fx .readout .r4 { animation-name: x-r4; }
+  .fx .duo-words { animation-name: x-words; }
+  .fx .duo-floor { animation-name: x-floor; }
+  .fx .step.s1 { animation-name: x-s1; } .fx .step.s2 { animation-name: x-s2; } .fx .step.s3 { animation-name: x-s3; } .fx .step.s4 { animation-name: x-s4; }
+  .fx .duo-rail .bar i { animation-name: x-bar; }
+  .fx .lbls .l1 { animation-name: x-l1; } .fx .lbls .l2 { animation-name: x-l2; } .fx .lbls .l3 { animation-name: x-l3; } .fx .lbls .l4 { animation-name: x-l4; }
+  .fx .dt1 { animation-name: x-tagA; } .fx .dt2 { animation-name: x-tagB; } .fx .dt3 { animation-name: x-tagB2; } .fx .dt4 { animation-name: x-tagC; } .fx .dt5 { animation-name: x-tagC2; }
+  @keyframes x-shut {
+    0%, 6% { transform: translate3d(0, 0, 0) rotateX(4deg) rotateY(-16deg) rotateZ(-2deg); opacity: 1; }
+    15.9% { transform: translate3d(0, 0, 0) rotateX(6deg) rotateY(-90deg) rotateZ(0deg); opacity: 1; }
+    16%, 100% { transform: translate3d(0, 0, 0) rotateX(6deg) rotateY(-90deg) rotateZ(0deg); opacity: 0; }
+  }
+  @keyframes x-book {
+    0%, 15.9% { transform: rotateX(6deg) rotateY(90deg) scale(0.92); opacity: 0; }
+    16% { transform: rotateX(6deg) rotateY(90deg) scale(0.92); opacity: 1; }
+    34%, 56% { transform: rotateX(12deg) rotateY(0deg) scale(1); opacity: 1; }
+    70%, 100% { transform: rotateX(6deg) rotateY(-8deg) rotateZ(-2deg) scale(0.97); opacity: 1; }
+  }
+  @keyframes x-half-l { 0%, 60% { transform: rotateY(0deg); } 72%, 100% { transform: rotateY(26deg); } }
+  @keyframes x-half-r {
+    0%, 16% { transform: rotateY(-179.4deg); }
+    34%, 60% { transform: rotateY(0deg); }
+    72%, 100% { transform: rotateY(-26deg); }
+  }
+  @keyframes x-face-front { 0%, 24.9% { opacity: 0; } 25%, 100% { opacity: 1; } }
+  @keyframes x-face-back { 0%, 24.9% { opacity: 1; } 25%, 100% { opacity: 0; } }
+  @keyframes x-lay-atlas { 0%, 58% { opacity: 1; } 63%, 100% { opacity: 0; } }
+  @keyframes x-lay-story { 0%, 58% { opacity: 0; } 63%, 100% { opacity: 1; } }
+  @keyframes x-glass { 0%, 18% { opacity: 1; } 30%, 100% { opacity: 0; } }
+  @keyframes x-hmoon { 0% { transform: scale(0.8); opacity: 0.5; } 16% { transform: scale(0.86); opacity: 1; } 34%, 60% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.94); opacity: 1; } }
+  /* hinge → phase: new when closed, half at 90°, full when flat, gibbous held like a book */
+  @keyframes x-hm-dark { 0%, 16% { transform: scaleX(1); } 25%, 100% { transform: scaleX(0); } }
+  @keyframes x-hm-lit { 0%, 25% { transform: scaleX(0); } 34%, 60% { transform: scaleX(1); } 72%, 100% { transform: scaleX(0.62); } }
+  @keyframes x-r1 { 0%, 14% { opacity: 1; } 17%, 100% { opacity: 0; } }
+  @keyframes x-r2 { 0%, 18% { opacity: 0; } 21%, 29% { opacity: 1; } 32%, 100% { opacity: 0; } }
+  @keyframes x-r3 { 0%, 32% { opacity: 0; } 35%, 60% { opacity: 1; } 63%, 100% { opacity: 0; } }
+  @keyframes x-r4 { 0%, 70% { opacity: 0; } 74%, 100% { opacity: 1; } }
+  @keyframes x-words {
+    0% { transform: translate3d(2%, 0, 0); } 12% { transform: translate3d(-2%, 0, 0); }
+    22% { transform: translate3d(-23%, 0, 0); } 32% { transform: translate3d(-27%, 0, 0); }
+    42% { transform: translate3d(-48%, 0, 0); } 58% { transform: translate3d(-52%, 0, 0); }
+    70% { transform: translate3d(-73%, 0, 0); } 100% { transform: translate3d(-77%, 0, 0); }
+  }
+  @keyframes x-floor { 0% { transform: scale(0.7); opacity: 0.6; } 34% { transform: scale(1.08); opacity: 1; } 60% { transform: scale(1); } 100% { transform: scale(0.95); opacity: 1; } }
+  @keyframes x-s1 { 0%, 12% { opacity: 1; transform: translate3d(0, 0, 0); } 17%, 100% { opacity: 0; transform: translate3d(0, -28px, 0); } }
+  @keyframes x-s2 { 0%, 17% { opacity: 0; transform: translate3d(0, 28px, 0); } 21%, 31% { opacity: 1; transform: translate3d(0, 0, 0); } 35%, 100% { opacity: 0; transform: translate3d(0, -28px, 0); } }
+  @keyframes x-s3 { 0%, 35% { opacity: 0; transform: translate3d(0, 28px, 0); } 39%, 58% { opacity: 1; transform: translate3d(0, 0, 0); } 63%, 100% { opacity: 0; transform: translate3d(0, -28px, 0); } }
+  @keyframes x-s4 { 0%, 63% { opacity: 0; transform: translate3d(0, 28px, 0); } 69%, 100% { opacity: 1; transform: translate3d(0, 0, 0); } }
+  @keyframes x-bar { from { transform: scaleX(0.02); } to { transform: scaleX(1); } }
+  @keyframes x-l1 { 0%, 14% { opacity: 1; } 18%, 100% { opacity: 0.35; } }
+  @keyframes x-l2 { 0%, 16% { opacity: 0.35; } 20%, 32% { opacity: 1; } 36%, 100% { opacity: 0.35; } }
+  @keyframes x-l3 { 0%, 34% { opacity: 0.35; } 38%, 60% { opacity: 1; } 64%, 100% { opacity: 0.35; } }
+  @keyframes x-l4 { 0%, 62% { opacity: 0.35; } 68%, 100% { opacity: 1; } }
+  @keyframes x-tagA { 0% { opacity: 1; transform: translate3d(0, 30px, 0); } 10% { opacity: 1; } 15%, 100% { opacity: 0; transform: translate3d(0, -60px, 0); } }
+  @keyframes x-tagB { 0%, 19% { opacity: 0; transform: translate3d(0, 80px, 0); } 23%, 31% { opacity: 1; } 36%, 100% { opacity: 0; transform: translate3d(0, -80px, 0); } }
+  @keyframes x-tagB2 { 0%, 37% { opacity: 0; transform: translate3d(0, 120px, 0); } 42%, 58% { opacity: 1; } 63%, 100% { opacity: 0; transform: translate3d(0, -110px, 0); } }
+  @keyframes x-tagC { 0%, 38% { opacity: 0; transform: translate3d(0, 80px, 0); } 43%, 58% { opacity: 1; } 63%, 100% { opacity: 0; transform: translate3d(0, -80px, 0); } }
+  @keyframes x-tagC2 { 0%, 70% { opacity: 0; transform: translate3d(0, 80px, 0); } 76%, 100% { opacity: 1; transform: translate3d(0, 0, 0); } }
+
+  /* sections: each layer drifts through at its own rate as the section crosses the screen */
+  .fx .drift-1 { animation-name: x-drift-1; } .fx .drift-2 { animation-name: x-drift-2; } .fx .drift-3 { animation-name: x-drift-3; } .fx .drift-4 { animation-name: x-drift-4; }
+  @keyframes x-drift-1 { from { transform: translate3d(0, 5vh, 0); } to { transform: translate3d(0, -5vh, 0); } }
+  @keyframes x-drift-2 { from { transform: translate3d(0, 12vh, 0); } to { transform: translate3d(0, -12vh, 0); } }
+  @keyframes x-drift-3 { from { transform: translate3d(0, 22vh, 0); } to { transform: translate3d(0, -22vh, 0); } }
+  @keyframes x-drift-4 { from { transform: translate3d(0, 34vh, 0); } to { transform: translate3d(0, -34vh, 0); } }
+  .fx .ipad-tilt { animation-name: x-ipad; }
+  @keyframes x-ipad { 0% { transform: rotateX(34deg) rotateZ(-4deg) scale(0.9); } 45%, 55% { transform: rotateX(0deg) rotateZ(0deg) scale(1); } 100% { transform: rotateX(-10deg) rotateZ(1deg) scale(0.98); } }
+  .fx .num-a { animation-name: x-num-a; } .fx .num-b { animation-name: x-num-b; } .fx .num-c { animation-name: x-num-c; }
+  @keyframes x-num-a { from { transform: translate3d(-6vw, 0, 0); } to { transform: translate3d(6vw, 0, 0); } }
+  @keyframes x-num-b { from { transform: translate3d(8vw, 0, 0); } to { transform: translate3d(-8vw, 0, 0); } }
+  @keyframes x-num-c { from { transform: translate3d(-10vw, 0, 0); } to { transform: translate3d(4vw, 0, 0); } }
+  .fx .phases .moon { animation-name: x-phase-pop; }
+  .fx .phases .moon:nth-child(2n) { animation-name: x-phase-pop2; }
+  @keyframes x-phase-pop { from { transform: translate3d(0, 6vh, 0); } to { transform: translate3d(0, -3vh, 0); } }
+  @keyframes x-phase-pop2 { from { transform: translate3d(0, 11vh, 0); } to { transform: translate3d(0, -6vh, 0); } }
+  @media (max-width: 560px) {
+    @keyframes x-drift-3 { from { transform: translate3d(0, 10vh, 0); } to { transform: translate3d(0, -10vh, 0); } }
+    @keyframes x-drift-4 { from { transform: translate3d(0, 16vh, 0); } to { transform: translate3d(0, -16vh, 0); } }
+    @keyframes x-num-a { from { transform: translate3d(-4vw, 0, 0); } to { transform: translate3d(4vw, 0, 0); } }
+    @keyframes x-num-b { from { transform: translate3d(5vw, 0, 0); } to { transform: translate3d(-5vw, 0, 0); } }
+    @keyframes x-num-c { from { transform: translate3d(-6vw, 0, 0); } to { transform: translate3d(2vw, 0, 0); } }
+  }
+</style>
+</head>
+<body>
+<div class="sky" aria-hidden="true">
+  <i class="aurora t-root"></i><i class="stars-far t-root"></i><i class="stars-near t-root"></i>
+  <svg class="moon sky-moon t-root" viewBox="0 0 200 200"><circle class="m-base" cx="100" cy="100" r="90"/><path class="m-half" d="M100 10a90 90 0 0 1 0 180z"/><ellipse class="m-dark t-root" cx="100" cy="100" rx="90.5" ry="90.5"/><ellipse class="m-lit t-root" cx="100" cy="100" rx="90" ry="90"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg>
+</div>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/metaphases/app/"><img src="icon.png" alt="" width="32" height="32" />Moon Club <small>by Metaphases</small></a>
+    <nav aria-label="Moon Club">
+      <a class="pill web" href="/metaphases/kids">Play on the web</a>
+      <a class="pill solid" href="https://apps.apple.com/us/app/moon-club/id6829860949" rel="noopener" data-cta="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 20h14"/></svg>Get the app</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero" data-tl aria-labelledby="h1">
+    <div class="h-glow t-sec" aria-hidden="true"></div>
+    <svg class="h-ring t-sec" viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="98"/><circle cx="100" cy="100" r="78" stroke-dasharray="2 5"/><circle cx="100" cy="100" r="58"/></svg>
+    <div class="wrap">
+      <div class="h-copy t-sec">
+        <p class="eyebrow"><i aria-hidden="true"></i>On the App Store · iPhone, iPhone Duo, iPad</p>
+        <h1 id="h1"><span class="wm">Moon Club.</span> Learn the market <em>like a game.</em></h1>
+        <p class="lede">Read candles, win lands and beat the Captain's Quiz, all with pretend money that follows real prices.</p>
+        <div class="get">
+          <a class="store" href="https://apps.apple.com/us/app/moon-club/id6829860949" rel="noopener" data-cta="hero">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 2a14 14 0 0 1 0 28a8.5 14 0 0 1 0-28z" fill="#ffd77a"/></svg>
+            <span><small>Download on the</small><b>App Store</b></span>
+          </a>
+          <span class="facts-mini"><b>Free.</b> No ads, no accounts.<br />Pretend money only.</span>
+        </div>
+      </div>
+      <div class="h-devs" aria-hidden="true">
+        <div class="h-duo t-sec"><div class="dv"><div class="shut-ph"><img src="duo-closed-boss.jpg" alt="" width="687" height="1000" fetchpriority="high" /></div></div></div>
+        <div class="h-ph t-sec"><div class="dv"><div class="ph"><img src="iphone-world.jpg" alt="" width="506" height="1100" /></div></div></div>
+        <div class="tag t1 t-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16a4.5 8 0 0 1 0-16z" fill="currentColor"/></svg><span>Made for iPhone Duo<small>The moon follows the hinge</small></span></div>
+        <div class="tag t2 t-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18h16"/><path d="M7 15V9M12 15V5M17 15v-4"/></svg><span>Real prices<small>Pretend coins</small></span></div>
+        <div class="tag t3 mono t-sec">Luna · <b>on device</b></div>
+      </div>
+    </div>
+    <div class="scroll-cue t-sec" aria-hidden="true">Scroll<i></i></div>
+  </section>
+
+  <section class="duo" id="duo" aria-labelledby="duo-h">
+    <div class="wrap duo-intro">
+      <span class="k">01 · iPhone Duo</span>
+      <h2 id="duo-h">Open the phone.<br /><em>Fill the moon.</em></h2>
+      <p class="lede">On iPhone Duo the hinge is part of the game: Luna's moon waxes as you open it, and the fold turns the page.</p>
+    </div>
+    <div class="duo-track">
+      <div class="duo-stage">
+        <div class="duo-words t-duo" aria-hidden="true"><span>Closed</span><span>Opening</span><span>Open</span><span>Book</span></div>
+        <div class="duo-floor t-duo" aria-hidden="true"><svg viewBox="0 0 1000 400" preserveAspectRatio="none"><ellipse cx="500" cy="230" rx="420" ry="70" stroke-opacity=".08"/><ellipse cx="500" cy="230" rx="300" ry="50" stroke-opacity=".11"/><ellipse cx="500" cy="230" rx="180" ry="30" stroke-opacity=".14"/></svg></div>
+        <div class="duo-scene" aria-hidden="true">
+          <div class="hmoon t-duo"><svg class="moon" viewBox="0 0 200 200"><circle class="m-base" cx="100" cy="100" r="90"/><path class="m-half" d="M100 10a90 90 0 0 1 0 180z"/><ellipse class="m-dark t-duo" cx="100" cy="100" rx="90.5" ry="90.5"/><ellipse class="m-lit t-duo" cx="100" cy="100" rx="90" ry="90"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg></div>
+          <div class="readout"><span class="r1 t-duo">0° · <b>New moon</b></span><span class="r2 t-duo">90° · <b>Half moon</b></span><span class="r3 t-duo">180° · <b>Full moon</b></span><span class="r4 t-duo">128° · <b>Gibbous</b></span></div>
+          <div class="rig">
+            <div class="shut t-duo"><img src="duo-closed.jpg" alt="" width="687" height="1000" decoding="async" /></div>
+            <div class="book t-duo">
+              <div class="half l t-duo">
+                <div class="scr">
+                  <img class="lay atlas t-duo" src="duo-atlas.jpg" alt="" width="914" height="1300" decoding="async" />
+                  <img class="lay story t-duo" src="duo-lesson.jpg" alt="" width="914" height="1300" decoding="async" loading="lazy" />
+                  <i class="glass t-duo"></i>
+                </div>
+              </div>
+              <div class="half r t-duo">
+                <div class="face front t-duo">
+                  <div class="scr">
+                    <img class="lay atlas t-duo" src="duo-atlas.jpg" alt="" width="914" height="1300" decoding="async" />
+                    <img class="lay story t-duo" src="duo-lesson.jpg" alt="" width="914" height="1300" decoding="async" loading="lazy" />
+                    <i class="glass t-duo"></i>
+                  </div>
+                </div>
+                <div class="face back t-duo"><svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="none" stroke="#ffd77a" stroke-opacity=".5" stroke-width="3"/><path d="M100 20a80 80 0 0 1 0 160a48 80 0 0 1 0-160z" fill="#ffd77a" fill-opacity=".55"/></svg></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="duo-tags" aria-hidden="true">
+          <div class="tag dt1 t-duo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg><span>Closed<small>The phone layout, one hand</small></span></div>
+          <div class="tag dt2 t-duo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12h3l2-5 3 10 2-5h6"/></svg><span>A tick at every phase<small>Haptics as the moon fills</small></span></div>
+          <div class="tag dt3 mono t-duo">Atlas · <b>7 lands</b></div>
+          <div class="tag dt4 t-duo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18v12H3z"/><path d="M12 6v12" stroke-dasharray="2 2"/></svg><span>Flick the fold<small>Turns the page</small></span></div>
+          <div class="tag dt5 t-duo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z"/></svg><span>Storybook mode<small>One page each side</small></span></div>
+        </div>
+        <ol class="duo-steps">
+          <li class="step s1 t-duo">
+            <img class="still" src="duo-closed.jpg" alt="Moon Club on the closed iPhone Duo's outer screen: Lemonade Coast on the market map" width="687" height="1000" loading="lazy" decoding="async" />
+            <span class="k">Closed</span><h3>The whole club, <em>one hand.</em></h3>
+            <p>The outer screen gets the phone layout, with the tabs down the side.</p>
+          </li>
+          <li class="step s2 t-duo">
+            <span class="k">Opening</span><h3>The hinge is <em>a moon dial.</em></h3>
+            <p>New when closed, half at 90°, full when flat, with a little tap at every phase.</p>
+          </li>
+          <li class="step s3 t-duo">
+            <img class="still" src="duo-atlas.jpg" alt="The open iPhone Duo: the market atlas, Lemonade Coast's story on the left page and its map on the right" width="914" height="1300" loading="lazy" decoding="async" />
+            <span class="k">Open</span><h3>Every land <em>is a page.</em></h3>
+            <p>The market atlas opens like a book. Swipe, or flick the fold, to turn it.</p>
+          </li>
+          <li class="step s4 t-duo">
+            <img class="still" src="duo-lesson.jpg" alt="A Moon School lesson in storybook mode: Luna's picture on the left page, the words on the right" width="914" height="1300" loading="lazy" decoding="async" />
+            <span class="k">Book</span><h3>Lessons <em>read like storybooks.</em></h3>
+            <p>Luna acts it out on one page, the words sit on the other.</p>
+          </li>
+        </ol>
+        <div class="duo-rail" aria-hidden="true"><div class="lbls"><span class="l1 t-duo">Closed</span><span class="l2 t-duo">Opening</span><span class="l3 t-duo">Open</span><span class="l4 t-duo">Book</span></div><div class="bar"><i class="t-duo"></i></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" data-tl aria-labelledby="ph-h">
+    <div class="wrap">
+      <span class="k drift-1 t-sec">02 · iPhone</span>
+      <h2 id="ph-h" class="drift-1 t-sec">Charts make sense<br /><em>under your thumbs.</em></h2>
+      <div class="phones">
+        <figure class="drift-2 t-sec"><div class="ph"><img src="iphone-candles.jpg" alt="Build the Candle on iPhone: drag start, high, low and end to draw a candle" width="506" height="1100" loading="lazy" decoding="async" /></div>
+          <figcaption><span class="k">Chart games</span><h3>Build a candle.</h3><p>Drag start, high, low and end. Suddenly charts make sense.</p></figcaption></figure>
+        <figure class="drift-4 t-sec"><div class="ph"><img src="iphone-boss.jpg" alt="The Captain's Quiz boss on iPhone: a crown, three hearts and a question about prices" width="506" height="1100" loading="lazy" decoding="async" /></div>
+          <figcaption><span class="k">Boss battles</span><h3>Beat the Captain's Quiz.</h3><p>Five questions, three hearts, one flag to plant.</p></figcaption></figure>
+        <figure class="drift-3 t-sec"><div class="ph"><img src="iphone-school-units.jpg" alt="Moon School on iPhone: one-minute lessons grouped into units" width="506" height="1100" loading="lazy" decoding="async" /></div>
+          <figcaption><span class="k">Moon School</span><h3>One-minute lessons.</h3><p>Luna acts each one out before you read a word.</p></figcaption></figure>
+      </div>
+      <ul class="phone-caps">
+        <li><span class="k">Chart games</span><h3>Build a candle.</h3><p>Drag start, high, low and end. Suddenly charts make sense.</p></li>
+        <li><span class="k">Boss battles</span><h3>Beat the Captain's Quiz.</h3><p>Five questions, three hearts, one flag to plant.</p></li>
+        <li><span class="k">Moon School</span><h3>One-minute lessons.</h3><p>Luna acts each one out before you read a word.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="sec" data-tl aria-labelledby="pad-h">
+    <div class="wrap ipad">
+      <div class="drift-1 t-sec">
+        <span class="k">03 · iPad</span>
+        <h2 id="pad-h">Room to <em>spread out.</em></h2>
+        <p class="lede">The same club on the big screen, in any orientation.</p>
+        <ul class="facts">
+          <li><b>Same club</b><span>Family League codes work between the app and the website.</span></li>
+          <li><b>Luna on device</b><span>With Apple Intelligence, questions never leave the iPad.</span></li>
+          <li><b>Offline</b><span>Lessons and quests work without a connection.</span></li>
+        </ul>
+      </div>
+      <div class="ipad-stage">
+        <div class="drift-2 t-sec"><div class="ipad-tilt t-sec"><div class="pad"><img src="ipad-school-units.jpg" alt="Moon School on iPad: Up Next, What is a report card, and the Money basics unit" width="1050" height="1400" loading="lazy" decoding="async" /></div></div></div>
+        <div class="tag t1 drift-4 t-sec" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg><span>Split View<small>Luna's Word Book beside you</small></span></div>
+        <div class="tag t2 mono drift-3 t-sec" aria-hidden="true">Works <b>offline</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec zeros" data-tl aria-labelledby="z-h">
+    <div class="wrap">
+      <span class="k">04 · Promises</span>
+      <h2 id="z-h">The best numbers<br /><em>are zeros.</em></h2>
+      <div class="nums">
+        <div class="num"><b class="num-a t-sec">$0<small>real money</small></b><p><strong>Pretend coins only.</strong>They follow real prices, and nothing can be spent.</p></div>
+        <div class="num"><b class="num-b t-sec">0<small>ads</small></b><p><strong>No ads, no links out.</strong>Nothing to tap that leaves the club.</p></div>
+        <div class="num"><b class="num-c t-sec">0<small>accounts</small></b><p><strong>No sign-up, no tracking.</strong>Progress stays on the device.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="get" data-tl aria-labelledby="g-h">
+    <div class="wrap">
+      <span class="k">05 · Phase by phase</span>
+      <h2 id="g-h">From a calendar<br /><em>drawn in moons.</em></h2>
+      <div class="phases" aria-hidden="true">
+        <svg class="moon t-sec" viewBox="0 0 200 200"><circle class="m-base" cx="100" cy="100" r="90"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg>
+        <svg class="moon t-sec" viewBox="0 0 200 200"><circle class="m-base" cx="100" cy="100" r="90"/><path class="m-half" d="M100 10a90 90 0 0 1 0 180a62 90 0 0 0 0-180z"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg>
+        <svg class="moon t-sec" viewBox="0 0 200 200"><circle class="m-base" cx="100" cy="100" r="90"/><path class="m-half" d="M100 10a90 90 0 0 1 0 180z"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg>
+        <svg class="moon t-sec" viewBox="0 0 200 200"><circle class="m-base" cx="100" cy="100" r="90"/><path class="m-half" d="M100 10a90 90 0 0 1 0 180a62 90 0 0 1 0-180z"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg>
+        <svg class="moon t-sec" viewBox="0 0 200 200"><circle class="m-half" cx="100" cy="100" r="90"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg>
+        <svg class="moon t-sec" viewBox="0 0 200 200"><circle class="m-base" cx="100" cy="100" r="90"/><path class="m-half" d="M100 10a90 90 0 0 0 0 180a62 90 0 0 0 0-180z"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg>
+        <svg class="moon t-sec" viewBox="0 0 200 200"><circle class="m-base" cx="100" cy="100" r="90"/><path class="m-half" d="M100 10a90 90 0 0 0 0 180z"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg>
+        <svg class="moon t-sec" viewBox="0 0 200 200"><circle class="m-base" cx="100" cy="100" r="90"/><path class="m-half" d="M100 10a90 90 0 0 0 0 180a62 90 0 0 1 0-180z"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg>
+      </div>
+      <p class="kin">Moon Club grew out of <a href="/metaphases/">Metaphases</a>, the free earnings calendar that marks every report with a moon phase.</p>
+      <div class="end">
+        <svg class="moon" viewBox="0 0 200 200" aria-hidden="true"><circle class="m-base" cx="100" cy="100" r="90"/><path class="m-half" d="M100 10a90 90 0 0 1 0 180z"/><ellipse class="m-dark" cx="100" cy="100" rx="90.5" ry="90.5"/><ellipse class="m-lit" cx="100" cy="100" rx="90" ry="90"/><circle class="m-rim" cx="100" cy="100" r="90"/></svg>
+        <p>A full moon of lessons,<br /><em>one tap away.</em></p>
+        <a class="store" href="https://apps.apple.com/us/app/moon-club/id6829860949" rel="noopener" data-cta="end">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 2a14 14 0 0 1 0 28a8.5 14 0 0 1 0-28z" fill="#ffd77a"/></svg>
+          <span><small>Download on the</small><b>App Store</b></span>
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="fine">Moon Club teaches how markets work with pretend money. It is not financial advice, and nothing in it can be bought or sold. Luna thinks on the device on iPhones and iPads with Apple Intelligence. Screens are from the app; the device outlines are our own drawings. Apple, App Store, iPhone, iPhone Duo, iPad and Apple Intelligence are trademarks of Apple Inc. <a href="/metaphases/kids">Play on the web</a> · <a href="/metaphases/kids/privacy">Privacy</a> · <a href="/metaphases/kids/support">Help</a> · <a href="/metaphases/">Metaphases</a></p>
+  </div>
+</footer>
+</body>
+</html>

@@ -3,7 +3,7 @@ import { CalendarPage } from "./components/Calendar";
 import { MacroStrip } from "./components/MacroStrip";
 import { TickerSheet } from "./components/TickerSheet";
 import { Icon, Mark, Phase, Skeleton } from "./components/bits";
-import { appPath, href, navigate, param, setParam, useLocation } from "./lib/router";
+import { appPath, BASE, href, navigate, param, setParam, useLocation } from "./lib/router";
 import { actions, useStore } from "./lib/store";
 import { nowNY } from "./lib/dates";
 import { AiLayer, AiTopButton } from "./components/ai/mount";
@@ -113,6 +113,7 @@ export default function App() {
           ))}
         </nav>
         <button className="top-search" onClick={openSearch} aria-label="Search ticker"><Icon name="search" size={14} /> <span>Search ticker</span> <kbd>⌘K</kbd></button>
+        <a className="top-app" href={`${BASE}/app/`} aria-label="Get the Moon Club app"><img src={`${BASE}/app/icon-64.png`} alt="" width={22} height={22} /><span>Moon Club app</span></a>
         <AiTopButton />
         <a className="top-icon gh" href="https://github.com/mutaaf/metaphases" target="_blank" rel="noreferrer" aria-label="Source on GitHub"><Icon name="github" /></a>
         <button className="top-icon" onClick={() => actions.setPref("theme", dark ? "light" : "dark")} aria-label={dark ? "Switch to light" : "Switch to dark"}><Icon name={dark ? "sun" : "moon"} /></button>
