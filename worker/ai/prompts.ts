@@ -4,6 +4,7 @@
 import type { ChatMessage } from "./providers";
 import { epsIn, isUsd, moneyIn } from "../../shared/currency";
 import { epsVerdict } from "../../shared/compare";
+import { nextTimeContested } from "../../shared/contestedTime";
 
 export type AiTask = "ticker" | "week" | "exposure" | "retrace" | "ask" | "hype" | "kids";
 export const TASKS: AiTask[] = ["ticker", "week", "exposure", "retrace", "ask", "hype", "kids"];
@@ -79,7 +80,7 @@ function tickerFacts(t: Obj): string[] {
       : `Just reported: Q${j.quarter} ${j.year} on ${clip(j.date, 10)}; EPS ${epsIn(j.epsA, cur3(j.currency))} against an estimate of ${epsIn(jv.est ?? j.epsE, cur3(j.currency))}.`);
   }
   if (t.next?.status === "results-pending") L.push(`Q${t.next.quarter} ${t.next.year} results were expected on ${clip(t.next.date, 10)} and are not in the data yet; do not describe this report as upcoming and do not guess the results.`);
-  else if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} ${t.next.closed || t.next.overdue ? "(date not confirmed yet)" : `on ${clip(t.next.date, 10)} ${clip(t.next.session || "time TBD", 4)}`}; consensus EPS ${t.next.epsBasis ? "not quoted (this REIT's recent results were on a different measure from the feed's estimate, usually FFO vs net income; don't state an EPS estimate)" : epsIn(t.next.epsE, cur3(t.next.currency))}, revenue estimate ${moneyIn(t.next.revE, cur3(t.next.currency))}${isUsd(cur3(t.next.currency)) ? "" : ` (estimates in ${cur3(t.next.currency) || "local currency"}, not USD; never compare them with USD figures)`}.`);
+  else if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} ${t.next.closed || t.next.overdue ? "(date not confirmed yet)" : `on ${clip(t.next.date, 10)} ${nextTimeContested(t.next) ? "time unconfirmed (our feed and Nasdaq list different sessions that day; don't state either as fact)" : clip(t.next.session || "time TBD", 4)}`}; consensus EPS ${t.next.epsBasis ? "not quoted (this REIT's recent results were on a different measure from the feed's estimate, usually FFO vs net income; don't state an EPS estimate)" : epsIn(t.next.epsE, cur3(t.next.currency))}, revenue estimate ${moneyIn(t.next.revE, cur3(t.next.currency))}${isUsd(cur3(t.next.currency)) ? "" : ` (estimates in ${cur3(t.next.currency) || "local currency"}, not USD; never compare them with USD figures)`}.`);
   else L.push("Next report date: not available.");
   // 0060: the two calendars disagree on the session; say how the moves were measured (enum-checked, never free text).
   const ms = t.moveSession as Obj | undefined, S: Record<string, string> = { bmo: "before the open", amc: "after the close" };

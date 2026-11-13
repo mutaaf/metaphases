@@ -1,7 +1,7 @@
 ---
 id: 0062
 title: A contested session isn't headlined as fact (ROAD and DE read "After close" while their own moves, and ROAD's 10:00 am call, say before the open)
-status: ready
+status: in-progress
 priority: P0
 size: S
 lens: data-quality

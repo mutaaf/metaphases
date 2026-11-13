@@ -153,7 +153,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
       <span className="erow-id">
         <b>{e.s}</b>
         <span className="muted">{nameOf(e.s)}</span>
-        {e.x === "differs" && e.xd && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">Nasdaq: {e.xd === e.d ? (e.xh ? PHASE_LABEL[e.xh].toLowerCase() : "another time") : `${fmtDay(e.xd)}${e.xh ? `, ${PHASE_LABEL[e.xh].toLowerCase()}` : ""}`}</span>}
+        {e.x === "differs" && e.xd && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{e.fh ? `Feed: ${PHASE_LABEL[e.fh].toLowerCase()} · ` : ""}Nasdaq: {e.xd === e.d ? (e.xh ? PHASE_LABEL[e.xh].toLowerCase() : "another time") : `${fmtDay(e.xd)}${e.xh ? `, ${PHASE_LABEL[e.xh].toLowerCase()}` : ""}`}</span>}
         {e.x !== "differs" && e.eA == null && eventProjected(e, todayISO()) && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}

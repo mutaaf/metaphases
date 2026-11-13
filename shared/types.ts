@@ -28,6 +28,8 @@ export interface EarningsEvent {
   xd?: string;
   /** Nasdaq's session, when it gives one. */
   xh?: Session;
+  /** 0062, client side: the feed's session on a row whose time the two calendars contest (`h` is then ""). */
+  fh?: Session;
 }
 
 export interface CalendarResponse {

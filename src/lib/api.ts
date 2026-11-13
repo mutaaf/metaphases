@@ -2,6 +2,7 @@ import type { CalendarResponse, MacroResponse, TickerResponse } from "../../shar
 import { useEffect, useState } from "react";
 import { BASE } from "./router";
 import { needsRetry } from "./partial";
+import { settleContested } from "../../shared/contestedTime";
 
 const mem = new Map<string, Promise<unknown>>();
 async function fetchJson(path: string) {
@@ -17,6 +18,11 @@ const isoAdd = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z");
  *  days, which keeps a cold month well inside the free plan's CPU budget (Cloudflare 1102). Chunks merge and dedupe;
  *  a failed chunk becomes a warning instead of failing the month. */
 async function fetchCalendar(path: string): Promise<CalendarResponse> {
+  // 0062: a session the two calendars contest is shown as unconfirmed on every surface (`fh` keeps the feed's).
+  const r = await fetchCalendarRaw(path);
+  return { ...r, events: (r.events ?? []).map(settleContested) };
+}
+async function fetchCalendarRaw(path: string): Promise<CalendarResponse> {
   const u = new URL(path, location.origin);
   const from = u.searchParams.get("from")!, to = u.searchParams.get("to")!;
   if (!from || !to || isoAdd(from, CAL_CHUNK_DAYS) > to) return fetchJson(path);
