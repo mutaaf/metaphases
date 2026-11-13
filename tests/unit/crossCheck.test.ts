@@ -263,3 +263,52 @@ describe("/api/ticker cross-check (0015)", () => {
     expect(nqCalls).toEqual(["2026-11-18"]);
   });
 });
+
+// ── 0061: a cold read says which days on screen are still being checked ──
+describe("/api/calendar on a cold window (0061)", () => {
+  const NEXT_WEEK = "/api/calendar?from=2026-11-16&to=2026-11-20";
+  const raw = (path: string) => worker.fetch(new Request(`https://mutaafaziz.com/metaphases${path}`), env, ctx);
+
+  it("names the range's unchecked days, fills those days first, and the next read carries the flag", async () => {
+    const res = await raw(NEXT_WEEK);
+    const r = await res.json() as any;
+    await Promise.all(waits); waits = [];
+    expect(r.unchecked).toBe(10);
+    expect(r.uncheckedDays).toEqual(["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"]);
+    expect(r.events.find((e: EarningsEvent) => e.s === "QQXB").x).toBeUndefined();
+    // An unflagged answer isn't kept for 10 minutes by the browser.
+    expect(Number(/max-age=(\d+)/.exec(res.headers.get("Cache-Control") ?? "")![1])).toBeLessThanOrEqual(60);
+    // The build spends its two days on the range asked for, not on this week's days nobody is looking at.
+    expect(nqCalls.sort()).toEqual(["2026-11-16", "2026-11-17"]);
+    expect(nqPeak).toBeLessThanOrEqual(2);
+    unlock();
+    const again = await call(NEXT_WEEK);
+    expect(again.uncheckedDays).toEqual(["2026-11-18", "2026-11-19", "2026-11-20"]);
+    expect(nqCalls.slice(2).sort()).toEqual(["2026-11-18", "2026-11-19"]); // still the range's days first
+    unlock();
+    // QQXB's own day (Nov 18) has loaded now, so the row can be judged.
+    const third = await call(NEXT_WEEK);
+    expect(third.events.find((e: EarningsEvent) => e.s === "QQXB")).toMatchObject({ x: "differs", xd: "2026-11-17", xh: "bmo" });
+    expect(third.uncheckedDays).toEqual(["2026-11-20"]);
+  });
+
+  it("a fully checked range carries no uncheckedDays and the usual cache life", async () => {
+    await warm();
+    const res = await raw(NEXT_WEEK);
+    const r = await res.json() as any;
+    expect(r.uncheckedDays).toBeUndefined();
+    expect(res.headers.get("Cache-Control")).toContain("max-age=600");
+  });
+
+  it("a range past the window never lists unchecked days", async () => {
+    const r = await call("/api/calendar?from=2026-11-30&to=2026-12-04");
+    expect(r.uncheckedDays).toBeUndefined();
+  });
+
+  it("a Nasdaq outage lists the days too (the client says it's still checking, never that it checked)", async () => {
+    nasdaq = () => new Response("nope", { status: 503 });
+    const r = await call(NEXT_WEEK);
+    expect(r.uncheckedDays).toHaveLength(5);
+    expect(r.warnings).toEqual([]);
+  });
+});

@@ -34,6 +34,8 @@ export function Phase({ h, size = 12, projected }: { h: Session; size?: number; 
   );
 }
 export const PHASE_LABEL: Record<Session, string> = { bmo: "Before open", dmh: "During hours", amc: "After close", "": "Time TBD" };
+/** A session group's label. A blank session on a day still being cross-checked isn't "TBD" yet: Nasdaq may fill it (0061). */
+export const sessionLabel = (h: Session, checking: boolean) => (!h && checking ? "Checking time…" : PHASE_LABEL[h]);
 
 /** Company tile — logo, or a typographic monogram when there's no logo or the viewer prefers tickers. */
 export function Tile({ s, size = 44, force }: { s: string; size?: number; force?: "logo" | "ticker" }) {

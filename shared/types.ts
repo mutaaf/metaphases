@@ -43,6 +43,8 @@ export interface CalendarResponse {
   pending?: number;
   /** 0015: weekdays in the next 14 whose Nasdaq cross-check couldn't load. Not a failure: the dates are Finnhub's as before. */
   unchecked?: number;
+  /** 0061: the requested days, inside that window, not compared yet. The client shows "still checking" and asks again. */
+  uncheckedDays?: string[];
 }
 
 export type Grade = "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C+" | "C" | "C-" | "D" | "F";
