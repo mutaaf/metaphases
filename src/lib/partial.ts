@@ -21,3 +21,23 @@ export function missingDays(warnings: readonly string[], from: string, to: strin
 
 /** 0047: only a real failure is worth a quiet retry. A pending count (overseas names still being checked) isn't one. */
 export const needsRetry = (data: { warnings?: readonly string[] } | null | undefined) => (data?.warnings?.length ?? 0) > 0;
+
+/** 0061: re-reads while the Nasdaq cross-check fills the days on screen (its builder takes 2 days per colo per minute,
+ *  so a cold 10-day window takes about 5 minutes). */
+export const CHECK_TRIES = 8;
+const CHECK_DELAY = 40_000;
+
+/**
+ * When useApi should quietly ask again, or null when the answer is final. A partial failure is retried twice,
+ * quickly (0026). With `recheck` (the calendar page only), a calendar whose days on screen haven't been
+ * cross-checked yet (`uncheckedDays`) is re-read every 40 s, a few times at most, so the flags and
+ * Nasdaq-filled sessions arrive without a reload (0061).
+ */
+export function retryDelay(data: { warnings?: readonly string[]; uncheckedDays?: readonly string[] } | null | undefined, attempt: number, recheck = false): number | null {
+  if (needsRetry(data)) return attempt < 2 ? 4000 * (attempt + 1) : null;
+  if (recheck && (data?.uncheckedDays?.length ?? 0) > 0) return attempt < CHECK_TRIES ? CHECK_DELAY : null;
+  return null;
+}
+
+/** 0061: the unchecked days worth mentioning (a market holiday has nothing to compare). */
+export const checkingOf = (days: readonly string[] | undefined) => (days ?? []).filter((d) => weekday(d) && !CLOSED.has(d));

@@ -3,7 +3,7 @@ import { track } from "../lib/insights";
 import type { EarningsEvent, MacroEvent } from "../../shared/types";
 import { EARLY_CLOSE, HOLIDAYS } from "../../shared/market";
 import { useCalendar, useMacro, prefetchTicker } from "../lib/api";
-import { missingDays } from "../lib/partial";
+import { checkingOf, missingDays } from "../lib/partial";
 import { co, curOf, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { noResultYet } from "../../shared/pending";
@@ -12,7 +12,7 @@ import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayIS
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
 import { actions, useStore } from "../lib/store";
-import { Icon, Notice, Phase, PHASE_LABEL, Skeleton, Term, Tile } from "./bits";
+import { Icon, Notice, Phase, PHASE_LABEL, sessionLabel, Skeleton, Term, Tile } from "./bits";
 import { WeekBrief } from "./WeekBrief";
 import { AskWeekButton } from "./ai/mount";
 import { briefWeek } from "../lib/brief";
@@ -191,7 +191,7 @@ function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: 
   return { eyebrow: "None we follow", body: <><Term k="follow">{NONE_OURS}</Term> report on {WEEKDAY_LONG[dow]}. Smaller companies, and some listed only overseas, may.</> };
 }
 
-export function DayDrawer({ day, events, macro, onClose, unknown }: { day: string; events: EarningsEvent[]; macro: MacroEvent[]; onClose: () => void; unknown?: DrawerUnknown }) {
+export function DayDrawer({ day, events, macro, onClose, unknown, checking = false }: { day: string; events: EarningsEvent[]; macro: MacroEvent[]; onClose: () => void; unknown?: DrawerUnknown; checking?: boolean }) {
   const ref = useRef<HTMLElement>(null);
   useDialog(ref, onClose);
   const { prefs } = useStore();
@@ -223,7 +223,7 @@ export function DayDrawer({ day, events, macro, onClose, unknown }: { day: strin
         {empty && <p className="empty-big drawer-empty">{empty.body}</p>}
         {groupBySession(events).map((g) => (
           <section key={g.h} className="sess">
-            <h3 className="sess-head"><Phase h={g.h} size={14} /> {PHASE_LABEL[g.h]} <span className="muted">· {g.list.length}</span></h3>
+            <h3 className="sess-head"><Phase h={g.h} size={14} /> {sessionLabel(g.h, checking)} <span className="muted">· {g.list.length}</span></h3>
             {g.list.map((e) => <EventRow key={e.s} e={e} />)}
           </section>
         ))}
@@ -278,7 +278,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const weeks = useMemo(() => (view === "month" ? monthWeeks(a.getFullYear(), a.getMonth()) : [weekOf(anchor)]), [anchor, view]);
   const from = weeks[0][0];
   const to = weeks[weeks.length - 1][4];
-  const { data, loading, error, retry } = useCalendar(view === "month" ? from : addDays(weekOf(anchor)[0], 0), view === "month" ? to : weekOf(anchor)[4]);
+  const { data, loading, error, retry, retrying } = useCalendar(view === "month" ? from : addDays(weekOf(anchor)[0], 0), view === "month" ? to : weekOf(anchor)[4], true);
   const macro = useMacro();
   const all = data?.events ?? [];
   const filtered = useFiltered(all);
@@ -309,6 +309,10 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const covered = (d: string) => !!data && data.from <= d && d <= data.to;
   const unknownDay = (d: string) => (covered(d) ? undefined : error ? "failed" as const : "loading" as const);
   const failedDays = useMemo(() => new Set(data ? missingDays(data.warnings ?? [], data.from, data.to) : []), [data]);
+  // 0061: days on screen the Nasdaq cross-check hasn't reached yet (useApi re-reads until they're in).
+  const unchecked = useMemo(() => new Set(data && !data.warnings.length ? checkingOf(data.uncheckedDays) : []), [data]);
+  // Still checking only while a re-read is coming; after the last one, those times are the feed's alone.
+  const checkingDays = retrying ? unchecked : new Set<string>();
   const byDay = useMemo(() => {
     const m: Record<string, EarningsEvent[]> = {};
     for (const e of filtered) (m[e.d] ??= []).push(e);
@@ -380,9 +384,15 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       {error && !loading && <Notice tone="error">{error} Your watchlist and holdings are safe. <button className="btn btn-box" onClick={retry}>Try again</button></Notice>}
       {data && data.warnings.length > 0 && (
         <Notice tone="warn">
-          {failedDays.size === 0 ? "Part of the calendar didn't load yet — the market data service is busy." : failedDays.size === 1 ? `${fmtLong([...failedDays][0])} didn't load yet — the market data service is busy.` : `${failedDays.size} days didn't load yet — the market data service is busy.`} Retrying in the background; everything else is current.
+          {failedDays.size === 0 ? "Part of the calendar didn't load yet — the market data service is busy." : failedDays.size === 1 ? `${fmtLong([...failedDays][0])} didn't load yet — the market data service is busy.` : `${failedDays.size} days didn't load yet — the market data service is busy.`} {retrying ? "Retrying in the background; everything else is current." : <>Everything else is current. <button className="link" onClick={retry}>Try again</button></>}
         </Notice>
       )}
+      {unchecked.size > 0 && (() => {
+        const which = unchecked.size === 1 ? `${WEEKDAY_LONG[parse([...unchecked][0]).getDay()]}'s` : `${unchecked.size} days'`;
+        return retrying
+          ? <Notice>Still comparing {which} dates and times with Nasdaq's calendar. A time or a <Term k="xcheck">“Nasdaq” note</Term> may fill in over the next few minutes.</Notice>
+          : <Notice>We couldn't compare {which} dates and times with Nasdaq's calendar just now, so they're our data feed's alone. <button className="link" onClick={retry}>Check again</button></Notice>;
+      })()}
       {data && !data.warnings.length && (data.pending ?? 0) > 0 && (
         <Notice>Some overseas companies' report dates are still being checked, so a few may be missing for now.</Notice>
       )}
@@ -391,7 +401,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       )}
 
       {view === "day" ? (
-        <DayView day={anchor} events={byDay[anchor] ?? []} loading={unknownDay(anchor) === "loading"} failed={unknownDay(anchor) === "failed" || failedDays.has(anchor)} macro={macroByDay[anchor] ?? []} />
+        <DayView day={anchor} events={byDay[anchor] ?? []} checking={checkingDays.has(anchor)} loading={unknownDay(anchor) === "loading"} failed={unknownDay(anchor) === "failed" || failedDays.has(anchor)} macro={macroByDay[anchor] ?? []} />
       ) : (
         <div className={`grid ${view}`}>
           {WEEKDAYS.map((w, i) => <div key={w} className={`wd wd-${i}`}><span>{w}</span></div>)}
@@ -399,19 +409,19 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
             loading && !data ? (
               <div key={d} className="cell"><Skeleton w={60} h={10} /><div className="cell-tiles"><Skeleton w={44} h={44} /><Skeleton w={44} h={44} /><Skeleton w={44} h={44} /></div></div>
             ) : view === "week" ? (
-              <WeekColumn key={d} day={d} events={byDay[d] ?? []} loaded={covered(d)} failed={unknownDay(d) === "failed" || failedDays.has(d)} next={next} macro={macroByDay[d] ?? []} />
+              <WeekColumn key={d} day={d} events={byDay[d] ?? []} checking={checkingDays.has(d)} loaded={covered(d)} failed={unknownDay(d) === "failed" || failedDays.has(d)} next={next} macro={macroByDay[d] ?? []} />
             ) : (
               <DayCell key={d} day={d} events={byDay[d] ?? []} unknown={unknownDay(d) ?? (failedDays.has(d) ? "failed" : undefined)} inMonth={inMonth(d)} today={today} next={next} macro={macroByDay[d] ?? []} onOpen={() => openDrawer(d)} />
             ),
           )}
         </div>
       )}
-      {openDay && <DayDrawer day={openDay} events={byDay[openDay] ?? []} unknown={covered(openDay) ? (failedDays.has(openDay) ? "failed" : undefined) : error ? "failed" : loading ? "loading" : "outside"} macro={macroByDay[openDay] ?? []} onClose={closeDrawer} />}
+      {openDay && <DayDrawer day={openDay} events={byDay[openDay] ?? []} checking={checkingDays.has(openDay)} unknown={covered(openDay) ? (failedDays.has(openDay) ? "failed" : undefined) : error ? "failed" : loading ? "loading" : "outside"} macro={macroByDay[openDay] ?? []} onClose={closeDrawer} />}
     </>
   );
 }
 
-function WeekColumn({ day, events, next, macro, failed, loaded }: { day: string; events: EarningsEvent[]; next: string; macro: MacroEvent[]; failed?: boolean; loaded?: boolean }) {
+function WeekColumn({ day, events, next, macro, failed, loaded, checking = false }: { day: string; events: EarningsEvent[]; next: string; macro: MacroEvent[]; failed?: boolean; loaded?: boolean; checking?: boolean }) {
   const d = parse(day);
   return (
     <div className={`wcol ${day === next ? "next" : ""}`}>
@@ -422,7 +432,7 @@ function WeekColumn({ day, events, next, macro, failed, loaded }: { day: string;
       {loaded && !failed && !HOLIDAY[day] && !events.length && <EmptyTag />}
       {groupBySession(events).map((g) => (
         <div key={g.h} className="wsess">
-          <span className="eyebrow sess-mini"><Phase h={g.h} size={10} /> {PHASE_LABEL[g.h]}</span>
+          <span className="eyebrow sess-mini"><Phase h={g.h} size={10} /> {sessionLabel(g.h, checking)}</span>
           {g.list.slice(0, 14).map((e) => (
             <button key={e.s} className={`wrow ${resultOf(e) ? `res-${resultOf(e)}` : ""}${e.eA == null && e.x !== "differs" && eventProjected(e, todayISO()) ? " wrow-projected" : ""}`} title={e.eA == null && e.x !== "differs" && eventProjected(e, todayISO()) ? `${nameOf(e.s)}: date not confirmed by the company yet` : undefined} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
               <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eA ?? e.eE, curOf(e.s))}</span>
@@ -435,7 +445,7 @@ function WeekColumn({ day, events, next, macro, failed, loaded }: { day: string;
   );
 }
 
-function DayView({ day, events, loading, macro, failed }: { day: string; events: EarningsEvent[]; loading: boolean; macro: MacroEvent[]; failed?: boolean }) {
+function DayView({ day, events, loading, macro, failed, checking = false }: { day: string; events: EarningsEvent[]; loading: boolean; macro: MacroEvent[]; failed?: boolean; checking?: boolean }) {
   const { prefs } = useStore();
   const narrowed = prefs.filter !== "everything" || !!prefs.sector;
   const wd = WEEKDAY_LONG[parse(day).getDay()];
@@ -449,7 +459,7 @@ function DayView({ day, events, loading, macro, failed }: { day: string; events:
         : <p className="empty-big"><Term k="follow">{NONE_OURS}</Term> report on {wd}{narrowed ? <> with these filters. Try <b>Everything</b>.</> : <>. Smaller companies, and some listed only overseas, may.</>}</p>)}
       {groupBySession(events).map((g) => (
         <section key={g.h} className="sess">
-          <h3 className="sess-head"><Phase h={g.h} size={14} /> {PHASE_LABEL[g.h]} <span className="muted">· {g.list.length}</span></h3>
+          <h3 className="sess-head"><Phase h={g.h} size={14} /> {sessionLabel(g.h, checking)} <span className="muted">· {g.list.length}</span></h3>
           {g.list.map((e) => <EventRow key={e.s} e={e} />)}
         </section>
       ))}
