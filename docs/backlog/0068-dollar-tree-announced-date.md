@@ -1,12 +1,12 @@
 ---
 id: 0068
 title: Use the date Dollar Tree announced (Tue Nov 24, before the open); we show a projected Dec 1
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-13
-pr:
+pr: 112
 by: scout
 ---
 
@@ -23,10 +23,10 @@ A $26B retailer reporting a week before we say it will is the 0045 case: the com
 - Nothing else; the override path does the rest.
 
 ## Acceptance criteria
-- [ ] `/api/ticker/DLTR` `next.date` is `2026-11-24`, session before the open, `confirmed` set, not projected
-- [ ] `/api/calendar?from=2026-11-23&to=2026-11-27` has DLTR on Nov 24 (before open) and `to=2026-12-04` has none on Dec 1
-- [ ] `/t/DLTR` at 390×844 and 1440×900 headlines Tuesday, November 24; `og:title` names Nov 24
-- [ ] `npm test` (validateOverrides) passes
+- [x] `/api/ticker/DLTR` `next.date` is `2026-11-24`, session before the open, `confirmed` set, not projected
+- [x] `/api/calendar?from=2026-11-23&to=2026-11-27` has DLTR on Nov 24 (before open) and `to=2026-12-04` has none on Dec 1
+- [x] `/t/DLTR` at 390×844 and 1440×900 headlines Tuesday, November 24; `og:title` names Nov 24
+- [x] `npm test` (validateOverrides) passes
 
 ## Test plan
 `validateOverrides` covers the entry. Production check:
