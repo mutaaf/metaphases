@@ -33,7 +33,7 @@ import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDay
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
 import { needsPastCheck, nqReports, settlePastRow } from "../shared/pastRows";
-import { oneReportOneRow } from "../shared/oneRow";
+import { oneReportOneRow, SAME_REPORT_DAYS } from "../shared/oneRow";
 import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
 
@@ -445,6 +445,34 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
   return events.map((e) => (needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today) : e));
 }
 
+/**
+ * 0041: one report, one row, the same answer whatever range is asked for. A report's twin can sit just outside the
+ * range (a Friday report with a stale Monday twin across a week edge, or the share title's single day), so the
+ * neighbouring SAME_REPORT_DAYS are read from the cache only (no upstream calls), given the same overrides and past
+ * check (cache only), collapsed with the range's rows, and dropped again. A cold neighbour is simply not compared.
+ * Call after settlePast: its `nd` mark decides between twins.
+ */
+async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, today: string, ctx: ExecutionContext): Promise<EarningsEvent[]> {
+  const syms = new Set(fixed.map((e) => e.s));
+  if (!syms.size) return fixed;
+  const padFrom = addDays(from, -SAME_REPORT_DAYS), padTo = addDays(to, SAME_REPORT_DAYS);
+  const days: string[] = [];
+  for (let d = padFrom; d <= padTo; d = addDays(d, 1)) {
+    const wd = new Date(d + "T12:00:00Z").getUTCDay();
+    if ((d < from || d > to) && wd !== 0 && wd !== 6) days.push(d);
+  }
+  const read = async (d: string) => {
+    const hit = (await caches.default.match(CAL_DAY(d)).catch(() => undefined)) ?? (await caches.default.match(CAL(`cal:stale:v3:${d}`)).catch(() => undefined));
+    return hit ? ((await hit.json().catch(() => [])) as EarningsEvent[]) : [];
+  };
+  const raw = (await Promise.all(days.map(read))).flat().filter((e) => syms.has(e.s));
+  const outside = (e: EarningsEvent) => (e.d < from || e.d > to) && syms.has(e.s);
+  let pad = flagClosed(applyToEvents(raw, OVERRIDES, padFrom, padTo, today, (s) => s in U)).filter(outside);
+  if (!pad.length) return oneReportOneRow(fixed);
+  if (padFrom < today) pad = await settlePast(pad, today, ctx, false).catch(() => pad);
+  return oneReportOneRow([...fixed, ...pad]).filter((e) => e.d >= from && e.d <= to);
+}
+
 async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
   const from = url.searchParams.get("from") ?? iso(new Date());
   const to = url.searchParams.get("to") ?? addDays(from, 34);
@@ -477,9 +505,10 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     // A progress count, not a warning (0047): nothing failed, so the client mustn't say "busy" or retry.
     pending = unfetched(doc, SUPP_SYMBOLS);
   }
-  // 0041: one report, one row, before the past check (a twin costs no Nasdaq read) and after it (a filled twin).
-  let fixed = oneReportOneRow(flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U)));
-  if (from < today) fixed = oneReportOneRow(await settlePast(fixed, today, ctx).catch(() => fixed));
+  let fixed = flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U));
+  if (from < today) fixed = await settlePast(fixed, today, ctx).catch(() => fixed);
+  // 0041: one report, one row (after the past check, whose `nd` mark picks the twin that happened).
+  fixed = await oneRowInRange(fixed, from, to, today, ctx).catch(() => oneReportOneRow(fixed));
   // 0015: only ranges that reach the next 14 days (or a month past them, for a projected date Nasdaq lists sooner).
   // A Nasdaq failure leaves the events as Finnhub has them. It isn't a calendar failure, so it's not a warning:
   // warnings make the client say "busy" and retry (0047). `unchecked` counts the days that couldn't be compared.
@@ -1001,7 +1030,8 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
       const today = iso(todayNY());
       // 0072 (and 0064): a projection that never happened, or one on a holiday, isn't counted. Cache only here.
       const base = flagClosed(applyToEvents(withSupp, OVERRIDES, day, day, today, (s) => s in U));
-      const settled = oneReportOneRow(await settlePast(oneReportOneRow(base), today, ctx, false).catch(() => base));
+      const past = await settlePast(base, today, ctx, false).catch(() => base);
+      const settled = await oneRowInRange(past, day, day, today, ctx).catch(() => oneReportOneRow(past));
       const evs = settled.filter((e) => e.t && !e.c && !e.od).sort((a, b) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0));
       const top = evs.slice(0, 4).map((e) => e.s).join(", ");
       return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };

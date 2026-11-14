@@ -67,7 +67,8 @@ describe("0072 settlePastRow", () => {
     expect(settlePastRow(row, nqReports(surprise([["10/1/2026", 1, 1]])), true, TODAY)).toBe(row); // a report weeks before: dated elsewhere
     expect(settlePastRow({ ...row, o: "https://example.com" }, nqReports(surprise([["6/1/2026", 1, 1]])), true, TODAY).od).toBeUndefined(); // company-dated
     // A matching report in another currency's unit isn't filled into a non-dollar row.
-    expect(settlePastRow(row, nqReports(surprise([["11/4/2026", 1, 1]])), false, TODAY)).toBe(row);
+    // (0041: it is still marked as the day the company's history gives, `nd`, figures untouched.)
+    expect(settlePastRow(row, nqReports(surprise([["11/4/2026", 1, 1]])), false, TODAY)).toEqual({ ...row, nd: 1 });
     // A matching report with no Nasdaq consensus keeps the feed's estimate rather than wiping it.
     expect(settlePastRow(row, nqReports(surprise([["11/4/2026", 0.97, "--"]])), true, TODAY)).toMatchObject({ eA: 0.97, eE: 0.96 });
   });

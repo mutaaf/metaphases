@@ -51,6 +51,8 @@ export function settlePastRow(e: EarningsEvent, reports: NqReport[] | null, usd:
   if (!reports || !reports.length) return e;
   const hit = reports.find((r) => nearDay(r.date, e.d));
   if (hit) {
+    // 0041: Nasdaq dates the report on this very day, so of two twin rows (Nov 2 and Nov 3) this one happened.
+    if (hit.date === e.d) e = { ...e, nd: 1 };
     if (!usd || hit.eps == null) return e;
     // Nasdaq's own pair, so the verdict never mixes two feeds' EPS bases (0058). No Nasdaq consensus: the feed's
     // estimate stays, and epsVerdict's basis band decides whether the pair can be judged.
