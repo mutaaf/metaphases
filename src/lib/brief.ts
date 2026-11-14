@@ -45,7 +45,8 @@ export function buildBrief(
 ): Brief {
   const from = week[0], to = week[week.length - 1];
   const inWeek = (d: string) => d >= from && d <= to;
-  const evs = events.filter((e) => inWeek(e.d));
+  // 0072: a projection that passed unreported (`od`) didn't happen this week, so it isn't counted or ranked.
+  const evs = events.filter((e) => inWeek(e.d) && !e.od);
   const syms = new Set(evs.map((e) => e.s));
   const companies = new Set(evs.map((e) => universe[e.s]?.n ?? e.s));
   const missingDays = [...new Set(calWarnings.flatMap((w) => w.match(/\d{4}-\d{2}-\d{2}/g) ?? []))].filter((d) => inWeek(d) && !HOLIDAYS.some((x) => x.date === d)).sort();

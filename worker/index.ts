@@ -32,6 +32,7 @@ import { shownSession } from "../shared/contestedTime";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
+import { needsPastCheck, nqReports, settlePastRow } from "../shared/pastRows";
 import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
 
@@ -394,6 +395,54 @@ async function calendarDay(day: string, env: Env, ctx: ExecutionContext): Promis
   throw r.reason;
 }
 
+// ── 0072: past rows with no figures, settled against the company's own report history ──
+/** The same cache entry the ticker sheet reads (`buildTicker`), so a symbol costs one Nasdaq call per 12 h either way. */
+const NQ_SURPRISE_TTL = 43200;
+const nqSurpriseReq = (s: string) => CAL(`nq:surprise:${s}`);
+const nqSurpriseFail = (s: string) => CAL(`nq:surprise:fail:v1:${s}`);
+/** At most this many symbols are fetched fresh per request (pooled, short timeout); the rest wait for a later read. */
+const PAST_FETCH_MAX = 8;
+
+/**
+ * Fill a past row's figures from Nasdaq when the company did report (AMCR, ATO), flag it `od` when it didn't
+ * (NIO). Never fails the calendar: a symbol whose history can't be read keeps its row as it was.
+ * `fetchFresh: false` (share cards) reads the cache only.
+ */
+async function settlePast(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true): Promise<EarningsEvent[]> {
+  const syms = [...new Set(events.filter((e) => needsPastCheck(e, today)).map((e) => e.s))];
+  if (!syms.length) return events;
+  const reports = new Map<string, ReturnType<typeof nqReports> | null>();
+  const misses: string[] = [];
+  await Promise.all(syms.map(async (s) => {
+    const hit = await readJson<any>(nqSurpriseReq(s));
+    if (hit) reports.set(s, nqReports(hit)); else misses.push(s);
+  }));
+  if (fetchFresh && misses.length) {
+    // A symbol whose read failed lately isn't asked again for 15 minutes: a Nasdaq outage must not cost 12 calls a read.
+    const failed = await Promise.all(misses.map((s) => readJson<number>(nqSurpriseFail(s))));
+    const take = misses.filter((_, i) => failed[i] == null).slice(0, PAST_FETCH_MAX);
+    // One try each, no 429 retries (as fetchNasdaqDay): a second opinion must never spend the request's subrequests.
+    const got = await pool(take, 4, async (s) => {
+      const r = await fetch(`https://api.nasdaq.com/api/company/${s}/earnings-surprise`, { headers: UA, signal: AbortSignal.timeout(2500) } as RequestInit);
+      if (!r.ok) throw new Error(`api.nasdaq.com ${r.status}`);
+      return (await r.json()) as any;
+    });
+    got.forEach((r, i) => {
+      if (r.status !== "fulfilled" || !r.value || typeof r.value !== "object") {
+        ctx.waitUntil(putJson(nqSurpriseFail(take[i]), 1, 900).catch(() => {}));
+        return;
+      }
+      reports.set(take[i], nqReports(r.value));
+      // No table (a symbol Nasdaq doesn't cover) is an answer too, but kept an hour, not twelve.
+      const ttl = r.value.data ? NQ_SURPRISE_TTL : 3600;
+      ctx.waitUntil(caches.default.put(nqSurpriseReq(take[i]), new Response(JSON.stringify(r.value), { headers: { "Cache-Control": `public, max-age=${ttl}`, "Content-Type": "application/json" } })).catch(() => {}));
+    });
+  }
+  // Nasdaq's figures are dollars: fill only rows whose figures are dollars too (untracked rows are shown in dollars).
+  const usd = (s: string) => !(s in U) || isUsd(U[s].ec ?? "USD");
+  return events.map((e) => (needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today) : e));
+}
+
 async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
   const from = url.searchParams.get("from") ?? iso(new Date());
   const to = url.searchParams.get("to") ?? addDays(from, 34);
@@ -427,6 +476,7 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     pending = unfetched(doc, SUPP_SYMBOLS);
   }
   let fixed = flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U));
+  if (from < today) fixed = await settlePast(fixed, today, ctx).catch(() => fixed);
   // 0015: only ranges that reach the next 14 days (or a month past them, for a projected date Nasdaq lists sooner).
   // A Nasdaq failure leaves the events as Finnhub has them. It isn't a calendar failure, so it's not a warning:
   // warnings make the client say "busy" and retry (0047). `unchecked` counts the days that couldn't be compared.
@@ -945,7 +995,11 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
     const label = new Date(day + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
     try {
       const withSupp = mergeSupplement(await calendarDay(day, env, ctx), await readSupp(), day, day, () => true); // cache only (0024)
-      const evs = applyToEvents(withSupp, OVERRIDES, day, day, iso(todayNY()), (s) => s in U).filter((e) => e.t).sort((a, b) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0));
+      const today = iso(todayNY());
+      // 0072 (and 0064): a projection that never happened, or one on a holiday, isn't counted. Cache only here.
+      const base = flagClosed(applyToEvents(withSupp, OVERRIDES, day, day, today, (s) => s in U));
+      const settled = await settlePast(base, today, ctx, false).catch(() => base);
+      const evs = settled.filter((e) => e.t && !e.c && !e.od).sort((a, b) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0));
       const top = evs.slice(0, 4).map((e) => e.s).join(", ");
       return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };
     } catch { return { title: `Earnings on ${label} · Metaphases`, desc: PAGES["/"].desc }; }

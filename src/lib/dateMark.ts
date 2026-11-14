@@ -8,7 +8,7 @@ import { fmtDay } from "./dates";
 
 const LOWER: Record<Session, string> = { bmo: "before open", dmh: "during hours", amc: "after close", "": "" };
 
-export type DateMark = { kind: "closed" } | { kind: "differs"; label: string } | { kind: "projected" } | null;
+export type DateMark = { kind: "closed" } | { kind: "overdue" } | { kind: "differs"; label: string } | { kind: "projected" } | null;
 
 /** "Nasdaq: Thu, Nov 5, after close" (another day) or "Feed: after close · Nasdaq: before open" (same day). */
 export function nasdaqLabel(e: Pick<EarningsEvent, "d" | "xd" | "xh" | "fh">): string {
@@ -19,6 +19,8 @@ export function nasdaqLabel(e: Pick<EarningsEvent, "d" | "xd" | "xh" | "fh">): s
 
 export function dateMark(e: EarningsEvent, today: string): DateMark {
   if (e.c) return { kind: "closed" };
+  // 0072: the projected day passed and the company didn't report then.
+  if (e.od) return { kind: "overdue" };
   if (e.x === "differs" && e.xd) return { kind: "differs", label: nasdaqLabel(e) };
   if (e.eA == null && eventProjected(e, today)) return { kind: "projected" };
   return null;

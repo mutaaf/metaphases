@@ -110,3 +110,59 @@ test("the week brief names no day for a Thanksgiving row", async ({ page }) => {
   await expect(page.locator(".brief-co", { hasText: "MRVL" }).getByTestId("brief-unconfirmed")).toContainText("Date not confirmed");
   await noSideScroll(page);
 });
+
+// 0072: a past projection no report came out on (`od`, set by the worker) isn't a dated report. Oct 14 has six
+// real reports plus NIO's passed projection; Oct 12 has only XPEV's. Both on the October fixture.
+test.describe("0072 past projections that never happened", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/api/calendar**", (r) => {
+      const to = new URL(r.request().url()).searchParams.get("to") ?? "";
+      if (to >= "2026-11-07") return r.fulfill({ contentType: "application/json", body: fx("calendar-2026-11.json") });
+      const body = JSON.parse(fx("calendar-2026-10.json"));
+      body.events.push(
+        { s: "NIO", d: "2026-10-14", h: "", q: 3, y: 2026, eE: -2.1, eA: null, rE: 2.2e10, rA: null, t: 1, od: true },
+        { s: "XPEV", d: "2026-10-12", h: "", q: 3, y: 2026, eE: -0.4, eA: null, rE: 1.9e10, rA: null, t: 1, od: true },
+      );
+      r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    });
+  });
+
+  for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+    test(`Oct 14 drawer at ${size.width}: "6 reporting", NIO under "Date not confirmed" with the overdue line, no "No figures yet"`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await page.goto("./?d=2026-10-14&day=2026-10-14");
+      const drawer = page.locator(".drawer[role=dialog]");
+      await expect(drawer.locator(".drawer-head .eyebrow")).toHaveText("6 reporting");
+      const group = drawer.getByTestId("unconfirmed-group");
+      await expect(group.locator(".sess-head")).toContainText("Date not confirmed");
+      await expect(group.getByTestId("overdue-note")).toHaveText("Our data feed expected this report on this day, but no results came out then, so it isn't counted as reporting. Check the company's own announcements for the real date.");
+      await expect(group).not.toContainText("markets are closed");
+      const nio = group.locator(".erow", { hasText: "NIO" });
+      await expect(nio.getByTestId("erow-overdue")).toHaveText("No report that day");
+      await expect(nio).not.toContainText("No figures yet");
+      await expect(drawer.locator(".sess .erow", { hasText: "NIO" })).toHaveCount(1); // only in the group, not under a session
+      await noSideScroll(page);
+      await group.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: test.info().outputPath(`overdue-drawer-${size.width}.png`) });
+    });
+  }
+
+  test("a day with only a passed projection says none confirmed and its month cell has no count", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("./?d=2026-10-12");
+    const cell = page.locator(".cell", { hasText: "XPEV" });
+    await expect(cell).toHaveCount(1);
+    await expect(cell.locator(".cell-count")).toHaveCount(0);
+    const c14 = page.locator(".cell", { hasText: "BAC" }); // Oct 14: NIO may sit past the tiles shown
+    await expect(c14.locator(".cell-count")).toHaveText("06");
+    await page.goto("./?d=2026-10-12&day=2026-10-12");
+    const drawer = page.locator(".drawer[role=dialog]");
+    await expect(drawer.locator(".drawer-head .eyebrow")).toHaveText("None confirmed");
+    await expect(drawer.locator(".drawer-empty")).toContainText("expected but didn't come out that day");
+    await expect(drawer.getByTestId("unconfirmed-group")).toContainText("XPEV");
+    // The day view's dek doesn't count it either.
+    await page.goto("./?d=2026-10-12");
+    await page.getByRole("button", { name: "day view" }).click();
+    await expect(page.locator(".dek")).not.toContainText("1 companies report");
+  });
+});

@@ -27,7 +27,8 @@ export function slimMacro(m: MacroResponse | null | undefined, from: string, to:
 
 /** The week(s) ahead: the biggest tracked reporters by market cap, plus macro and mood. */
 export function weekContext(events: EarningsEvent[], macro: MacroResponse | null | undefined, from: string, to: string, today: string, limit = 90) {
-  const inRange = events.filter((e) => e.t && e.d >= from && e.d <= to);
+  // 0072: a projection that passed unreported (`od`) didn't happen, so the AI never sees it as a report.
+  const inRange = events.filter((e) => e.t && !e.od && e.d >= from && e.d <= to);
   const top = [...inRange].sort((a, b) => (UNIVERSE[b.s]?.mc ?? 0) - (UNIVERSE[a.s]?.mc ?? 0)).slice(0, limit);
   return { today, range: { from, to }, total: inRange.length, events: top.sort((a, b) => a.d.localeCompare(b.d)).map(slimEvent), macro: slimMacro(macro, from, to) };
 }
