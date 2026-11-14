@@ -3,7 +3,8 @@
 // Nov 4 report twice (Q3 2026 and Q1 2027). Its fiscal labels can't be trusted to tell them apart, so the rule is
 // the one date overrides use: rows of one symbol within a week of each other are the same report (no company
 // reports twice in a week). The calendar keeps the best of them, so a glancer sees one FDXF, not a reported row
-// beside a "to come" twin, and the season counters count each report once.
+// beside a "to come" twin, and the season counters count each report once. The rare company that does report twice
+// within a week (catching up on late filings) would show once; we accept that over a phantom twin every season.
 import type { EarningsEvent } from "./types";
 import { daysApart } from "./pending";
 
@@ -12,9 +13,10 @@ export const SAME_REPORT_DAYS = 7;
 
 /**
  * Which row speaks for the report, best first: the one with the company's figures (actual EPS and revenue, then
- * either), then a company-announced date, then a real date (not a holiday projection or a day that passed
- * unreported), then one with a session, then the feed's own actual over one filled from Nasdaq, then the later date
- * (the feed's latest word, as a moved date is usually pushed later).
+ * either), then a company-announced date, then the day the company's own report history (Nasdaq) gives (`nd`, set by
+ * the past check, so collapse after it), then a real date (not a holiday projection or a day that passed unreported),
+ * then one with a session, then the feed's own actual over one filled from Nasdaq, then the later date (the feed's
+ * latest word, as a moved date is usually pushed later).
  */
 function rank(e: EarningsEvent): (number | string)[] {
   const has = (v: number | null) => (v != null ? 1 : 0);
@@ -22,6 +24,7 @@ function rank(e: EarningsEvent): (number | string)[] {
     has(e.eA) & has(e.rA),
     has(e.eA) | has(e.rA),
     e.o ? 1 : 0,
+    e.nd ? 1 : 0,
     e.c || e.od ? 0 : 1,
     e.h ? 1 : 0,
     e.pr === "n" ? 0 : 1,
@@ -57,8 +60,9 @@ export function oneReportOneRow(events: EarningsEvent[]): EarningsEvent[] {
         let best = group[0];
         for (const i of group) if (better(events[i], events[best])) best = i;
         const w = events[best];
-        // A same-day twin may carry the session the best row lacks.
-        const h = w.h || group.map((i) => events[i]).find((e) => e.d === w.d && e.h)?.h || w.h;
+        // A same-day twin may carry the session the best row lacks; never onto a company-dated row (its session is
+        // the company's word or blank), and this runs before crossCheck, which sets hs/xh from the session kept.
+        const h = (w.h || w.o) ? w.h : group.map((i) => events[i]).find((e) => e.d === w.d && e.h)?.h || w.h;
         if (h !== w.h) replace.set(best, { ...w, h });
         for (const i of group) if (i !== best) drop.add(i);
       }

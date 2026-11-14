@@ -94,24 +94,28 @@ const get = async (path: string) => {
   return r.json() as Promise<any>;
 };
 
+let fhRows: ReturnType<typeof fhRow>[] = [];
+let nqDates: [string, number, number][] = [];
+let nqCalls = 0;
+const surpriseBody = () => ({ data: { earningsSurpriseTable: { rows: nqDates.map(([dateReported, eps, consensusForecast]) => ({ fiscalQtrEnd: "Sep 2026", dateReported, eps, consensusForecast })) } } });
+
 describe("0041 through /api/calendar", () => {
   beforeEach(() => {
-    pending = [];
+    pending = []; nqCalls = 0;
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-04T15:00:00Z"));
     (globalThis as any).caches = { default: new MemCache() };
+    fhRows = [fhRow("2026-10-28", "", 1, 2027, null, null), fhRow("2026-10-29", "amc", 3, 2026, 1.49, 2442000000), fhRow("2026-10-29", "amc", 4, 2026, null, null)];
+    // Nasdaq's history says the report was Oct 29 (what 0072 would fill every twin from).
+    nqDates = [["10/29/2026", 1.49, 1.38]];
     vi.stubGlobal("fetch", vi.fn(async (u: string) => {
       const url = new URL(u);
       if (url.hostname === "finnhub.io" && url.searchParams.get("symbol")) return new Response(JSON.stringify({ earningsCalendar: [] }));
       if (url.hostname === "finnhub.io" && url.pathname.endsWith("/calendar/earnings")) {
         const from = url.searchParams.get("from") ?? "", to = url.searchParams.get("to") ?? "";
-        const rows = [fhRow("2026-10-28", "", 1, 2027, null, null), fhRow("2026-10-29", "amc", 3, 2026, 1.49, 2442000000), fhRow("2026-10-29", "amc", 4, 2026, null, null)]
-          .filter((r) => r.date >= from && r.date <= to);
-        return new Response(JSON.stringify({ earningsCalendar: rows }));
+        return new Response(JSON.stringify({ earningsCalendar: fhRows.filter((r) => r.date >= from && r.date <= to) }));
       }
-      // Nasdaq's history says the report was Oct 29 (what 0072 would fill every twin from).
-      if (/\/api\/company\/ZZFRT\/earnings-surprise/.test(url.pathname))
-        return new Response(JSON.stringify({ data: { earningsSurpriseTable: { rows: [{ fiscalQtrEnd: "Sep 2026", dateReported: "10/29/2026", eps: 1.49, consensusForecast: 1.38 }] } } }));
+      if (/\/api\/company\/ZZFRT\/earnings-surprise/.test(url.pathname)) { nqCalls++; return new Response(JSON.stringify(surpriseBody())); }
       return new Response("{}", { status: 404 });
     }));
   });
@@ -123,5 +127,32 @@ describe("0041 through /api/calendar", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ d: "2026-10-29", h: "amc", eA: 1.49, rA: 2442000000 });
     expect(body.warnings).toEqual([]);
+  });
+
+  it("two twins with no figures keep the day the company's history gives, not the later one", async () => {
+    fhRows = [fhRow("2026-10-26", "amc", 3, 2026, null, null), fhRow("2026-10-27", "amc", 3, 2026, null, null)];
+    nqDates = [["10/26/2026", 1.49, 1.38]];
+    const body = await get("/api/calendar?from=2026-10-26&to=2026-10-30");
+    const rows = body.events.filter((e: EarningsEvent) => e.s === "ZZFRT");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ d: "2026-10-26", eA: 1.49, pr: "n", nd: 1 });
+    expect(nqCalls).toBe(1); // twins cost one history read, not two
+  });
+
+  it("a twin across a week edge: Friday's report shows once, not again as next Monday's 'reported' row", async () => {
+    fhRows = [fhRow("2026-10-23", "amc", 3, 2026, 1.49, 2442000000), fhRow("2026-10-26", "amc", 3, 2026, null, null)];
+    nqDates = [["10/23/2026", 1.49, 1.38]];
+    const before = await get("/api/calendar?from=2026-10-19&to=2026-10-23");
+    expect(before.events.filter((e: EarningsEvent) => e.s === "ZZFRT")).toEqual([expect.objectContaining({ d: "2026-10-23", eA: 1.49 })]);
+    const next = await get("/api/calendar?from=2026-10-26&to=2026-10-30");
+    expect(next.events.filter((e: EarningsEvent) => e.s === "ZZFRT")).toEqual([]);
+  });
+
+  it("a cold neighbouring week costs no upstream call and leaves the row as it was", async () => {
+    fhRows = [fhRow("2026-10-26", "amc", 3, 2026, 1.49, 2442000000)];
+    const calls = () => (globalThis.fetch as any).mock.calls.filter(([u]: [string]) => u.startsWith("https://finnhub.io") && u.includes("/calendar/earnings") && !u.includes("symbol=")).map(([u]: [string]) => new URL(u).searchParams.get("from"));
+    const body = await get("/api/calendar?from=2026-10-26&to=2026-10-30");
+    expect(body.events.filter((e: EarningsEvent) => e.s === "ZZFRT")).toHaveLength(1);
+    expect(calls().every((f: string) => f >= "2026-10-26")).toBe(true);
   });
 });
