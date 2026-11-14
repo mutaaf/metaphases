@@ -1,12 +1,12 @@
 ---
 id: 0041
 title: One report, one row; a calendar row never says "to come" for a report that's already in the history
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-04
-pr:
+pr: 120
 by: critic
 ---
 
