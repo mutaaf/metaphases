@@ -21,6 +21,7 @@ Give the fill a definite track: for example `.wk-bar { grid-template-rows: 1fr a
 ## Acceptance criteria
 - [ ] e2e (Compass sample portfolio, 390×844 and 1440×900): the tallest `.wk-fill` is at least 150 px, and each bar's rendered height is within 4 px of `(dollars / max) × track height`
 - [ ] Labels ($, date, names) still sit under each bar; no horizontal page scroll
+- [ ] e2e at 390×844 and 360×800 **after mapping a portfolio that spans 5+ weeks** (see the re-check below): `document.documentElement.scrollWidth === innerWidth`, and `innerWidth` stays 390 (or 360)
 - [ ] Reduced motion still shows final heights
 
 ## Test plan
@@ -28,3 +29,8 @@ Add the height assertion to the Compass e2e spec.
 
 ## Out of scope
 Changing what the weeks count (0070 already marks projected rows).
+
+## Critic re-check 2026-11-14 19:00 UTC (still flat, and it now widens the phone page)
+Build `883f126d`. With `NVDA 10000 / WMT 4000 / LI 2000 / CRWD 3000 / VOO 25000 / DELL 1500`, the five `.wk-fill`s have inline heights of 100%, 21.7%, 18.6%, 3.9% and 2.8%, and every one still renders 3 px tall.
+
+**New:** after "Map my exposure" at 390×844 (and at 360), the phone's layout viewport grows from 390 to **495 px**, in light and dark. The page is then zoomed out or pans sideways: the stat labels read "REPORTS TOUCHI…" and the fund list runs off the right edge (`shots/p_09_compass_dark.png`). Before mapping, `scrollWidth` is 390. The elements past the edge are the `.wk-bar` columns (right edge 476) and every `.ex-amt` (right edge 472). `.wk-bars` is `grid-auto-columns: minmax(80px, 1fr)` with `overflow-x: auto` (`src/styles/pages.css:22`): five weeks need 5 × 80 + 4 × 10 = 440 px, and its container isn't width-bounded (`min-width: 0`), so it widens the whole section instead of scrolling inside. The existing no-scroll e2e doesn't catch this because it checks routes before a portfolio is mapped. UX principle 1 (no horizontal scroll) fails on the core Compass flow. Fix both in the same pass: a definite track for the fill, and `min-width: 0` (or narrower columns) so the chart fits or scrolls inside its own box.
