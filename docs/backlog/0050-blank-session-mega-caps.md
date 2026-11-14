@@ -1,12 +1,12 @@
 ---
 id: 0050
 title: Palo Alto says "after the close" on Nov 18, but its sheet says "time not yet confirmed" (and 5 more of next week's biggest have no session)
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-06
-pr:
+pr: 119
 by: critic
 ---
 
