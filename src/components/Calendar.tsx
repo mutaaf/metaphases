@@ -161,6 +161,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         <span className="muted">{nameOf(e.s)}</span>
         {mark?.kind === "differs" && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{mark.label}</span>}
         {(mark?.kind === "projected" || mark?.kind === "closed") && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
+        {mark?.kind === "overdue" && <span className="erow-proj" data-testid="erow-overdue" title="Our data feed expected a report this day, but no results came out then, and the company hasn't announced a new date.">No report that day</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}
       {(() => { const j = e.eA != null ? epsOf(e) : null; return j?.via ? <span className="erow-num" title="The data feed's estimate is on another basis from the actual (e.g. net income vs FFO), so this is Nasdaq's forecast on the actual's basis."><span className="eyebrow">Nasdaq est</span>{epsIn(j.est, cur)}</span> : <span className="erow-num"><span className="eyebrow">EPS est</span>{epsIn(e.eE, cur)}</span>; })()}
@@ -169,7 +170,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         ? <span className="erow-num" data-testid="nq-actual" title={`Our data feed's figure is ${epsIn(e.eA, cur)}. This is Nasdaq's figure on the same basis as the estimate, and the result is judged on that pair.`}><span className="eyebrow">Nasdaq actual</span>{epsIn(j.act, cur)}</span>
         : <span className="erow-num"><span className="eyebrow">{e.eA != null ? "Actual" : "Rev est"}</span>{e.eA != null ? epsIn(e.eA, cur) : moneyIn(e.rE, cur)}</span>; })()}
       <span className="erow-res">
-        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : e.eA != null && epsOf(e).pending ? <span className="chip chip-nores" data-testid="eps-pending" title="This estimate is Nasdaq's, and Nasdaq posts its result on the same basis a day or two after the report. Until then we don't call it a beat or a miss.">Judging soon</span> : !e.c && noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : e.c ? "Unconfirmed" : PHASE_LABEL[e.h]}</span>}
+        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : e.eA != null && epsOf(e).pending ? <span className="chip chip-nores" data-testid="eps-pending" title="This estimate is Nasdaq's, and Nasdaq posts its result on the same basis a day or two after the report. Until then we don't call it a beat or a miss.">Judging soon</span> : !e.c && !e.od && noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : e.c || e.od ? "Unconfirmed" : PHASE_LABEL[e.h]}</span>}
       </span>
     </button>
   );
@@ -182,15 +183,18 @@ function groupBySession(evs: EarningsEvent[]) {
 }
 
 // 0064: rows our feed projects onto a market holiday. Never counted as reporting, never under a session.
+// 0072: so are past projections no report came out on (`od`).
 function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compact?: boolean }) {
   const { unconfirmed } = splitClosed(events);
   if (!unconfirmed.length) return null;
-  const holiday = unconfirmed[0].c;
+  const holiday = unconfirmed.find((e) => e.c)?.c;
+  const closedN = unconfirmed.filter((e) => e.c).length, passedN = unconfirmed.length - closedN;
+  const why = (e: EarningsEvent) => e.c ? `our data feed projects ${e.c}, when markets are closed` : "our data feed expected a report this day, but none came out";
   if (compact) return (
     <div className="wsess" data-testid="unconfirmed-group">
       <span className="eyebrow sess-mini"><Phase h="" size={10} projected /> Date not confirmed</span>
       {unconfirmed.slice(0, 14).map((e) => (
-        <button key={e.s} className="wrow wrow-projected" title={`${nameOf(e.s)}: our data feed projects ${holiday}, when markets are closed; date not confirmed`} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
+        <button key={e.s} className="wrow wrow-projected" title={`${nameOf(e.s)}: ${why(e)}; date not confirmed`} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
           <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eE, curOf(e.s))}</span>
         </button>
       ))}
@@ -200,7 +204,8 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
   return (
     <section className="sess" data-testid="unconfirmed-group">
       <h3 className="sess-head"><Phase h="" size={14} projected /> <Term k="unconfirmed">Date not confirmed</Term> <span className="muted">· {unconfirmed.length}</span></h3>
-      <p className="muted small sess-note">Our data feed projects {unconfirmed.length === 1 ? "this report" : "these reports"} on {holiday}, when markets are closed, so {unconfirmed.length === 1 ? "it's" : "they're"} likely not the real date. The real date is probably a nearby trading day.</p>
+      {closedN > 0 && <p className="muted small sess-note">Our data feed projects {closedN === 1 ? "this report" : "these reports"} on {holiday}, when markets are closed, so {closedN === 1 ? "it's" : "they're"} likely not the real date. The real date is probably a nearby trading day.</p>}
+      {passedN > 0 && <p className="muted small sess-note" data-testid="overdue-note">Our data feed expected {passedN === 1 ? "this report" : "these reports"} on this day, but no results came out, and {passedN === 1 ? "the company hasn't" : "the companies haven't"} announced a new date yet.</p>}
       {unconfirmed.map((e) => <EventRow key={e.s} e={e} />)}
     </section>
   );
@@ -218,6 +223,8 @@ function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: 
   // A shared ?day= outside the range on screen: we haven't read it, so we don't claim anything.
   if (unknown === "outside") return { eyebrow: "Not on screen", body: <>This day isn't in the range on screen. Open the day view to see who reports.</> };
   if (unknown === "failed") return { eyebrow: "Didn't load", body: <>This day's earnings didn't load, so we can't say who reports. Try again in a moment.</> };
+  // 0072: only rows that never happened here, so nothing is said to report, and nothing contradicts them.
+  if (unconfirmed) return { eyebrow: "None confirmed", body: <>No report we follow is confirmed for {WEEKDAY_LONG[dow]}. The ones below were expected but didn't come out that day.</> };
   if (narrowed) return { eyebrow: "None with these filters", body: <>None with these filters report on {WEEKDAY_LONG[dow]}. Try <b>Everything</b>.</> };
   return { eyebrow: "None we follow", body: <><Term k="follow">{NONE_OURS}</Term> report on {WEEKDAY_LONG[dow]}. Smaller companies, and some listed only overseas, may.</> };
 }
