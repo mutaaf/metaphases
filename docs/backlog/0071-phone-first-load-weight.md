@@ -39,3 +39,6 @@ e2e: count `static2.finnhub.io` requests before `load` on the fixture home page 
 
 ## Out of scope
 Changing the Box Office tag or its config (operator's). Self-hosting logos (a new host or storage needs a proposal).
+
+## Critic measurement 2026-11-14 19:00 UTC
+Phone home, first visit, build `883f126d`: 2.04 MB transferred in 74 requests, `load` 4.47 s, LCP 1.99 s, `networkidle` 9.7 s. **45 company logos are 1.46 MB (71%)**: the largest are DE 85 KB, PLTR 62 KB and MDT 62 KB, all drawn at 30–40 px. The Box Office tag adds 283 KB of JS (`array.js` 126 KB, `posthog-recorder.js` 76 KB, `surveys.js` 52 KB), which is more than our own 121 KB main bundle. It's operator-approved, so it's the operator's call, but it's the second-largest item after logos. Our own JS, CSS and fonts are about 240 KB.

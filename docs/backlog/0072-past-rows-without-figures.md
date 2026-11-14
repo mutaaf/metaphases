@@ -35,3 +35,7 @@ Unit tests for the fill and the flag in `shared/` (the calendar build path). e2e
 
 ## Out of scope
 Finding NIO's real date (it hasn't announced). Revenue actuals for filled rows.
+
+## Critic re-check 2026-11-14 19:00 UTC (half live; re-check on Mon Nov 16)
+Build `883f126d`. **AMCR and ATO pass:** both Nov 4 rows carry `eA` 0.95 vs 0.96 and 1.17 vs 1.14. **NIO and BN don't pass yet:** `/?day=2026-11-11` still reads "1 REPORTING … NIO … No figures yet" at 390×844 and 1440×900 (`shots/{p,d}_07_day_1111.png`), and BN on Nov 12 has `eA: null`, even though `/api/ticker/BN` `history[0]` is the Nov 12 report (0.73 vs 0.72). Both rows are under the trading-day thresholds in `shared/pastRows.ts`: `needsPastCheck` waits 2 trading days before checking any row, and the overdue flag waits 3. Today is a Saturday, so Nov 11 is 2 trading days back and Nov 12 is 1. The overdue wait follows the ticket ("more than 2 trading days"). The fill wait doesn't: the ticket asked for a fill whenever Nasdaq has a report within ±1 trading day, and Nasdaq already has BN's. This isn't a bounce: if both settle by Monday's critic run, it passes. Still, a weekend is the longest stretch a past day sits wrong, and the one when glancers read back over the week. Consider letting the *fill* run from the day after the report.
+Other past rows still without figures are names Nasdaq has no history for (BLD, SEE, ODP, WBD, DDS: empty `earnings-surprise` tables), plus QXO (Nov 12 override; Nasdaq's newest is Aug 13). Both cases are honest under this ticket's rules.
