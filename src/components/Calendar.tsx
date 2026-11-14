@@ -9,7 +9,7 @@ import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { noResultYet } from "../../shared/pending";
 import { eventProjected } from "../../shared/projected";
 import { dateMark } from "../lib/dateMark";
-import { splitClosed } from "../../shared/closedRows";
+import { splitClosed, unconfirmedRow } from "../../shared/closedRows";
 import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
@@ -161,7 +161,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         <span className="muted">{nameOf(e.s)}</span>
         {mark?.kind === "differs" && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{mark.label}</span>}
         {(mark?.kind === "projected" || mark?.kind === "closed") && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
-        {mark?.kind === "overdue" && <span className="erow-proj" data-testid="erow-overdue" title="Our data feed expected a report this day, but no results came out then, and the company hasn't announced a new date.">No report that day</span>}
+        {mark?.kind === "overdue" && <span className="erow-proj" data-testid="erow-overdue" title="Our data feed expected a report this day, but no results came out then. It isn't counted as reporting.">No report that day</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}
       {(() => { const j = e.eA != null ? epsOf(e) : null; return j?.via ? <span className="erow-num" title="The data feed's estimate is on another basis from the actual (e.g. net income vs FFO), so this is Nasdaq's forecast on the actual's basis."><span className="eyebrow">Nasdaq est</span>{epsIn(j.est, cur)}</span> : <span className="erow-num"><span className="eyebrow">EPS est</span>{epsIn(e.eE, cur)}</span>; })()}
@@ -205,7 +205,7 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
     <section className="sess" data-testid="unconfirmed-group">
       <h3 className="sess-head"><Phase h="" size={14} projected /> <Term k="unconfirmed">Date not confirmed</Term> <span className="muted">· {unconfirmed.length}</span></h3>
       {closedN > 0 && <p className="muted small sess-note">Our data feed projects {closedN === 1 ? "this report" : "these reports"} on {holiday}, when markets are closed, so {closedN === 1 ? "it's" : "they're"} likely not the real date. The real date is probably a nearby trading day.</p>}
-      {passedN > 0 && <p className="muted small sess-note" data-testid="overdue-note">Our data feed expected {passedN === 1 ? "this report" : "these reports"} on this day, but no results came out, and {passedN === 1 ? "the company hasn't" : "the companies haven't"} announced a new date yet.</p>}
+      {passedN > 0 && <p className="muted small sess-note" data-testid="overdue-note">Our data feed expected {passedN === 1 ? "this report" : "these reports"} on this day, but no results came out then, so {passedN === 1 ? "it isn't" : "they aren't"} counted as reporting. Check the company's own announcements for the real date.</p>}
       {unconfirmed.map((e) => <EventRow key={e.s} e={e} />)}
     </section>
   );
@@ -333,7 +333,8 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     if (!data) return c; // unknown, not zero: a failed load must never read "· 0" (0026)
-    const scoped = view === "month" ? all.filter((e) => inMonth(e.d)) : all;
+    // 0072/0064: a row that isn't a dated report (holiday projection, passed unreported) isn't counted.
+    const scoped = (view === "month" ? all.filter((e) => inMonth(e.d)) : all).filter((e) => !unconfirmedRow(e));
     const watchSet = new Set(store.watch.map((w) => w.s));
     const direct = new Set(store.holdings.map((h) => h.s));
     c.popular = scoped.filter((e) => e.t).length;
@@ -381,20 +382,21 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
 
   const label = view === "month" ? `${MONTHS[a.getMonth()]} ${a.getFullYear()}` : view === "week" ? `Week of ${MON3[parse(weeks[0][0]).getMonth()]} ${parse(weeks[0][0]).getDate()}` : fmtLong(anchor).toUpperCase();
   const reported = monthEvents.filter((e) => e.eA != null);
+  const datedCount = monthEvents.filter((e) => !unconfirmedRow(e)).length;
   const beats = reported.filter((e) => resultOf(e) === "beat").length;
 
   return (
     <>
-      <HomeHero monthCount={view === "month" && data ? monthEvents.length : null} monthLabel={`${MONTHS[a.getMonth()]} ${a.getFullYear()}`} />
+      <HomeHero monthCount={view === "month" && data ? datedCount : null} monthLabel={`${MONTHS[a.getMonth()]} ${a.getFullYear()}`} />
       <div className="page-head">
         <div className="title-row">
           <h1 className="headline">
             {view === "day" ? fmtLong(anchor).split(",")[0] : MONTHS[a.getMonth()]} <em>earnings</em>.
           </h1>
           <p className="dek">
-            {monthEvents.length ? (
+            {datedCount ? (
               <>
-                <b>{monthEvents.length}</b> companies report {view === "month" ? "this month" : view === "week" ? "this week" : "today"}
+                <b>{datedCount}</b> companies report {view === "month" ? "this month" : view === "week" ? "this week" : "today"}
                 {reported.length > 0 && <> · <b>{Math.round((beats / reported.length) * 100)}%</b> of those reported so far <Term k="beat">beat</Term> on both lines</>}
                 . Tap any logo for the full read.
               </>

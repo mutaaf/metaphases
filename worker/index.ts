@@ -401,7 +401,7 @@ const NQ_SURPRISE_TTL = 43200;
 const nqSurpriseReq = (s: string) => CAL(`nq:surprise:${s}`);
 const nqSurpriseFail = (s: string) => CAL(`nq:surprise:fail:v1:${s}`);
 /** At most this many symbols are fetched fresh per request (pooled, short timeout); the rest wait for a later read. */
-const PAST_FETCH_MAX = 12;
+const PAST_FETCH_MAX = 8;
 
 /**
  * Fill a past row's figures from Nasdaq when the company did report (AMCR, ATO), flag it `od` when it didn't
@@ -421,7 +421,12 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
     // A symbol whose read failed lately isn't asked again for 15 minutes: a Nasdaq outage must not cost 12 calls a read.
     const failed = await Promise.all(misses.map((s) => readJson<number>(nqSurpriseFail(s))));
     const take = misses.filter((_, i) => failed[i] == null).slice(0, PAST_FETCH_MAX);
-    const got = await pool(take, 4, (s) => getJson<any>(`https://api.nasdaq.com/api/company/${s}/earnings-surprise`, UA, 3000));
+    // One try each, no 429 retries (as fetchNasdaqDay): a second opinion must never spend the request's subrequests.
+    const got = await pool(take, 4, async (s) => {
+      const r = await fetch(`https://api.nasdaq.com/api/company/${s}/earnings-surprise`, { headers: UA, signal: AbortSignal.timeout(2500) } as RequestInit);
+      if (!r.ok) throw new Error(`api.nasdaq.com ${r.status}`);
+      return (await r.json()) as any;
+    });
     got.forEach((r, i) => {
       if (r.status !== "fulfilled" || !r.value || typeof r.value !== "object") {
         ctx.waitUntil(putJson(nqSurpriseFail(take[i]), 1, 900).catch(() => {}));
@@ -435,7 +440,7 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
   }
   // Nasdaq's figures are dollars: fill only rows whose figures are dollars too (untracked rows are shown in dollars).
   const usd = (s: string) => !(s in U) || isUsd(U[s].ec ?? "USD");
-  return events.map((e) => (needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s)) : e));
+  return events.map((e) => (needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today) : e));
 }
 
 async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {

@@ -3,6 +3,7 @@ import { needsPastCheck, nqReports, settlePastRow } from "../../shared/pastRows"
 import { splitClosed } from "../../shared/closedRows";
 import { epsVerdict } from "../../shared/compare";
 import { buildBrief } from "../../src/lib/brief";
+import { weekContext } from "../../src/lib/aiContext";
 import type { EarningsEvent } from "../../shared/types";
 import worker from "../../worker/index";
 
@@ -32,22 +33,25 @@ describe("0072 settlePastRow", () => {
   });
 
   it("did report (AMCR, Nov 4): fills Nasdaq's pair, and the row judges as a miss", () => {
-    const out = settlePastRow(ev("AMCR", "2026-11-04"), nqReports(surprise([["11/4/2026", 0.95, 0.96], ["8/14/2026", 0.71, 0.7]])), true);
+    const out = settlePastRow(ev("AMCR", "2026-11-04"), nqReports(surprise([["11/4/2026", 0.95, 0.96], ["8/14/2026", 0.71, 0.7]])), true, TODAY);
     expect(out).toMatchObject({ eA: 0.95, eE: 0.96, pr: "n" });
     expect(out.od).toBeUndefined();
     expect(epsVerdict(out).v).toBe("miss");
   });
 
   it("an after-close report Nasdaq dates the next morning still matches (one trading day)", () => {
-    const out = settlePastRow(ev("ATO", "2026-11-04"), nqReports(surprise([["11/5/2026", 1.17, 1.14]])), true);
+    const out = settlePastRow(ev("ATO", "2026-11-04"), nqReports(surprise([["11/5/2026", 1.17, 1.14]])), true, TODAY);
     expect(out).toMatchObject({ eA: 1.17, eE: 1.14 });
     expect(epsVerdict(out).v).toBe("beat");
     // Over a weekend: Fri row, Mon report.
-    expect(settlePastRow(ev("Y", "2026-11-06"), nqReports(surprise([["11/9/2026", 1, 1]])), true).eA).toBe(1);
+    expect(settlePastRow(ev("Y", "2026-11-06"), nqReports(surprise([["11/9/2026", 1, 1]])), true, TODAY).eA).toBe(1);
   });
 
   it("didn't report (NIO, Nov 11): last report a quarter back, so the row is flagged and leaves the count", () => {
-    const nio = settlePastRow(ev("NIO", "2026-11-11", { h: "" }), nqReports(surprise([["9/2/2026", -0.3, -0.35], ["6/3/2026", -0.4, -0.4]])), false);
+    const hist = nqReports(surprise([["9/2/2026", -0.3, -0.35], ["6/3/2026", -0.4, -0.4]]));
+    // Two trading days on (Fri Nov 13 evening, Sat Nov 14): Nasdaq may not have posted a real report yet, so no flag.
+    expect(settlePastRow(ev("NIO", "2026-11-11", { h: "" }), hist, false, TODAY).od).toBeUndefined();
+    const nio = settlePastRow(ev("NIO", "2026-11-11", { h: "" }), hist, false, "2026-11-16");
     expect(nio.od).toBe(true);
     expect(nio.eA).toBeNull();
     const { dated, unconfirmed } = splitClosed([nio, ev("AAPL", "2026-11-11")]);
@@ -57,13 +61,27 @@ describe("0072 settlePastRow", () => {
 
   it("leaves a row alone when it can't tell", () => {
     const row = ev("Z", "2026-11-04");
-    expect(settlePastRow(row, null, true)).toBe(row); // history unreadable
-    expect(settlePastRow(row, [], true)).toBe(row); // no history
-    expect(settlePastRow(row, nqReports(surprise([["11/10/2026", 1, 1]])), true)).toBe(row); // reported on another day since
-    expect(settlePastRow(row, nqReports(surprise([["10/1/2026", 1, 1]])), true)).toBe(row); // a report weeks before: dated elsewhere
-    expect(settlePastRow({ ...row, o: "https://example.com" }, nqReports(surprise([["6/1/2026", 1, 1]])), true).od).toBeUndefined(); // company-dated
+    expect(settlePastRow(row, null, true, TODAY)).toBe(row); // history unreadable
+    expect(settlePastRow(row, [], true, TODAY)).toBe(row); // no history
+    expect(settlePastRow(row, nqReports(surprise([["11/10/2026", 1, 1]])), true, TODAY)).toBe(row); // reported on another day since
+    expect(settlePastRow(row, nqReports(surprise([["10/1/2026", 1, 1]])), true, TODAY)).toBe(row); // a report weeks before: dated elsewhere
+    expect(settlePastRow({ ...row, o: "https://example.com" }, nqReports(surprise([["6/1/2026", 1, 1]])), true, TODAY).od).toBeUndefined(); // company-dated
     // A matching report in another currency's unit isn't filled into a non-dollar row.
-    expect(settlePastRow(row, nqReports(surprise([["11/4/2026", 1, 1]])), false)).toBe(row);
+    expect(settlePastRow(row, nqReports(surprise([["11/4/2026", 1, 1]])), false, TODAY)).toBe(row);
+    // A matching report with no Nasdaq consensus keeps the feed's estimate rather than wiping it.
+    expect(settlePastRow(row, nqReports(surprise([["11/4/2026", 0.97, "--"]])), true, TODAY)).toMatchObject({ eA: 0.97, eE: 0.96 });
+  });
+
+  it("the gap rule: a report 60 days before the row isn't overdue, 61 days is", () => {
+    const row = ev("Z", "2026-11-04");
+    expect(settlePastRow(row, nqReports(surprise([["9/5/2026", 1, 1]])), true, TODAY).od).toBeUndefined();
+    expect(settlePastRow(row, nqReports(surprise([["9/4/2026", 1, 1]])), true, TODAY).od).toBe(true);
+  });
+
+  it("the AI's week context never sees a row that never happened", () => {
+    const ctx = weekContext([ev("NIO", "2026-11-11", { od: true }), ev("AAPL", "2026-11-12")], null, "2026-11-09", "2026-11-13", TODAY);
+    expect(ctx.total).toBe(1);
+    expect(ctx.events.map((e) => e.s)).toEqual(["AAPL"]);
   });
 
   it("the week brief doesn't count or rank a row that never happened", () => {
@@ -104,7 +122,7 @@ describe("0072 through /api/calendar", () => {
       if (url.hostname === "finnhub.io" && url.searchParams.get("symbol")) return new Response(JSON.stringify({ earningsCalendar: [] }));
       if (url.hostname === "finnhub.io" && url.pathname.endsWith("/calendar/earnings")) {
         const from = url.searchParams.get("from") ?? "", to = url.searchParams.get("to") ?? "";
-        const rows = [fhRow("AMCR", "2026-11-04"), fhRow("ZZNOR", "2026-11-11", ""), { ...fhRow("ATO", "2026-11-04"), epsActual: 1.17 }].filter((r) => r.date >= from && r.date <= to);
+        const rows = [fhRow("AMCR", "2026-11-04"), fhRow("ZZNOR", "2026-11-09", ""), { ...fhRow("ATO", "2026-11-04"), epsActual: 1.17 }].filter((r) => r.date >= from && r.date <= to);
         return new Response(JSON.stringify({ earningsCalendar: rows }));
       }
       const m = /\/api\/company\/([A-Z]+)\/earnings-surprise/.exec(url.pathname);
@@ -118,21 +136,24 @@ describe("0072 through /api/calendar", () => {
   });
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
-  it("fills AMCR's Nov 4 figures and flags ZZNOR's Nov 11 projection; a reported row costs no call", async () => {
+  it("fills AMCR's Nov 4 figures and flags ZZNOR's Nov 9 projection; a reported row costs no call", async () => {
     const body = await get("/api/calendar?from=2026-11-02&to=2026-11-13");
     const by = (s: string) => body.events.find((e: EarningsEvent) => e.s === s);
     expect(by("AMCR")).toMatchObject({ d: "2026-11-04", eA: 0.95, eE: 0.96, pr: "n" });
-    expect(by("ZZNOR")).toMatchObject({ d: "2026-11-11", od: true, eA: null });
+    expect(by("ZZNOR")).toMatchObject({ d: "2026-11-09", od: true, eA: null });
     expect(by("ATO").od).toBeUndefined();
     // Company-dated rows from data/date-overrides.json in these weeks are checked too; ATO (reported) never is.
     expect(nqCalls).toEqual(expect.arrayContaining(["AMCR", "ZZNOR"]));
     expect(nqCalls).not.toContain("ATO");
-    expect(nqCalls.length).toBeLessThanOrEqual(12);
-    // A second read uses the cached history (shared with the ticker sheet's key): no new Nasdaq calls.
+    expect(nqCalls.length).toBeLessThanOrEqual(8);
+    // A second read uses the cached history (shared with the ticker sheet's key).
     nqCalls = [];
     const again = await get("/api/calendar?from=2026-11-02&to=2026-11-13");
     expect(again.events.find((e: EarningsEvent) => e.s === "AMCR").eA).toBe(0.95);
-    expect(nqCalls).toEqual([]);
+    // Only symbols the first read's cap (8) left over are fetched now; AMCR and ZZNOR come from the cache.
+    expect(nqCalls).not.toContain("AMCR");
+    expect(nqCalls).not.toContain("ZZNOR");
+    expect(nqCalls.length).toBeLessThanOrEqual(8);
   });
 
   it("a Nasdaq failure leaves the rows as they were, with no warning", async () => {
@@ -140,7 +161,7 @@ describe("0072 through /api/calendar", () => {
       const url = new URL(u);
       if (url.hostname === "finnhub.io") {
         const from = url.searchParams.get("from") ?? "", to = url.searchParams.get("to") ?? "";
-        return new Response(JSON.stringify({ earningsCalendar: [fhRow("AMCR", "2026-11-04"), fhRow("ZZNOR", "2026-11-11", "")].filter((r) => r.date >= from && r.date <= to) }));
+        return new Response(JSON.stringify({ earningsCalendar: [fhRow("AMCR", "2026-11-04"), fhRow("ZZNOR", "2026-11-09", "")].filter((r) => r.date >= from && r.date <= to) }));
       }
       return new Response("busy", { status: 503 });
     }));

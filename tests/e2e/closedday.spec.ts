@@ -135,7 +135,7 @@ test.describe("0072 past projections that never happened", () => {
       await expect(drawer.locator(".drawer-head .eyebrow")).toHaveText("6 reporting");
       const group = drawer.getByTestId("unconfirmed-group");
       await expect(group.locator(".sess-head")).toContainText("Date not confirmed");
-      await expect(group.getByTestId("overdue-note")).toHaveText("Our data feed expected this report on this day, but no results came out, and the company hasn't announced a new date yet.");
+      await expect(group.getByTestId("overdue-note")).toHaveText("Our data feed expected this report on this day, but no results came out then, so it isn't counted as reporting. Check the company's own announcements for the real date.");
       await expect(group).not.toContainText("markets are closed");
       const nio = group.locator(".erow", { hasText: "NIO" });
       await expect(nio.getByTestId("erow-overdue")).toHaveText("No report that day");
@@ -160,5 +160,9 @@ test.describe("0072 past projections that never happened", () => {
     await expect(drawer.locator(".drawer-head .eyebrow")).toHaveText("None confirmed");
     await expect(drawer.locator(".drawer-empty")).toContainText("expected but didn't come out that day");
     await expect(drawer.getByTestId("unconfirmed-group")).toContainText("XPEV");
+    // The day view's dek doesn't count it either.
+    await page.goto("./?d=2026-10-12");
+    await page.getByRole("button", { name: "day view" }).click();
+    await expect(page.locator(".dek")).not.toContainText("1 companies report");
   });
 });

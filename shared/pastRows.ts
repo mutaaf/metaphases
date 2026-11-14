@@ -27,6 +27,8 @@ export function nqReports(body: any): NqReport[] {
 
 /** How far back the calendar settles rows (Finnhub's range history reaches about a month). */
 export const PAST_LOOKBACK_DAYS = 45;
+/** Nasdaq posts a report to its history a day or two after it: a row is only called unreported once more than two trading days have passed (the ticket's rule). */
+export const OVERDUE_AFTER_TRADING_DAYS = 3;
 /** No report within this many days before a passed row (and none since) means the quarter it stands for hasn't reported. */
 export const OVERDUE_GAP_DAYS = 60;
 
@@ -45,16 +47,18 @@ const nearDay = (a: string, b: string) => (a <= b ? tradingDaysSince(a, b) : tra
  * One past row against the company's reports. `usd`: the row's figures are dollars (Nasdaq's are), so its
  * actual can be filled; otherwise only the overdue flag can apply. `reports === null`: the history couldn't be read.
  */
-export function settlePastRow(e: EarningsEvent, reports: NqReport[] | null, usd: boolean): EarningsEvent {
+export function settlePastRow(e: EarningsEvent, reports: NqReport[] | null, usd: boolean, today: string): EarningsEvent {
   if (!reports || !reports.length) return e;
   const hit = reports.find((r) => nearDay(r.date, e.d));
   if (hit) {
     if (!usd || hit.eps == null) return e;
-    // Nasdaq's own pair, so the verdict never mixes two feeds' EPS bases (0058). No Nasdaq consensus: no verdict.
-    return { ...e, eA: hit.eps, eE: hit.est, pr: "n" };
+    // Nasdaq's own pair, so the verdict never mixes two feeds' EPS bases (0058). No Nasdaq consensus: the feed's
+    // estimate stays, and epsVerdict's basis band decides whether the pair can be judged.
+    return hit.est != null ? { ...e, eA: hit.eps, eE: hit.est, pr: "n" } : { ...e, eA: hit.eps };
   }
   // A company-dated row (o) that passed with nothing in is the company's word, not a projection: leave it.
   if (e.o) return e;
+  if (tradingDaysSince(e.d, today) < OVERDUE_AFTER_TRADING_DAYS) return e; // Nasdaq may simply not have posted it yet
   const newest = reports[0].date;
   if (newest > e.d) return e; // reported after the row's day: some other day, not "didn't report" (0041's ground)
   if (daysApart(newest, e.d) <= OVERDUE_GAP_DAYS) return e; // a report in the weeks before: likely this quarter, dated elsewhere
