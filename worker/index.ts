@@ -288,6 +288,7 @@ const MS_TTL = 60 * 86400;
 
 /** The background fill's timeout: Nasdaq's day calendar answers in 1.2–3.3 s (0059), so 2.5 s lost whole days. */
 const NQX_BUILD_TIMEOUT = 4000;
+const SESSION_PLAIN: Record<Session, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 const WHEN_LONG: Record<Session, string> = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "" };
 
 /**
@@ -536,11 +537,11 @@ function slimMetric(raw: any) {
 /**
  * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
  * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
- * (`tk:stale:v6:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
+ * (`tk:stale:v7:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
  */
 async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
-  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v7:${symbol}`)}`);
-  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v6:${symbol}`)}`);
+  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v8:${symbol}`)}`);
+  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v7:${symbol}`)}`);
   const hit = await caches.default.match(key);
   if (hit) { const data = (await hit.json()) as TickerResponse; return { data, ttl: sheetTtl(data) }; }
   const built = await buildTicker(symbol, env, ctx);
@@ -616,7 +617,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   if (xcheck && nqNextDay) nqWin = withDay(nqWin, today, nextE.date, nqNextDay);
   const fhNextHour = nextE?.hour as string | undefined;
   const nqOnNext = nextE && !nextE.source ? nqNextHour ?? (nqWin?.loaded.includes(nextE.date) ? nqWin.idx[symbol]?.find((l) => l.d === nextE.date)?.h : undefined) : undefined;
-  if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) nextE.hour = c.h; }
+  if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) { nextE.hour = c.h; nextE.hs = "n"; } } // 0050: Nasdaq's, not the company's
   // Past prints: Nasdaq gives the report dates (newest first).
   const rows: any[] = nasdaq?.data?.earningsSurpriseTable?.rows ?? [];
   const barDates = chart ? chart.t.map(nyDate) : []; // computed once per build
@@ -819,7 +820,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // 0007: the feed's projection, not the company's date: "expected around", and no session stated as fact.
     read.push(`${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} is expected around ${longDay(upNext.date)}, but the company hasn't confirmed the date yet.`);
   } else if (upNext) {
-    const when = upNext.hour ? WHEN_LONG[upNext.hour as Session] ?? "" : nqNext ? "" : "(time not yet confirmed)";
+    const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; the company hasn't said)" : ""}` : nqNext ? "" : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
     const nqWhen = nqNext ? (nqNext.date === upNext.date ? (nqNext.session ? `it ${WHEN_LONG[nqNext.session]} that day` : "it at another time that day") : `${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}`) : "";
     // 0062: same day, other session: lead with the day and call the time unconfirmed, as the sheet's headline does.
@@ -848,7 +849,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
     next: duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
-      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
+      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(upNext.hs === "n" && upNext.hour && !upNext.source ? { hs: "n" as const } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     ...(contest && chart ? { moveSession: { feed: contest.feed, nasdaq: contest.nasdaq, session: habit } } : {}),
@@ -1194,7 +1195,9 @@ function cardFromSheet(sym: string, d: TickerResponse): string {
   const nq = !rc && when ? d.next?.nasdaq : undefined;
   const contested = nq ? { headline: `Reports ${when}, ${nq.date === d.next!.date ? "time" : "date"} unconfirmed`, session: "" as Session }
     // 0007: a projected date is "expected around", with no session glyph.
-    : !rc && when && d.next?.projected ? { headline: `Around ${when} · unconfirmed`, session: "" as Session } : {};
+    : !rc && when && d.next?.projected ? { headline: `Around ${when} · unconfirmed`, session: "" as Session }
+    // 0050: a time only Nasdaq's calendar gives is expected, not the company's.
+    : !rc && !d.justReported && when && d.next?.hs === "n" && d.next.session ? { headline: `Reports ${when}, expected ${SESSION_PLAIN[d.next.session]}` } : {};
   return cardSvg({ symbol: sym, name: d.profile?.name ?? U[sym]?.n ?? sym, when, session: d.justReported?.session ?? d.next?.session ?? "", ...contested, move: d.expectedMove, beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, ...(rc ?? {}) });
 }
 
@@ -1202,12 +1205,12 @@ async function ogCard(sym: string, fmt: "svg" | "png", req: Request, env: Env, c
   const fallback = () => env.ASSETS.fetch(new Request(new URL(`${BASE}/og.png`, req.url), req));
   try {
     const day = iso(todayNY());
-    const key = new Request(`https://cache.metaphases.internal/og-png-v7-${sym}-${day}`);
+    const key = new Request(`https://cache.metaphases.internal/og-png-v8-${sym}-${day}`);
     // A card drawn while degraded is kept 30 s under its own key, so an unfurl burst renders it once, not per request.
-    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v7-${sym}-${day}-d`);
+    const shortKey = new Request(`https://cache.metaphases.internal/og-png-v8-${sym}-${day}-d`);
     if (fmt === "png") { const hit = (await caches.default.match(key)) ?? (await caches.default.match(shortKey)); if (hit) return hit; }
     // 0043: a card drawn while the sheet's date or history failed to load is served briefly and never cached.
-    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v7:${sym}:${day}`)}`);
+    const svgKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`og:svg:v8:${sym}:${day}`)}`);
     const svgHit = await caches.default.match(svgKey);
     const { svg, degraded } = svgHit ? { svg: await svgHit.text(), degraded: false } : await cardFor(sym, env, ctx);
     const age = degraded ? SHEET_DEGRADED_TTL : 21600;

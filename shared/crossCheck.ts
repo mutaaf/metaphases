@@ -106,7 +106,7 @@ export function crossCheck(events: EarningsEvent[], w: NqWindow): EarningsEvent[
     if (e.o || e.c || e.eA != null || e.rA != null) return e; // company-dated, closed-day or already reported: the date is settled
     const c = crossOne(e.s, e.d, e.h, w);
     if (!c) return e;
-    return { ...e, h: c.h ?? e.h, x: c.x, ...(c.xd ? { xd: c.xd } : {}), ...(c.xh ? { xh: c.xh } : {}) };
+    return { ...e, h: c.h ?? e.h, ...(c.h ? { hs: "n" as const } : {}), x: c.x, ...(c.xd ? { xd: c.xd } : {}), ...(c.xh ? { xh: c.xh } : {}) };
   });
 }
 

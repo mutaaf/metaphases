@@ -17,6 +17,7 @@ import { track } from "../lib/insights";
 import { isDated } from "../../shared/pending";
 import { nextTimeContested, shownSession } from "../../shared/contestedTime";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
+import { sessionText } from "../lib/sessionText";
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "at another time" };
 
 /** 0039: a report that's out, said plainly before the next one. */
@@ -208,12 +209,13 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                   {data.next.closed && <span className="muted nc-closed">The data feed projects {fmtLong(data.next.date)}, but markets are closed that day ({data.next.closed}).</span>}
                   {data.next.overdue && <span className="muted nc-closed">{data.next.date ? `The data feed expected it on ${fmtLong(data.next.date)}, and there are no results yet.` : "The data feed has no date for this quarter yet, and there are no results yet."} The new date isn't confirmed.</span>}
                   {due && <span className="muted nc-closed">Results were expected {shownSession(data.next) ? `${PHASE_LABEL[shownSession(data.next)].toLowerCase()} ` : ""}{data.next.date === today ? "today" : `on ${fmtLong(data.next.date)}`}. None are in our data yet.</span>}
-                  {!data.next.overdue && !due && <span className="muted" data-testid="nc-session">{contested ? <Term k="xcheck">Time unconfirmed</Term> : <Term k={data.next.session || "bmo"}>{PHASE_LABEL[data.next.session]}</Term>}{proj && data.next.session && !contested ? " (projected)" : ""}{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
+                  {!data.next.overdue && !due && <span className="muted" data-testid="nc-session">{contested ? <Term k="xcheck">Time unconfirmed</Term> : <Term k={data.next.session || "bmo"}>{sessionText(data.next.session, data.next.hs)}</Term>}{proj && data.next.session && !contested ? " (projected)" : ""}{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
                   {data.next.nasdaq && !data.next.overdue && !due && <span className="muted nc-xcheck small" data-testid="nc-xcheck"><Term k="xcheck">Two calendars disagree.</Term> {contested
                     ? `Our data feed lists it ${SESSION_WORDS[data.next.session]}; Nasdaq's calendar, ${SESSION_WORDS[data.next.nasdaq.session]}.${data.moveSession?.session === "bmo" || data.moveSession?.session === "amc" ? ` Past moves point to ${SESSION_WORDS[data.moveSession.session]}.` : ""}`
                     : data.next.nasdaq.date === data.next.date
                     ? `Nasdaq's calendar lists it ${data.next.nasdaq.session ? PHASE_LABEL[data.next.nasdaq.session].toLowerCase() : "at another time"} that day.`
                     : `Nasdaq's calendar lists it on ${fmtLong(data.next.nasdaq.date)}${data.next.nasdaq.session ? `, ${PHASE_LABEL[data.next.nasdaq.session].toLowerCase()}` : ""}.`} Treat the {data.next.nasdaq.date === data.next.date ? "time" : "date"} as unconfirmed until the company announces it.</span>}
+                  {data.next.hs === "n" && data.next.session && !data.next.nasdaq && !proj && !data.next.overdue && !due && <span className="muted nc-expected small" data-testid="nc-expected">The time is from Nasdaq's calendar; our data feed left it blank and the company hasn't said.</span>}
                   {proj && !data.next.overdue && !due && <span className="muted nc-projected small" data-testid="nc-projected"><Term k="unconfirmed">Date not yet confirmed by the company.</Term> The {data.next.session ? "date and time shown are" : "date shown is"} our data feed's projection and can move when the company announces its own.</span>}
                   {data.next.confirmed && <span className="nc-confirmed small"><Term k="companydate">Confirmed by the company</Term> · <a href={data.next.confirmed} target="_blank" rel="noopener noreferrer">source</a></span>}
                 </div>

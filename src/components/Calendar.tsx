@@ -9,6 +9,7 @@ import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { noResultYet } from "../../shared/pending";
 import { eventProjected } from "../../shared/projected";
 import { dateMark } from "../lib/dateMark";
+import { sessionText } from "../lib/sessionText";
 import { splitClosed, unconfirmedRow } from "../../shared/closedRows";
 import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
@@ -85,8 +86,8 @@ function TileButton({ e, size = 44 }: { e: EarningsEvent; size?: number }) {
       className={`tbtn ${r ? `res-${r}` : ""}${proj ? " tbtn-projected" : ""}`}
       onClick={(ev) => { ev.stopPropagation(); setParam("t", e.s); }}
       onMouseEnter={() => prefetchTicker(e.s)}
-      title={`${nameOf(e.s)} (${e.s}) · ${PHASE_LABEL[e.h]}${e.eE != null ? ` · est. ${epsIn(e.eE, curOf(e.s))}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}${proj ? " · date not confirmed" : ""}`}
-      aria-label={`${nameOf(e.s)}, ${PHASE_LABEL[e.h].toLowerCase()}, ${r ? r : proj ? "date not confirmed" : "upcoming"}${starred ? ", on your watchlist" : ""}`}
+      title={`${nameOf(e.s)} (${e.s}) · ${sessionText(e.h, e.hs)}${e.eE != null ? ` · est. ${epsIn(e.eE, curOf(e.s))}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}${proj ? " · date not confirmed" : ""}`}
+      aria-label={`${nameOf(e.s)}, ${sessionText(e.h, e.hs).toLowerCase()}, ${r ? r : proj ? "date not confirmed" : "upcoming"}${starred ? ", on your watchlist" : ""}`}
     >
       <Tile s={e.s} size={size} />
       <span className="tbtn-phase"><Phase h={e.h} size={11} projected={proj} /></span>
@@ -161,6 +162,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         <span className="muted">{nameOf(e.s)}</span>
         {mark?.kind === "differs" && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{mark.label}</span>}
         {(mark?.kind === "projected" || mark?.kind === "closed") && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
+        {!mark && e.hs === "n" && e.h && e.eA == null && <span className="erow-proj" data-testid="erow-expected" title="Our data feed left the time blank; this one is from Nasdaq's calendar. The company hasn't said.">Time expected</span>}
         {mark?.kind === "overdue" && <span className="erow-proj" data-testid="erow-overdue" title="Our data feed expected a report this day, but no results came out then. It isn't counted as reporting.">No report that day</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}

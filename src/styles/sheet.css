@@ -18,7 +18,7 @@
 .next-card .eyebrow { color: color-mix(in srgb, var(--bg) 60%, transparent); }
 .next-card .muted { color: color-mix(in srgb, var(--bg) 70%, transparent); }
 .nc-closed { display: block; margin-bottom: 2px; }
-.nc-xcheck, .nc-projected { display: block; margin-top: 4px; }
+.nc-xcheck, .nc-projected, .nc-expected { display: block; margin-top: 4px; }
 .nc-confirmed { display: block; margin-top: 4px; color: color-mix(in srgb, var(--bg) 70%, transparent); }
 .nc-confirmed a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--bg) 45%, transparent); }
 .next-card h3 { font: 800 24px/1.15 var(--display); letter-spacing: -.02em; margin: 2px 0; }

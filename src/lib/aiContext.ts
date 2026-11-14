@@ -14,7 +14,7 @@ const slimEvent = (e: EarningsEvent) => {
   const ej = epsOf(e);
   const epsNC = ej.v === "not-comparable";
   // The estimate it was judged against (Nasdaq's when Finnhub's is on another basis), never a figure that contradicts `res`.
-  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.h, eE: ej.pending ? null : ej.via ? ej.est : e.eE, eA: ej.act ?? e.eA, epsNC: epsNC || undefined, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: c?.ec, res: resultOf(e) ?? undefined };
+  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.h, ...(e.hs === "n" && e.h ? { hx: 1 } : {}), eE: ej.pending ? null : ej.via ? ej.est : e.eE, eA: ej.act ?? e.eA, epsNC: epsNC || undefined, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: c?.ec, res: resultOf(e) ?? undefined };
 };
 
 export function slimMacro(m: MacroResponse | null | undefined, from: string, to: string) {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Grade, Session } from "../../shared/types";
 import { co } from "../lib/data";
 import { GLOSSARY } from "../lib/glossary";
+import { PHASE_LABEL } from "../lib/sessionText";
 import { useStore } from "../lib/store";
 
 /** The brand mark: a moon caught mid-phase. */
@@ -33,7 +34,7 @@ export function Phase({ h, size = 12, projected }: { h: Session; size?: number; 
     </svg>
   );
 }
-export const PHASE_LABEL: Record<Session, string> = { bmo: "Before open", dmh: "During hours", amc: "After close", "": "Time TBD" };
+export { PHASE_LABEL };
 /** A session group's label. A blank session on a day still being cross-checked isn't "TBD" yet: Nasdaq may fill it (0061). */
 export const sessionLabel = (h: Session, checking: boolean) => (!h && checking ? "Checking time…" : PHASE_LABEL[h]);
 
