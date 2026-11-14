@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { EarningsEvent } from "../../shared/types";
 import { useCalendar } from "../lib/api";
 import { ETFS, ETF_ASOF, heldVia, nameOf } from "../lib/data";
+import { dateMark } from "../lib/dateMark";
 import { addDays, fmtShort, todayISO, weekOf } from "../lib/dates";
 import { money } from "../lib/format";
 import { setParam } from "../lib/router";
 import { actions, useStore, type Holding } from "../lib/store";
-import { Phase, Skeleton, Term, Tile } from "../components/bits";
+import { Notice, Phase, Skeleton, Term, Tile } from "../components/bits";
 import { PageHero } from "../components/Hero";
 
 const SAMPLE = "VOO 25000\nQQQ 12000\nSCHD 8000\nAAPL 4000\nNVDA 3000";
@@ -42,7 +43,8 @@ export default function CompassPage() {
     }
     // 0064: a row projected onto a market holiday has no real date yet, so it sorts last.
     return rows.sort((a, b) => Number(!!a.e.c) - Number(!!b.e.c) || a.e.d.localeCompare(b.e.d));
-  }, [data, holdings]);
+  }, [data, holdings, today]);
+  const marked = useMemo(() => exposure.map((r) => dateMark(r.e, today)), [exposure, today]);
   const weeks = useMemo(() => {
     const w: Record<string, { dollars: number; names: string[] }> = {};
     for (const r of exposure) { if (r.e.c) continue; const k = weekOf(r.e.d)[0]; (w[k] ??= { dollars: 0, names: [] }); w[k].dollars += r.dollars; w[k].names.push(r.e.s); }
@@ -110,18 +112,38 @@ export default function CompassPage() {
             </section>
             <section className="card">
               <h4 className="eyebrow">Every report that touches your money</h4>
-              {exposure.map(({ e, dollars, via }) => (
-                <button key={e.s + e.d} className="ex-row" onClick={() => setParam("t", e.s)}>
-                  {e.c
-                    // 0064: projected onto a market holiday, so not a real date yet.
-                    ? <span className="ex-date ex-unconfirmed" data-testid="ex-unconfirmed" title={`Our data feed projects ${fmtShort(e.d)} (${e.c}), when markets are closed`}>Date not confirmed <Phase h="" size={11} projected /></span>
-                    : <span className="ex-date">{fmtShort(e.d)} <Phase h={e.h} size={11} /></span>}
-                  <Tile s={e.s} size={30} />
-                  <span className="erow-id"><b>{e.s}</b><span className="muted">{nameOf(e.s)}</span></span>
-                  <span className="ex-via muted small">{via.join(" + ")}</span>
-                  <b className="ex-amt">{money(dollars)}</b>
-                </button>
-              ))}
+              {(() => {
+                // 0070: the same two notes as the day drawer, so a date the company hasn't confirmed never reads as fact.
+                const nx = marked.filter((m) => m?.kind === "differs").length;
+                const np = marked.filter((m) => m?.kind === "projected").length;
+                return (nx > 0 || np > 0) && (
+                  <div data-testid="ex-notes">
+                    {nx > 0 && <Notice><Term k="xcheck">{nx === 1 ? "One date here isn't confirmed" : `${nx} dates here aren't confirmed`}</Term>: Nasdaq's calendar lists {nx === 1 ? "it" : "them"} on another day or time, marked “Nasdaq” below. Our feed and Nasdaq disagree, so check the company's own announcement.</Notice>}
+                    {np > 0 && <Notice><Term k="unconfirmed">{np === 1 ? "One date here is projected" : `${np} dates here are projected`}</Term>: {np === 1 ? "the company hasn't" : "the companies haven't"} announced {np === 1 ? "it" : "them"} yet, so {np === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>}
+                  </div>
+                );
+              })()}
+              {exposure.map(({ e, dollars, via }, i) => {
+                const m = marked[i];
+                const name = nameOf(e.s);
+                return (
+                  <button key={e.s + e.d} className="ex-row" onClick={() => setParam("t", e.s)}>
+                    {m?.kind === "closed"
+                      // 0064: projected onto a market holiday, so not a real date yet.
+                      ? <span className="ex-date ex-unconfirmed" data-testid="ex-unconfirmed" title={`Our data feed projects ${fmtShort(e.d)} (${e.c}), when markets are closed`}>Date not confirmed <Phase h="" size={11} projected /></span>
+                      : <span className="ex-date">{fmtShort(e.d)} <Phase h={e.h} size={11} projected={m?.kind === "projected"} /></span>}
+                    <Tile s={e.s} size={30} />
+                    <span className="erow-id">
+                      <b>{e.s}</b>
+                      {name !== e.s && <span className="muted ex-name">{name}</span>}
+                      {m?.kind === "differs" && <span className="erow-x" data-testid="ex-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{m.label}</span>}
+                      {m?.kind === "projected" && <span className="erow-proj" data-testid="ex-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
+                    </span>
+                    <span className="ex-via muted small">{via.join(" + ")}</span>
+                    <b className="ex-amt">{money(dollars)}</b>
+                  </button>
+                );
+              })}
               {!loading && !exposure.length && <p className="muted">None of your holdings report in the next two months.</p>}
             </section>
           </>
