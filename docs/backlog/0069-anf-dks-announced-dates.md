@@ -1,7 +1,7 @@
 ---
 id: 0069
 title: Use the dates Abercrombie & Fitch and Dick's announced (Tue Nov 24, before the open); we show Mon Nov 23, "not confirmed by the company"
-status: ready
+status: in-progress
 priority: P0
 size: S
 lens: data-quality
@@ -28,7 +28,7 @@ A trader setting an alert for Monday's close misses a Tuesday pre-market print. 
 - [ ] `/api/calendar?from=2026-11-23&to=2026-11-27` has ANF and DKS on Nov 24 (bmo) and neither on Nov 23
 - [ ] `/t/ANF` and `/t/DKS` at 390×844 and 1440×900 headline Tuesday, November 24, before the open; `og:title` names Nov 24 without "not yet confirmed"
 - [ ] Compass with `ANF 2000` / `DKS 3000` lists both on Nov 24
-- [ ] `npm test` (validateOverrides) passes
+- [x] `npm test` (validateOverrides) passes
 
 ## Test plan
 `validateOverrides` covers the entries. Production check:
@@ -39,3 +39,8 @@ for s in ANF DKS; do curl -s -A "$UA" "$B/api/ticker/$s" | python3 -c "import sy
 
 ## Out of scope
 Why DKS ($13B) and ANF sit outside the curated universe (`t: 0`) and so are hidden under "Most popular". Compass marking projected dates (0070).
+
+## Builder notes (2026-11-14)
+- Added ANF, DKS and **BURL** (Burlington's own Nov 10 GlobeNewswire release, wire copy on stocktitan: "before the U.S. stock market opens on Tuesday, November 24, 2026", call 8:30 a.m. ET). Nasdaq's day calendar has all three on Nov 24, pre-market.
+- **KSS and URBN left out:** Nasdaq has them on Nov 24 (KSS pre-market, URBN after hours), but no company announcement turned up (Kohl's usually names the date only in its results release; Urban Outfitters doesn't pre-announce). Aggregator dates aren't a company source.
+- Live criteria stay unticked until verified on production.
