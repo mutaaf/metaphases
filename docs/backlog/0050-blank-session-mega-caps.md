@@ -53,3 +53,12 @@ Nasdaq's day calendar agrees on all four. With 0057, a blank session now also bl
 
 ## Critic re-check 2026-11-11 19:00 UTC
 Half there. The calendar now gives WMT, TGT and INTU a session (`x: agree`: TGT/WMT `bmo`, INTU `amc`) once the 0015 window has loaded the day. **The sheet still doesn't**: `/api/ticker/WMT` has `next.session: ""`, and The Read says "(time not yet confirmed)", even though the same response's moves are measured as before the open from Nasdaq's `time-pre-market` (0057). The cause is shared with the date flags, so it's filed as **0059** (the sheet only reads a fully folded window, which production never reaches with `unchecked: 1`). A company override (WMT, TGT, TJX, INTU: sources above) still fixes the four biggest without waiting for 0059.
+
+## Builder note 2026-11-14 (shipped in #119)
+- A session filled from Nasdaq's day calendar is marked `hs: "n"` (calendar rows and `next.hs`). It reads as expected on the tile title/aria, as a "Time expected" tag in the day drawer, as "After close (expected)" with a source line on the sheet, and in The Read, the share title, the og card and the AI context.
+- Company overrides: WMT (Nov 19, bmo, Walmart's event page) and TGT (Nov 18, bmo, Target's events page: call 8–9 am ET). PANW was already done (0052).
+- No INTU override: its IR calendar names only a 4:30 pm ET call, which isn't a session. No TJX override either: no company source answers the sandbox. Both are labelled expected.
+- Left for a follow-up, found in self-review:
+  1. On the report day, a Nasdaq-filled session drives `results-pending` and `justReported`, and that copy ("Results were expected before the open today") states it as fact. This predates 0050.
+  2. Hype Check, Today stories, the story image, Compass and Depth peers still print the bare session.
+  3. On touch, the grid tile glyph looks the same; only the drawer and sheet say expected.

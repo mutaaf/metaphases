@@ -125,3 +125,40 @@ describe("0050 company sessions for Walmart and Target", () => {
     expect(out[0].source).toMatch(/^https:\/\/corporate\.walmart\.com\//);
   });
 });
+
+describe("0050 review: the share card and the AI context", () => {
+  beforeEach(() => {
+    waits = [];
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-09T15:00:00Z"));
+    cache = new MemCache();
+    (globalThis as any).caches = { default: cache };
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      const url = new URL(u);
+      if (url.hostname === "api.nasdaq.com" && url.pathname === "/api/calendar/earnings") return new Response(JSON.stringify({ data: { rows: [] } }));
+      if (url.hostname === "api.nasdaq.com") return new Response(JSON.stringify({ data: { earningsSurpriseTable: { rows: [] } } }));
+      if (url.pathname.endsWith("/calendar/earnings")) return new Response(JSON.stringify({ earningsCalendar: FH_ROWS.filter((r) => r.symbol === url.searchParams.get("symbol")) }));
+      return new Response("{}", { status: 200 });
+    }));
+  });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("the og card says the time is expected", async () => {
+    cache.store.set(CAL("nq:x:v1:2026-11-18"), JSON.stringify({ QQPA: "amc" }));
+    const r = await worker.fetch(new Request("https://mutaafaziz.com/metaphases/og/t/QQPA.svg"), env, ctx);
+    await Promise.all(waits); waits = [];
+    const svg = await r.text();
+    expect(svg).toContain("Reports Wed, Nov 18, expected after the close");
+  });
+
+  it("the AI's sheet and calendar context say the time is expected", async () => {
+    const { factsFor } = await import("../../worker/ai/prompts");
+    const t = factsFor("ticker", { symbol: "QQPA", next: { date: "2026-11-18", session: "amc", quarter: 1, year: 2027, epsE: 1, revE: 1e9, hs: "n" } }).join(" ");
+    expect(t).toMatch(/amc \(expected: the time is from Nasdaq's calendar/);
+    const w = factsFor("week", { events: [{ s: "QQPA", d: "2026-11-18", h: "amc", hx: 1, eE: 1 }] }).join(" ");
+    expect(w).toMatch(/time expected, from Nasdaq's calendar/);
+    const plain = factsFor("week", { events: [{ s: "QQPB", d: "2026-11-18", h: "amc", eE: 1 }] }).join(" ");
+    expect(plain).not.toMatch(/expected/);
+  });
+
+});

@@ -36,3 +36,15 @@ test("the sheet calls a Nasdaq-filled time expected and says where it's from; a 
   await expect(page.locator(".next-card").getByTestId("nc-expected")).toHaveCount(0);
   await expect(page.locator(".next-card").getByTestId("nc-session")).not.toContainText("(expected)");
 });
+
+test("the day drawer tags a Nasdaq-filled time 'Time expected' and nothing scrolls sideways at 390", async ({ page }) => {
+  const cal = JSON.parse(fx("calendar-2026-11.json"));
+  for (const e of cal.events) if (e.s === "CEG" && e.d === "2026-11-09") Object.assign(e, { h: "bmo", hs: "n", x: "agree", xh: "bmo" });
+  await page.route("**/api/calendar**", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(cal) }));
+  await page.goto("./?d=2026-11-09&day=2026-11-09");
+  const drawer = page.locator(".drawer[role=dialog]");
+  await expect(drawer.locator(".erow", { hasText: "CEG" }).getByTestId("erow-expected")).toHaveText("Time expected");
+  await expect(drawer.getByTestId("erow-expected")).toHaveCount(1);
+  await noSideScroll(page);
+  await page.screenshot({ path: test.info().outputPath("nasdaq-session-drawer.png") });
+});
