@@ -1,12 +1,12 @@
 ---
 id: 0069
 title: Use the dates Abercrombie & Fitch and Dick's announced (Tue Nov 24, before the open); we show Mon Nov 23, "not confirmed by the company"
-status: in-progress
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-13
-pr:
+pr: 115
 by: critic
 ---
 
