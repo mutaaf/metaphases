@@ -1,7 +1,7 @@
 ---
 id: 0041
 title: One report, one row; a calendar row never says "to come" for a report that's already in the history
-status: ready
+status: in-progress
 priority: P1
 size: S
 lens: data-quality
@@ -32,3 +32,8 @@ Vitest on the merge function with recorded FDXF and ROKU rows. The existing cale
 
 ## Out of scope
 Missing future dates (0015, 0038) and missing actuals (0040). No new hosts and no new upstream calls in the calendar path.
+
+## Builder notes 2026-11-14
+- Live on 2026-11-14 the FDXF triplets carried **different** fiscal labels (Q1 2027, Q3 2026, Q4 2026), and AMCR's Nov 4 twins too (Q3 2026, Q1 2027), so a `q`/`y` key finds nothing. The rule is the one date overrides use: one symbol's rows within 7 days are one report (`shared/oneRow.ts`). 0072 had filled every twin with the same Nasdaq actual, which made them look like separate reports.
+- Applied in the worker (before and after the past check, and the `?day=` share title) and in the client (per chunk, so the same-day key merge can't keep the "to come" twin, and across chunks).
+- The ROKU case is covered when the feed also lists the reported row (the twin goes). A lone stale row a day off is 0072's ground: it is filled on its own date, since Nasdaq dates after-close reports either way. Moving a lone row to a Nasdaq date further away needs a fiscal-period match and is left out. No `warnings` on a cold cache: warnings make the client say "busy" (0047).

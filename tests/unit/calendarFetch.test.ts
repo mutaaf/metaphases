@@ -11,6 +11,10 @@ class MemCache {
   async put(req: Request, res: Response) { this.store.set(req.url, await res.text()); }
 }
 
+// 0041: one company reports at most once a week, so a test that needs a row on every day uses a different
+// tracked company per day of the month (the calendar collapses one symbol's rows within a week into one report).
+const DAILY = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "JPM", "V", "MA", "WMT", "PG", "KO", "PEP", "COST", "HD", "DIS", "NFLX", "ADBE", "CRM", "ORCL", "INTC", "AMD", "QCOM", "CSCO", "IBM", "NKE", "MCD", "SBUX", "BA", "CAT"];
+const daily = (date: string) => DAILY[Number(date.slice(8, 10)) - 1];
 const row = (symbol: string, date: string) => ({ symbol, date, hour: "amc", quarter: 1, year: 2027, epsEstimate: 1, epsActual: null, revenueEstimate: 5e9, revenueActual: null });
 const env = { FINNHUB_API_KEY: "k", FRED_API_KEY: "k", ASSETS: { fetch: async () => new Response("") } } as any;
 const ctx = { waitUntil: (p: Promise<unknown>) => { pending.push(p); }, passThroughOnException() {} } as any;
@@ -41,7 +45,7 @@ const get = async (from: string, to: string) => {
 
 describe("calendar fetching", () => {
   it("makes one upstream call per week, not per day, and splits rows back into days", async () => {
-    rowsFor = (from, to) => [row("AAPL", from), row("MSFT", to)];
+    rowsFor = (from, to) => [row(daily(from), from), row(daily(to), to)];
     const r = await get("2027-04-26", "2027-05-21"); // four weeks
     expect(calls.length).toBe(4);
     expect(r.warnings).toEqual([]);
@@ -59,7 +63,7 @@ describe("calendar fetching", () => {
   });
 
   it("falls back to per-day calls when a range looks truncated", async () => {
-    rowsFor = (from, to) => (from === to ? [row("AAPL", from)] : Array.from({ length: 1500 }, (_, i) => row(`X${i}`, from)));
+    rowsFor = (from, to) => (from === to ? [row(daily(from), from)] : Array.from({ length: 1500 }, (_, i) => row(`X${i}`, from)));
     const r = await get("2027-02-01", "2027-02-05");
     expect(calls.length).toBe(1 + 5);
     expect(new Set(r.events.map((e) => e.d)).size).toBe(5);
@@ -67,7 +71,7 @@ describe("calendar fetching", () => {
 
   it("caps in-flight per-day calls when a busy week is truncated", async () => {
     let inFlight = 0, peak = 0;
-    rowsFor = (from, to) => (from === to ? [row("AAPL", from)] : Array.from({ length: 1500 }, (_, i) => row(`X${i}`, from)));
+    rowsFor = (from, to) => (from === to ? [row(daily(from), from)] : Array.from({ length: 1500 }, (_, i) => row(`X${i}`, from)));
     const base = (globalThis.fetch as any).getMockImplementation();
     vi.stubGlobal("fetch", vi.fn(async (u: string) => {
       inFlight++; peak = Math.max(peak, inFlight);
@@ -80,7 +84,7 @@ describe("calendar fetching", () => {
   });
 
   it("a failed range call serves the last good copy without fanning out into per-day calls", async () => {
-    rowsFor = () => ["2027-03-01", "2027-03-02", "2027-03-03", "2027-03-04", "2027-03-05"].map((d) => row("AAPL", d));
+    rowsFor = () => ["2027-03-01", "2027-03-02", "2027-03-03", "2027-03-04", "2027-03-05"].map((d) => row(daily(d), d));
     await get("2027-03-01", "2027-03-05"); // warm the stale copies
     (globalThis as any).caches.default.store.forEach((_: string, k: string) => {
       if (!k.includes("stale")) (globalThis as any).caches.default.store.delete(k);
