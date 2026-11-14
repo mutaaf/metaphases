@@ -33,6 +33,7 @@ import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDay
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
 import { needsPastCheck, nqReports, settlePastRow } from "../shared/pastRows";
+import { oneReportOneRow } from "../shared/oneRow";
 import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
 
@@ -476,8 +477,9 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     // A progress count, not a warning (0047): nothing failed, so the client mustn't say "busy" or retry.
     pending = unfetched(doc, SUPP_SYMBOLS);
   }
-  let fixed = flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U));
-  if (from < today) fixed = await settlePast(fixed, today, ctx).catch(() => fixed);
+  // 0041: one report, one row, before the past check (a twin costs no Nasdaq read) and after it (a filled twin).
+  let fixed = oneReportOneRow(flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U)));
+  if (from < today) fixed = oneReportOneRow(await settlePast(fixed, today, ctx).catch(() => fixed));
   // 0015: only ranges that reach the next 14 days (or a month past them, for a projected date Nasdaq lists sooner).
   // A Nasdaq failure leaves the events as Finnhub has them. It isn't a calendar failure, so it's not a warning:
   // warnings make the client say "busy" and retry (0047). `unchecked` counts the days that couldn't be compared.
@@ -999,7 +1001,7 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
       const today = iso(todayNY());
       // 0072 (and 0064): a projection that never happened, or one on a holiday, isn't counted. Cache only here.
       const base = flagClosed(applyToEvents(withSupp, OVERRIDES, day, day, today, (s) => s in U));
-      const settled = await settlePast(base, today, ctx, false).catch(() => base);
+      const settled = oneReportOneRow(await settlePast(oneReportOneRow(base), today, ctx, false).catch(() => base));
       const evs = settled.filter((e) => e.t && !e.c && !e.od).sort((a, b) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0));
       const top = evs.slice(0, 4).map((e) => e.s).join(", ");
       return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };

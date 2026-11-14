@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { BASE } from "./router";
 import { retryDelay } from "./partial";
 import { settleContested } from "../../shared/contestedTime";
+import { oneReportOneRow } from "../../shared/oneRow";
 
 const mem = new Map<string, Promise<unknown>>();
 async function fetchJson(path: string) {
@@ -20,7 +21,8 @@ const isoAdd = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z");
 async function fetchCalendar(path: string): Promise<CalendarResponse> {
   // 0062: a session the two calendars contest is shown as unconfirmed on every surface (`fh` keeps the feed's).
   const r = await fetchCalendarRaw(path);
-  return { ...r, events: (r.events ?? []).map(settleContested) };
+  // 0041: one report, one row, also when its twins straddle two chunks (Oct 28 in one week, Oct 29 in the next).
+  return { ...r, events: oneReportOneRow(r.events ?? []).map(settleContested) };
 }
 async function fetchCalendarRaw(path: string): Promise<CalendarResponse> {
   const u = new URL(path, location.origin);
@@ -40,7 +42,8 @@ async function fetchCalendarRaw(path: string): Promise<CalendarResponse> {
     if (p.value.pending) out.pending = Math.max(out.pending ?? 0, p.value.pending); // one global count, repeated per chunk
     if (p.value.unchecked) out.unchecked = Math.max(out.unchecked ?? 0, p.value.unchecked); // 0015: same, for the Nasdaq cross-check
     if (p.value.uncheckedDays?.length) out.uncheckedDays = [...new Set([...(out.uncheckedDays ?? []), ...p.value.uncheckedDays])].sort(); // 0061: per chunk
-    for (const e of p.value.events ?? []) {
+    // 0041: collapse a chunk's twins first, or the same-day key below could keep the "to come" one.
+    for (const e of oneReportOneRow(p.value.events ?? [])) {
       const k = `${e.s}|${e.d}`;
       if (e.d < from || e.d > to || seen.has(k)) continue;
       seen.add(k); out.events.push(e);
