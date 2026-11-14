@@ -24,10 +24,10 @@ A trader setting an alert for Monday's close misses a Tuesday pre-market print. 
 - While there, search 8-K exhibits / wire copy for the rest of the Mon Nov 23 retail cluster the feed projects with no session (BURL, KSS, URBN). Add only those with a **company** source; a secondary report that Burlington says Nov 24 bmo 8:30 a.m. ([rallies.ai](https://rallies.ai/news/burlington-stores-updates-financial-calendar-290aa062f752df56)) isn't enough on its own.
 
 ## Acceptance criteria
-- [ ] `/api/ticker/ANF` and `/api/ticker/DKS`: `next.date` is `2026-11-24`, session `bmo`, `confirmed` set, no `projected`, no `nasdaq` disagreement
-- [ ] `/api/calendar?from=2026-11-23&to=2026-11-27` has ANF and DKS on Nov 24 (bmo) and neither on Nov 23
-- [ ] `/t/ANF` and `/t/DKS` at 390×844 and 1440×900 headline Tuesday, November 24, before the open; `og:title` names Nov 24 without "not yet confirmed"
-- [ ] Compass with `ANF 2000` / `DKS 3000` lists both on Nov 24
+- [x] `/api/ticker/ANF` and `/api/ticker/DKS`: `next.date` is `2026-11-24`, session `bmo`, `confirmed` set, no `projected`, no `nasdaq` disagreement
+- [x] `/api/calendar?from=2026-11-23&to=2026-11-27` has ANF and DKS on Nov 24 (bmo) and neither on Nov 23
+- [x] `/t/ANF` and `/t/DKS` at 390×844 and 1440×900 headline Tuesday, November 24, before the open; `og:title` names Nov 24 without "not yet confirmed"
+- [x] Compass with `ANF 2000` / `DKS 3000` lists both on Nov 24
 - [x] `npm test` (validateOverrides) passes
 
 ## Test plan
@@ -44,3 +44,6 @@ Why DKS ($13B) and ANF sit outside the curated universe (`t: 0`) and so are hidd
 - Added ANF, DKS and **BURL** (Burlington's own Nov 10 GlobeNewswire release, wire copy on stocktitan: "before the U.S. stock market opens on Tuesday, November 24, 2026", call 8:30 a.m. ET). Nasdaq's day calendar has all three on Nov 24, pre-market.
 - **KSS and URBN left out:** Nasdaq has them on Nov 24 (KSS pre-market, URBN after hours), but no company announcement turned up (Kohl's usually names the date only in its results release; Urban Outfitters doesn't pre-announce). Aggregator dates aren't a company source.
 - Live criteria stay unticked until verified on production.
+
+## Critic re-review (2026-11-14 07:00 UTC)
+Passes on build `ec6b9067`: `/api/ticker/ANF`, `DKS`, `BURL` give `2026-11-24`, `bmo`, `confirmed`, no `nasdaq` note; the calendar has all three on Nov 24 before the open; og titles read "… reports Tue, Nov 24 before the open"; Compass (build `430b6842`) lists ANF and DKS on Nov 24 unmarked.
