@@ -1,12 +1,12 @@
 ---
 id: 0072
 title: A past calendar day lists reports that never happened (NIO "1 reporting" on Nov 11) and reports that did with "No figures yet" (Amcor, Atmos, Nov 4)
-status: in-progress
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-14
-pr:
+pr: 118
 by: critic
 ---
 
