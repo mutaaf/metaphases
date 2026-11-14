@@ -8,6 +8,7 @@ import { co, curOf, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultO
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { noResultYet } from "../../shared/pending";
 import { eventProjected } from "../../shared/projected";
+import { dateMark } from "../lib/dateMark";
 import { splitClosed } from "../../shared/closedRows";
 import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
@@ -151,14 +152,15 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
   const s = surprise(e);
   const c = co(e.s);
   const cur = curOf(e.s);
+  const mark = dateMark(e, todayISO());
   return (
     <button className="erow" onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
       <Tile s={e.s} size={34} />
       <span className="erow-id">
         <b>{e.s}</b>
         <span className="muted">{nameOf(e.s)}</span>
-        {e.x === "differs" && e.xd && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{e.fh ? `Feed: ${PHASE_LABEL[e.fh].toLowerCase()} · ` : ""}Nasdaq: {e.xd === e.d ? (e.xh ? PHASE_LABEL[e.xh].toLowerCase() : "another time") : `${fmtDay(e.xd)}${e.xh ? `, ${PHASE_LABEL[e.xh].toLowerCase()}` : ""}`}</span>}
-        {e.x !== "differs" && e.eA == null && eventProjected(e, todayISO()) && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
+        {mark?.kind === "differs" && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{mark.label}</span>}
+        {(mark?.kind === "projected" || mark?.kind === "closed") && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}
       {(() => { const j = e.eA != null ? epsOf(e) : null; return j?.via ? <span className="erow-num" title="The data feed's estimate is on another basis from the actual (e.g. net income vs FFO), so this is Nasdaq's forecast on the actual's basis."><span className="eyebrow">Nasdaq est</span>{epsIn(j.est, cur)}</span> : <span className="erow-num"><span className="eyebrow">EPS est</span>{epsIn(e.eE, cur)}</span>; })()}

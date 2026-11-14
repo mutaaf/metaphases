@@ -1,7 +1,7 @@
 ---
 id: 0070
 title: Compass lists projected and contested dates as fact (ANF and DKS "NOV 23", while their sheets say the date isn't confirmed)
-status: ready
+status: in-progress
 priority: P1
 size: S
 lens: data-quality
