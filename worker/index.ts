@@ -616,7 +616,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   if (xcheck && nqNextDay) nqWin = withDay(nqWin, today, nextE.date, nqNextDay);
   const fhNextHour = nextE?.hour as string | undefined;
   const nqOnNext = nextE && !nextE.source ? nqNextHour ?? (nqWin?.loaded.includes(nextE.date) ? nqWin.idx[symbol]?.find((l) => l.d === nextE.date)?.h : undefined) : undefined;
-  if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) nextE.hour = c.h; }
+  if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) { nextE.hour = c.h; nextE.hs = "n"; } } // 0050: Nasdaq's, not the company's
   // Past prints: Nasdaq gives the report dates (newest first).
   const rows: any[] = nasdaq?.data?.earningsSurpriseTable?.rows ?? [];
   const barDates = chart ? chart.t.map(nyDate) : []; // computed once per build
@@ -819,7 +819,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // 0007: the feed's projection, not the company's date: "expected around", and no session stated as fact.
     read.push(`${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} is expected around ${longDay(upNext.date)}, but the company hasn't confirmed the date yet.`);
   } else if (upNext) {
-    const when = upNext.hour ? WHEN_LONG[upNext.hour as Session] ?? "" : nqNext ? "" : "(time not yet confirmed)";
+    const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; the company hasn't said)" : ""}` : nqNext ? "" : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
     const nqWhen = nqNext ? (nqNext.date === upNext.date ? (nqNext.session ? `it ${WHEN_LONG[nqNext.session]} that day` : "it at another time that day") : `${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}`) : "";
     // 0062: same day, other session: lead with the day and call the time unconfirmed, as the sheet's headline does.
@@ -848,7 +848,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
     next: duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
-      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
+      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(upNext.hs === "n" && upNext.hour && !upNext.source ? { hs: "n" as const } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     ...(contest && chart ? { moveSession: { feed: contest.feed, nasdaq: contest.nasdaq, session: habit } } : {}),
