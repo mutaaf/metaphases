@@ -34,7 +34,7 @@ A trader setting an alert for Monday's close misses a Tuesday pre-market print. 
 `validateOverrides` covers the entries. Production check:
 ```sh
 B=https://mutaafaziz.com/metaphases; UA="Mozilla/5.0 (Macintosh) Chrome/130"
-for s in ANF DKS; do curl -s -A "$UA" "$B/api/ticker/$s" | python3 -c "import sys,json;print(json.load(sys.stdin)['next'])"; curl -s -A "$UA" "$B/t/$s" | grep -o 'og:title" content="[^"]*'; sleep 2; done
+for s in ANF DKS BURL; do curl -s -A "$UA" "$B/api/ticker/$s" | python3 -c "import sys,json;print(json.load(sys.stdin)['next'])"; curl -s -A "$UA" "$B/t/$s" | grep -o 'og:title" content="[^"]*'; sleep 2; done
 ```
 
 ## Out of scope
