@@ -1,7 +1,7 @@
 ---
 id: 0075
 title: Li Auto (Nov 25 before the open) and CrowdStrike (Dec 1 after the close) have announced, but their sheets say "not yet confirmed"
-status: ready
+status: in-progress
 priority: P0
 size: S
 lens: data-quality
@@ -33,3 +33,22 @@ The existing override validation test covers the new entries. Before adding a sy
 
 ## Out of scope
 Why the LI sheet missed the Nasdaq session fill that the calendar row got (0059/0050 paths). File it separately if it shows up on a name with no company notice.
+
+## Builder notes (2026-11-15)
+Each company's own release, read on its wire copy, and Nasdaq's day calendar (`api.nasdaq.com/api/calendar/earnings?date=`, read 2026-11-15 06:25 UTC):
+
+| Symbol | Found | Override |
+|---|---|---|
+| LI | GlobeNewswire Nov 10: "before the U.S. market opens" Wed Nov 25, call 7:00 a.m. ET. Nasdaq: pre-market | Nov 25 bmo |
+| CRWD | Business Wire Nov 4: "after the U.S. market close on Tuesday, December 1, 2026". Nasdaq: after hours | Dec 1 amc |
+| MDB | PR Newswire Nov 5: "after the U.S. financial markets close on Tuesday, December 1, 2026". Nasdaq: after hours | Dec 1 amc |
+| NTAP | Business Wire Nov 10: "After market close on December 1, 2026". Nasdaq: after hours | Dec 1 amc |
+| OKTA | Business Wire Nov 2: "after the U.S. market close on Tuesday, December 1, 2026". Nasdaq: after hours | Dec 1 amc |
+| IOT | Business Wire Nov 2: "after the U.S. market closes on Thursday, December 3, 2026". Nasdaq: after hours | Dec 3 amc |
+| DG | Business Wire Nov 5: results on Dec 3, call 8:00 a.m. CT / 9:00 a.m. ET. The results come before a call that starts before the open (the TGT/APD rule). Nasdaq: pre-market | Dec 3 bmo |
+| KR | None found (Kroger usually announces its call about two weeks ahead). Nasdaq has Dec 3 pre-market, the feed has Dec 2: left alone | — |
+| ZS | None found. Nasdaq: Dec 2 after hours | — |
+| ULTA | None found (an aggregator's estimate says Nov 26) | — |
+| DOCU | None found (an aggregator says Dec 2). Nasdaq: Dec 3, no time | — |
+| CPRT | None found for fiscal 2027 Q1. The feed has Nov 18, Nasdaq Nov 19 | — |
+| SQM | The IR event page (403 from the sandbox) lists a Nov 18 10:00 a.m. call per the search index. Secondary sources disagree on the results day (Nov 17 or Nov 18), so no override | — |
