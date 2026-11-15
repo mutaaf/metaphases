@@ -8,6 +8,8 @@ export const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI"];
 /** "Now" in New York, the market's clock. */
 export const nowNY = () => new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
 export const todayISO = () => iso(nowNY());
+/** Minutes after midnight in New York (for "has this session passed?"). */
+export const nowMinNY = () => { const n = nowNY(); return n.getHours() * 60 + n.getMinutes(); };
 
 export const isWeekend = (s: string) => { const w = parse(s).getDay(); return w === 0 || w === 6; };
 
