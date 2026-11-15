@@ -7,7 +7,7 @@ import { InstallCoach, LensSwitch } from "../components/Everyday";
 import { GradeBadge, Icon, Phase, Skeleton, Tile } from "../components/bits";
 import { useCalendar, useMacro, useTicker } from "../lib/api";
 import { curOf, heldVia, nameOf, UNIVERSE } from "../lib/data";
-import { addDays, todayISO } from "../lib/dates";
+import { addDays, nowMinNY, todayISO } from "../lib/dates";
 import { currencyName, epsIn, isUsd, money } from "../lib/format";
 import { moodPlain, movePlain, whatTheyDo, whenPlain } from "../lib/plain";
 import { BASE, navigate, setParam } from "../lib/router";
@@ -80,7 +80,7 @@ export default function TodayPage() {
   const stories = useMemo(() => {
     if (!cal.data && !macro.data) return [];
     return pickStories({
-      events: (cal.data?.events ?? []) as EarningsEvent[], macro: macro.data, watch, holdings, today, horizon,
+      events: (cal.data?.events ?? []) as EarningsEvent[], macro: macro.data, watch, holdings, today, horizon, nowMin: nowMinNY(),
       mcap: (s) => UNIVERSE[s]?.mc ?? 0, heldVia,
     });
   }, [cal.data, macro.data, watch, holdings]);

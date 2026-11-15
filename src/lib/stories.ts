@@ -2,6 +2,7 @@
 // Her own names first (watchlist, holdings, funds she owns), then the biggest reporters.
 import type { EarningsEvent, MacroEvent, MacroResponse } from "../../shared/types";
 import type { Holding, WatchItem } from "./store";
+import { figuresPending } from "../../shared/pending";
 
 export type Story =
   | { kind: "mood"; score: number; label: string }
@@ -18,6 +19,8 @@ export function pickStories(o: {
   holdings: Holding[];
   today: string;
   horizon: string; // last date to consider (inclusive)
+  /** Minutes after NY midnight: a report whose session already passed today isn't "reports today" (0040). */
+  nowMin?: number;
   mcap: (s: string) => number;
   heldVia: (s: string, h: Holding[]) => { etf: string; dollars: number }[];
   max?: number;
@@ -26,7 +29,7 @@ export function pickStories(o: {
   const out: Story[] = [];
   if (o.macro?.mood) out.push({ kind: "mood", score: o.macro.mood.score, label: o.macro.mood.label });
 
-  const upcoming = o.events.filter((e) => e.d >= o.today && e.d <= o.horizon);
+  const upcoming = o.events.filter((e) => e.d >= o.today && e.d <= o.horizon && !(o.nowMin != null && figuresPending(e, o.today, o.nowMin)));
   const watch = new Set(o.watch.map((w) => w.s));
   const direct = new Set(o.holdings.map((h) => h.s));
   const scored = upcoming.map((e) => {

@@ -6,12 +6,12 @@ import { useCalendar, useMacro, prefetchTicker } from "../lib/api";
 import { checkingOf, missingDays } from "../lib/partial";
 import { co, curOf, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
-import { noResultYet } from "../../shared/pending";
+import { figuresPending, noResultYet } from "../../shared/pending";
 import { eventProjected } from "../../shared/projected";
 import { dateMark } from "../lib/dateMark";
 import { sessionText } from "../lib/sessionText";
 import { splitClosed, unconfirmedRow } from "../../shared/closedRows";
-import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
+import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, nowMinNY, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
 import { actions, useStore } from "../lib/store";
@@ -23,6 +23,9 @@ import { useDialog } from "../lib/dialog";
 import { HomeHero } from "./Hero";
 
 const HOLIDAY = Object.fromEntries(HOLIDAYS.map((h) => [h.date, h.name]));
+// 0040: the session is over and the feed has no figures yet. Never styled as upcoming, never tinted.
+const pendingNow = (e: EarningsEvent) => figuresPending(e, todayISO(), nowMinNY());
+const PENDING_WHY = "This report's expected time has passed, but our data feed has no figures for it yet. If the company has reported, they'll show here once the feed catches up; until then it isn't called a beat or a miss.";
 const PER_CELL = 3;
 
 // An empty trading day means none of the companies we follow report, never
@@ -81,13 +84,14 @@ function TileButton({ e, size = 44 }: { e: EarningsEvent; size?: number }) {
   const r = resultOf(e);
   const starred = watch.some((w) => w.s === e.s);
   const proj = !r && eventProjected(e, todayISO());
+  const due = !r && pendingNow(e);
   return (
     <button
       className={`tbtn ${r ? `res-${r}` : ""}${proj ? " tbtn-projected" : ""}`}
       onClick={(ev) => { ev.stopPropagation(); setParam("t", e.s); }}
       onMouseEnter={() => prefetchTicker(e.s)}
-      title={`${nameOf(e.s)} (${e.s}) · ${sessionText(e.h, e.hs)}${e.eE != null ? ` · est. ${epsIn(e.eE, curOf(e.s))}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}${proj ? " · date not confirmed" : ""}`}
-      aria-label={`${nameOf(e.s)}, ${sessionText(e.h, e.hs).toLowerCase()}, ${r ? r : proj ? "date not confirmed" : "upcoming"}${starred ? ", on your watchlist" : ""}`}
+      title={`${nameOf(e.s)} (${e.s}) · ${sessionText(e.h, e.hs)}${e.eE != null ? ` · est. ${epsIn(e.eE, curOf(e.s))}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}${due ? " · figures pending" : proj ? " · date not confirmed" : ""}`}
+      aria-label={`${nameOf(e.s)}, ${sessionText(e.h, e.hs).toLowerCase()}, ${r ? r : due ? "figures pending" : proj ? "date not confirmed" : "upcoming"}${starred ? ", on your watchlist" : ""}`}
     >
       <Tile s={e.s} size={size} />
       <span className="tbtn-phase"><Phase h={e.h} size={11} projected={proj} /></span>
@@ -162,7 +166,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         <span className="muted">{nameOf(e.s)}</span>
         {mark?.kind === "differs" && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{mark.label}</span>}
         {(mark?.kind === "projected" || mark?.kind === "closed") && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
-        {!mark && e.hs === "n" && e.h && e.eA == null && <span className="erow-proj" data-testid="erow-expected" title="Our data feed left the time blank; this one is from Nasdaq's calendar. The company hasn't said.">Time expected</span>}
+        {!mark && e.hs === "n" && e.h && e.eA == null && !pendingNow(e) && <span className="erow-proj" data-testid="erow-expected" title="Our data feed left the time blank; this one is from Nasdaq's calendar. The company hasn't said.">Time expected</span>}
         {mark?.kind === "overdue" && <span className="erow-proj" data-testid="erow-overdue" title="Our data feed expected a report this day, but no results came out then. It isn't counted as reporting.">No report that day</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}
@@ -172,7 +176,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         ? <span className="erow-num" data-testid="nq-actual" title={`Our data feed's figure is ${epsIn(e.eA, cur)}. This is Nasdaq's figure on the same basis as the estimate, and the result is judged on that pair.`}><span className="eyebrow">Nasdaq actual</span>{epsIn(j.act, cur)}</span>
         : <span className="erow-num"><span className="eyebrow">{e.eA != null ? "Actual" : "Rev est"}</span>{e.eA != null ? epsIn(e.eA, cur) : moneyIn(e.rE, cur)}</span>; })()}
       <span className="erow-res">
-        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : e.eA != null && epsOf(e).pending ? <span className="chip chip-nores" data-testid="eps-pending" title="This estimate is Nasdaq's, and Nasdaq posts its result on the same basis a day or two after the report. Until then we don't call it a beat or a miss.">Judging soon</span> : !e.c && !e.od && noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : e.c || e.od ? "Unconfirmed" : PHASE_LABEL[e.h]}</span>}
+        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : e.eA != null && epsOf(e).pending ? <span className="chip chip-nores" data-testid="eps-pending" title="This estimate is Nasdaq's, and Nasdaq posts its result on the same basis a day or two after the report. Until then we don't call it a beat or a miss.">Judging soon</span> : pendingNow(e) ? <span className="chip chip-nores" data-testid="figures-pending" title={PENDING_WHY}>Figures pending</span> : !e.c && !e.od && noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : e.c || e.od ? "Unconfirmed" : PHASE_LABEL[e.h]}</span>}
       </span>
     </button>
   );
@@ -480,7 +484,7 @@ function WeekColumn({ day, events, next, macro, failed, loaded, checking = false
         <div key={g.h} className="wsess">
           <span className="eyebrow sess-mini"><Phase h={g.h} size={10} /> {sessionLabel(g.h, checking)}</span>
           {g.list.slice(0, 14).map((e) => (
-            <button key={e.s} className={`wrow ${resultOf(e) ? `res-${resultOf(e)}` : ""}${e.eA == null && e.x !== "differs" && eventProjected(e, todayISO()) ? " wrow-projected" : ""}`} title={e.eA == null && e.x !== "differs" && eventProjected(e, todayISO()) ? `${nameOf(e.s)}: date not confirmed by the company yet` : undefined} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
+            <button key={e.s} className={`wrow ${resultOf(e) ? `res-${resultOf(e)}` : ""}${e.eA == null && e.x !== "differs" && eventProjected(e, todayISO()) ? " wrow-projected" : ""}`} title={pendingNow(e) ? `${nameOf(e.s)}: figures pending` : e.eA == null && e.x !== "differs" && eventProjected(e, todayISO()) ? `${nameOf(e.s)}: date not confirmed by the company yet` : undefined} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
               <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eA ?? e.eE, curOf(e.s))}</span>
             </button>
           ))}

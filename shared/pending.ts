@@ -1,6 +1,7 @@
 import { HOLIDAYS } from "./market";
 import { epsIn } from "./currency";
 import { vsExpected } from "./compare";
+import { sessionPassed } from "./reported";
 const HOLIDAY_SET: ReadonlySet<string> = new Set(HOLIDAYS.map((h) => h.date));
 
 /**
@@ -77,6 +78,17 @@ export function tradingDaysSince(day: string, today: string, holidays: ReadonlyS
  */
 export const noResultYet = (e: { d: string; eA: number | null; rA: number | null }, today: string) =>
   e.eA == null && e.rA == null && e.d < today && tradingDaysSince(e.d, today) >= 2;
+
+/**
+ * 0040: a row whose session is over but whose figures aren't in yet: today once its usual release time has
+ * passed in New York (`sessionPassed`, the same rule as the sheet's "results expected, none in yet"), or an
+ * earlier day still inside `noResultYet`'s grace. It must never read like an upcoming report. Depends on the
+ * clock (`nowMin` = minutes after NY midnight), so callers compute it; it's never stored in a day cache.
+ * Holiday (`c`) and passed-projection (`od`) rows are "Date not confirmed" instead, and a row whose day or
+ * session Nasdaq disputes (`x: "differs"`) keeps its "Nasdaq: …" mark: its time may not have come at all.
+ */
+export const figuresPending = (e: { d: string; h: string; eA: number | null; rA: number | null; c?: string; od?: true; x?: string }, today: string, nowMin: number) =>
+  e.eA == null && e.rA == null && !e.c && !e.od && e.x !== "differs" && e.d <= today && !noResultYet(e, today) && (e.d < today || sessionPassed(e.h, nowMin));
 
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
