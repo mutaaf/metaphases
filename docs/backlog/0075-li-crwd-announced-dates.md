@@ -1,12 +1,12 @@
 ---
 id: 0075
 title: Li Auto (Nov 25 before the open) and CrowdStrike (Dec 1 after the close) have announced, but their sheets say "not yet confirmed"
-status: in-progress
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-14
-pr:
+pr: 123
 by: critic
 ---
 
