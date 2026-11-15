@@ -80,11 +80,11 @@ describe("0075 the companies' sessions through the worker", () => {
   });
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
-  for (const range of [["2026-11-23", "2026-12-04"], ["2026-11-30", "2026-12-04"]]) {
+  for (const range of [["2026-11-16", "2026-12-04"], ["2026-11-23", "2026-12-04"], ["2026-11-30", "2026-12-04"], ["2026-11-23", "2026-12-01"]]) {
     it(`/api/calendar ${range[0]}..${range[1]} carries each company's session and source`, async () => {
       const r = await get(`/api/calendar?from=${range[0]}&to=${range[1]}`);
       for (const c of CASES) {
-        if (c.date < range[0]) continue;
+        if (c.date < range[0] || c.date > range[1]) continue;
         const rows = r.events.filter((e: any) => e.s === c.s);
         expect(rows, c.s).toHaveLength(1);
         expect(rows[0]).toMatchObject({ d: c.date, h: c.hour, o: FILE[c.s]?.source });

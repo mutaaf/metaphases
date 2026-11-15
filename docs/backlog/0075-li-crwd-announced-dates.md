@@ -45,7 +45,7 @@ Each company's own release, read on its wire copy, and Nasdaq's day calendar (`a
 | NTAP | Business Wire Nov 10: "After market close on December 1, 2026". Nasdaq: after hours | Dec 1 amc |
 | OKTA | Business Wire Nov 2: "after the U.S. market close on Tuesday, December 1, 2026". Nasdaq: after hours | Dec 1 amc |
 | IOT | Business Wire Nov 2: "after the U.S. market closes on Thursday, December 3, 2026". Nasdaq: after hours | Dec 3 amc |
-| DG | Business Wire Nov 5: results on Dec 3, call 8:00 a.m. CT / 9:00 a.m. ET. The results come before a call that starts before the open (the TGT/APD rule). Nasdaq: pre-market | Dec 3 bmo |
+| DG | Business Wire Nov 5: results on Dec 3, call 8:00 a.m. CT / 9:00 a.m. ET. No session is stated; the results come before a call that starts at 9:00 a.m. ET, before the open (as APD), so bmo is inferred. Nasdaq: pre-market | Dec 3 bmo |
 | KR | None found (Kroger usually announces its call about two weeks ahead). Nasdaq has Dec 3 pre-market, the feed has Dec 2: left alone | — |
 | ZS | None found. Nasdaq: Dec 2 after hours | — |
 | ULTA | None found (an aggregator's estimate says Nov 26) | — |
