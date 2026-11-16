@@ -53,6 +53,9 @@ test("the Thanksgiving month cell shows no count; the week column lists the rows
   const cell = page.locator(".cell.holiday", { hasText: "Thanksgiving" });
   await expect(cell).toContainText("Market closed · Thanksgiving");
   await expect(cell.locator(".cell-count")).toHaveCount(0);
+  // 0067: the cell says there are unconfirmed rows inside, to the eye and to a screen reader.
+  await expect(cell.getByTestId("cell-unconfirmed")).toHaveText(/2 unconfirmed/);
+  await expect(cell).toHaveAttribute("aria-label", /market closed for Thanksgiving\. 2 report dates not confirmed inside/);
   await page.getByRole("button", { name: "week view" }).click();
   const col = page.locator(".wcol", { hasText: "Thanksgiving" });
   await expect(col).toContainText("Market closed · Thanksgiving");
@@ -166,3 +169,15 @@ test.describe("0072 past projections that never happened", () => {
     await expect(page.locator(".dek")).not.toContainText("1 companies report");
   });
 });
+
+for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+  test(`0067 at ${size.width}: the brief says 2 dates not confirmed and the holiday cell says 2 unconfirmed`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await page.goto(`./?d=${HOL}`);
+    await expect(page.locator("section.brief").getByTestId("brief-unconfirmed-count")).toHaveText(/2 dates not confirmed/);
+    const cell = page.locator(".cell.holiday", { hasText: "Thanksgiving" });
+    await expect(cell.getByTestId("cell-unconfirmed")).toHaveText(/2 unconfirmed/);
+    await noSideScroll(page);
+    await page.screenshot({ path: test.info().outputPath(`closedday-brief-${size.width}.png`) });
+  });
+}

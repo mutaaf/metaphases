@@ -101,10 +101,13 @@ function tickerFacts(t: Obj): string[] {
   return L;
 }
 
+// 0067: a row the feed projects onto a market holiday (`cx` names it) has no confirmed date or session.
+const unconfirmedNote = (e: Obj) => e.cx ? ` (date not confirmed: our data feed projects ${clip(e.cx, 30)}, when markets are closed; don't state this date or a session)` : "";
+
 function eventLine(e: Obj): string {
   const c = cur3(e.cur);
-  if (!isUsd(c)) return `${clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""} EPS est ${epsIn(e.eE, c)}${e.eA != null ? ` actual ${epsIn(e.eA, c)}` : ""}${e.rE ? ` rev est ${moneyIn(e.rE, c)}` : ""}${e.rA && !e.revNC ? ` rev actual ${moneyIn(e.rA, c)}` : ""}${e.epsNC ? " (reported EPS is on a different basis from the estimate; don't call it an EPS beat or miss)" : ""} (figures in ${c || "local currency"}, not USD)${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}`;
-  return `${clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""}${e.mc ? ` mcap ${money(e.mc * 1e6)}` : ""} EPS est ${n(e.eE)}${e.eA != null ? ` actual ${n(e.eA)}` : ""}${e.rE ? ` rev est ${money(e.rE)}` : ""}${e.rA && !e.revNC ? ` rev actual ${money(e.rA)}` : ""}${e.revNC ? " (reported revenue is on a different basis from the estimate; don't call it a revenue beat or miss)" : ""}${e.epsNC ? " (reported EPS is on a different basis from the estimate, e.g. FFO vs net income; don't call it an EPS beat or miss)" : ""}${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}${e.hx ? " (time expected, from Nasdaq's calendar; the company hasn't said)" : ""}`;
+  if (!isUsd(c)) return `${e.cx ? "date-unconfirmed" : clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""} EPS est ${epsIn(e.eE, c)}${e.eA != null ? ` actual ${epsIn(e.eA, c)}` : ""}${e.rE ? ` rev est ${moneyIn(e.rE, c)}` : ""}${e.rA && !e.revNC ? ` rev actual ${moneyIn(e.rA, c)}` : ""}${e.epsNC ? " (reported EPS is on a different basis from the estimate; don't call it an EPS beat or miss)" : ""} (figures in ${c || "local currency"}, not USD)${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}${unconfirmedNote(e)}`;
+  return `${e.cx ? "date-unconfirmed" : clip(e.d, 10)} ${clip(e.h || "tbd", 4)} ${clip(e.s, 8)} ${clip(e.n ?? "", 40)}${e.sec ? ` [${clip(e.sec, 24)}]` : ""}${e.mc ? ` mcap ${money(e.mc * 1e6)}` : ""} EPS est ${n(e.eE)}${e.eA != null ? ` actual ${n(e.eA)}` : ""}${e.rE ? ` rev est ${money(e.rE)}` : ""}${e.rA && !e.revNC ? ` rev actual ${money(e.rA)}` : ""}${e.revNC ? " (reported revenue is on a different basis from the estimate; don't call it a revenue beat or miss)" : ""}${e.epsNC ? " (reported EPS is on a different basis from the estimate, e.g. FFO vs net income; don't call it an EPS beat or miss)" : ""}${e.res ? ` → ${clip(e.res, 6).toUpperCase()}` : ""}${e.hx ? " (time expected, from Nasdaq's calendar; the company hasn't said)" : ""}${unconfirmedNote(e)}`;
 }
 
 function macroLines(m: Obj | undefined): string[] {
@@ -127,7 +130,7 @@ function weekFacts(c: Obj): string[] {
 function exposureFacts(c: Obj): string[] {
   const L: string[] = [];
   if (typeof c.total === "number") L.push(`Portfolio total: ${money(c.total)}. Holdings: ${(c.holdings ?? []).map((h: Obj) => `${clip(h.s, 8)} ${money(h.v)}`).join(", ")}.`);
-  for (const r of c.rows ?? []) L.push(`${clip(r.d, 10)} ${clip(r.h || "tbd", 4)} ${clip(r.s, 8)} ${clip(r.n ?? "", 40)}: ${money(r.dollars)} of this portfolio exposed via ${(r.via ?? []).map((v: unknown) => clip(v, 8)).join(" + ")}.`);
+  for (const r of c.rows ?? []) L.push(`${r.cx ? "date-unconfirmed" : clip(r.d, 10)} ${clip(r.h || "tbd", 4)} ${clip(r.s, 8)} ${clip(r.n ?? "", 40)}: ${money(r.dollars)} of this portfolio exposed via ${(r.via ?? []).map((v: unknown) => clip(v, 8)).join(" + ")}${unconfirmedNote(r)}.`);
   for (const w of c.weeks ?? []) L.push(`Week of ${clip(w.week, 10)}: ${money(w.dollars)} exposed (${(w.names ?? []).slice(0, 6).map((s: unknown) => clip(s, 8)).join(", ")}).`);
   return L;
 }

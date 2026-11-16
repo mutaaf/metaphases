@@ -8,7 +8,8 @@ import type { Co } from "./data";
 export interface BriefReporter { s: string; name: string; d: string; h: Session; mc: number; c?: string }
 export interface Brief {
   week: string[]; // Mon…Fri
-  total: number; // every company reporting this week (share classes count once)
+  total: number; // every company reporting this week (share classes count once); holiday projections (`c`) aren't counted
+  unconfirmed: number; // 0067: tracked companies the feed projects onto a market holiday this week (date not confirmed)
   tracked: number; // of those, companies on the Metaphases watch list (matches the calendar's "Most popular" count)
   missingDays: string[]; // weekdays whose earnings didn't load (calendar warnings)
   macroComplete: boolean; // false when the economic calendar can't vouch for this week
@@ -47,8 +48,11 @@ export function buildBrief(
   const inWeek = (d: string) => d >= from && d <= to;
   // 0072: a projection that passed unreported (`od`) didn't happen this week, so it isn't counted or ranked.
   const evs = events.filter((e) => inWeek(e.d) && !e.od);
-  const syms = new Set(evs.map((e) => e.s));
-  const companies = new Set(evs.map((e) => universe[e.s]?.n ?? e.s));
+  // 0067: a row projected onto a holiday (`c`) may really report in another week, so the counts leave it out;
+  // it still shows in the top list, marked "Date not confirmed" (0064).
+  const dated = evs.filter((e) => !e.c);
+  const syms = new Set(dated.map((e) => e.s));
+  const companies = new Set(dated.map((e) => universe[e.s]?.n ?? e.s));
   const missingDays = [...new Set(calWarnings.flatMap((w) => w.match(/\d{4}-\d{2}-\d{2}/g) ?? []))].filter((d) => inWeek(d) && !HOLIDAYS.some((x) => x.date === d)).sort();
   const macroComplete = !!macro && macro.warnings.length === 0 && from >= addDays(today, -MACRO_WINDOW.back) && to <= addDays(today, MACRO_WINDOW.ahead);
 
@@ -57,10 +61,13 @@ export function buildBrief(
   const ranked = evs
     .filter((e) => universe[e.s])
     .sort((a, b) => universe[b.s].mc - universe[a.s].mc || a.s.localeCompare(b.s))
-    .filter((e) => { const n = universe[e.s].n; return seen.has(n) ? false : (seen.add(n), true); });
+    // A company's dated row wins over a holiday projection of another share class (0067).
+    .sort((a, b) => Number(!!a.c) - Number(!!b.c))
+    .filter((e) => { const n = universe[e.s].n; return seen.has(n) ? false : (seen.add(n), true); })
+    .sort((a, b) => universe[b.s].mc - universe[a.s].mc || a.s.localeCompare(b.s));
   const top = ranked.slice(0, 5).map((e) => ({ s: e.s, name: universe[e.s].n, d: e.d, h: e.h, mc: universe[e.s].mc, ...(e.c ? { c: e.c } : {}) }));
 
-  const spNames = new Set(evs.filter((e) => universe[e.s]?.sp).map((e) => universe[e.s].n));
+  const spNames = new Set(dated.filter((e) => universe[e.s]?.sp).map((e) => universe[e.s].n));
   const big = largestSP(universe, 10);
   const reporting = big.filter((g) => g.some((s) => syms.has(s))).map((g) => g.find((s) => syms.has(s))!);
 
@@ -72,7 +79,8 @@ export function buildBrief(
   return {
     week,
     total: companies.size,
-    tracked: ranked.length,
+    tracked: ranked.filter((e) => !e.c).length,
+    unconfirmed: new Set(ranked.filter((e) => e.c).map((e) => universe[e.s].n)).size,
     missingDays,
     macroComplete,
     sp: spNames.size,

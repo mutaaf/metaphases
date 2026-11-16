@@ -14,7 +14,8 @@ const slimEvent = (e: EarningsEvent) => {
   const ej = epsOf(e);
   const epsNC = ej.v === "not-comparable";
   // The estimate it was judged against (Nasdaq's when Finnhub's is on another basis), never a figure that contradicts `res`.
-  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.h, ...(e.hs === "n" && e.h ? { hx: 1 } : {}), eE: ej.pending ? null : ej.via ? ej.est : e.eE, eA: ej.act ?? e.eA, epsNC: epsNC || undefined, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: c?.ec, res: resultOf(e) ?? undefined };
+  // 0067: a row projected onto a market holiday (`c`) carries no session and is marked unconfirmed (`cx`).
+  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.c ? "" : e.h, ...(e.c ? { cx: e.c } : e.hs === "n" && e.h ? { hx: 1 } : {}), eE: ej.pending ? null : ej.via ? ej.est : e.eE, eA: ej.act ?? e.eA, epsNC: epsNC || undefined, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: c?.ec, res: resultOf(e) ?? undefined };
 };
 
 export function slimMacro(m: MacroResponse | null | undefined, from: string, to: string) {
@@ -30,22 +31,24 @@ export function weekContext(events: EarningsEvent[], macro: MacroResponse | null
   // 0072: a projection that passed unreported (`od`) didn't happen, so the AI never sees it as a report.
   const inRange = events.filter((e) => e.t && !e.od && e.d >= from && e.d <= to);
   const top = [...inRange].sort((a, b) => (UNIVERSE[b.s]?.mc ?? 0) - (UNIVERSE[a.s]?.mc ?? 0)).slice(0, limit);
-  return { today, range: { from, to }, total: inRange.length, events: top.sort((a, b) => a.d.localeCompare(b.d)).map(slimEvent), macro: slimMacro(macro, from, to) };
+  // 0067: a holiday projection is passed (marked) but not counted as reporting in the window.
+  return { today, range: { from, to }, total: inRange.filter((e) => !e.c).length, events: top.sort((a, b) => a.d.localeCompare(b.d)).map(slimEvent), macro: slimMacro(macro, from, to) };
 }
 
 /** Which upcoming reports touch this portfolio — directly and through its funds. */
 export function exposureContext(events: EarningsEvent[], holdings: Holding[], today: string) {
-  const rows: { s: string; n?: string; d: string; h: string; dollars: number; via: string[] }[] = [];
+  const rows: { s: string; n?: string; d: string; h: string; cx?: string; dollars: number; via: string[] }[] = [];
   for (const e of events) {
     if (e.d < today) continue;
     const direct = holdings.find((h) => h.s === e.s);
     const via = heldVia(e.s, holdings);
     const dollars = (direct?.v ?? 0) + via.reduce((a, x) => a + x.dollars, 0);
-    if (dollars > 0) rows.push({ s: e.s, n: co(e.s)?.n, d: e.d, h: e.h, dollars: Math.round(dollars), via: [...(direct ? ["direct"] : []), ...via.map((x) => x.etf)] });
+    if (dollars > 0) rows.push({ s: e.s, n: co(e.s)?.n, d: e.d, h: e.c ? "" : e.h, ...(e.c ? { cx: e.c } : {}), dollars: Math.round(dollars), via: [...(direct ? ["direct"] : []), ...via.map((x) => x.etf)] });
   }
   rows.sort((a, b) => b.dollars - a.dollars);
   const weeks: Record<string, { dollars: number; names: string[] }> = {};
-  for (const r of rows) { const k = weekOf(r.d)[0]; (weeks[k] ??= { dollars: 0, names: [] }); weeks[k].dollars += r.dollars; weeks[k].names.push(r.s); }
+  // 0067 (as Compass): a holiday row's week isn't known, so it adds to no week's total.
+  for (const r of rows) { if (r.cx) continue; const k = weekOf(r.d)[0]; (weeks[k] ??= { dollars: 0, names: [] }); weeks[k].dollars += r.dollars; weeks[k].names.push(r.s); }
   return {
     total: holdings.reduce((a, h) => a + h.v, 0),
     holdings: holdings.slice(0, 40),
