@@ -12,7 +12,7 @@ import { currencyName, epsIn, isUsd, money } from "../lib/format";
 import { moodPlain, movePlain, whatTheyDo, whenPlain } from "../lib/plain";
 import { BASE, navigate, setParam } from "../lib/router";
 import { actions, useStore } from "../lib/store";
-import { PopularChips } from "./Watchlist";
+import { PopularChips } from "../components/PopularChips";
 import { pickStories, type Story } from "../lib/stories";
 
 /** Share a story card as a 9:16 image: native share sheet with the file when possible, else download. */
@@ -123,7 +123,7 @@ export default function TodayPage() {
             className={`story story-${s.kind}`}
             aria-live="polite"
             aria-label={`Story ${i + 1} of ${n}`}
-            onClick={(e) => { if ((e.target as HTMLElement).closest("button,a")) return; const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); go(e.clientX - r.left < r.width / 3 ? -1 : 1); }}
+            onClick={(e) => { if ((e.target as HTMLElement).closest("button,a,.chip-row")) return; const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); go(e.clientX - r.left < r.width / 3 ? -1 : 1); }}
             onTouchStart={(e) => { touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
             onTouchEnd={(e) => {
               const t0 = touch.current; touch.current = null; if (!t0) return;

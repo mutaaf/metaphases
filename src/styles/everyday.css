@@ -86,6 +86,8 @@
 .st-more { justify-self: start; font: 600 14px var(--display); color: var(--accent); min-height: 40px; }
 .st-macro { font-size: clamp(40px, 11vw, 64px) !important; }
 .st-cta { width: 100%; }
+.story .chip-row { margin: var(--s2) 0; }
+.story .chip-star { min-height: 44px; } /* touch targets on the Today card (0023) */
 .st-foot { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: var(--s3); }
 .st-share { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 var(--s3); border: 1px solid var(--ink); font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; background: var(--bg); }
 .st-nav { display: flex; justify-content: center; gap: var(--s2); }

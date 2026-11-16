@@ -6,18 +6,39 @@ export interface Holding { s: string; v: number } // symbol, dollar value
 export interface Prefs { theme: "auto" | "light" | "dark"; tiles: "logo" | "ticker"; view: "month" | "week" | "day"; filter: string; sector: string; brief: "auto" | "open" | "closed"; intro: "new" | "seen" | "dismissed"; lens: "unset" | "everyday" | "trader"; install: "new" | "dismissed" }
 
 const KEY = "metaphases:v1";
-interface State { watch: WatchItem[]; holdings: Holding[]; prefs: Prefs }
+interface State { watch: WatchItem[]; holdings: Holding[]; prefs: Prefs; /** 2 = saved after 0023; older saves may hold the seed */ wv?: number }
 /** The sample a visitor can load on purpose ("Try a sample watchlist"). Never the default: a new visitor
  *  hasn't starred anything, so nothing may say a company is "on your watchlist" until she does (0023). */
 export const SAMPLE_WATCH = ["AAPL", "NVDA", "DIS"] as const;
-export const DEFAULT: State = {
+export const DEFAULT: Readonly<State> = {
   watch: [],
   holdings: [],
+  wv: 2,
   prefs: { theme: "auto", tiles: "logo", view: "month", filter: "popular", sector: "", brief: "auto", intro: "new", lens: "unset", install: "new" },
 };
 
+/** Before 0023 every browser was seeded with AAPL, NVDA and DIS, all "added" 2026-10-31, and any pref write saved
+ *  that seed as if she had starred them. In a pre-0023 save (no `wv`), exactly that untouched seed (no buy price,
+ *  no note) is dropped on load; anything she changed or added herself is kept. Saves from now on carry `wv: 2`. */
+export function dropLegacySeed(watch: WatchItem[]): WatchItem[] {
+  const seed = watch.length === SAMPLE_WATCH.length && SAMPLE_WATCH.every((s, i) => {
+    const w = watch[i];
+    return w?.s === s && w.added === "2026-10-31" && w.buy == null && !w.note;
+  });
+  return seed ? [] : watch;
+}
+
+export function loadState(raw: string | null): State {
+  if (!raw) return DEFAULT;
+  const p = JSON.parse(raw);
+  const prefs = { ...DEFAULT.prefs, ...p.prefs };
+  if ((prefs.lens as string) === "kids") prefs.lens = "everyday";
+  const watch = !Array.isArray(p.watch) ? DEFAULT.watch : p.wv >= 2 ? p.watch : dropLegacySeed(p.watch);
+  return { ...DEFAULT, ...p, watch, prefs, wv: 2 };
+}
+
 let state: State = (() => {
-  try { const raw = localStorage.getItem(KEY); if (raw) { const p = JSON.parse(raw); const prefs = { ...DEFAULT.prefs, ...p.prefs }; if ((prefs.lens as string) === "kids") prefs.lens = "everyday"; return { ...DEFAULT, ...p, prefs }; } } catch {}
+  try { return loadState(localStorage.getItem(KEY)); } catch {}
   return DEFAULT;
 })();
 const subs = new Set<() => void>();

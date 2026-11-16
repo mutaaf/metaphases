@@ -1,12 +1,12 @@
 ---
 id: 0023
 title: Don't tell a first-time visitor that Apple is "on your watchlist"
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: clarity
 created: 2026-11-01
-pr:
+pr: 129
 by: critic
 ---
 
@@ -22,11 +22,11 @@ Still live: a fresh Playwright context (empty storage) opens AAPL's sheet with t
 - Existing visitors keep whatever is saved. Only the default changes.
 
 ## Acceptance criteria
-- [ ] e2e with an empty localStorage at 390×844: `/today` contains no text "on your watchlist" and shows an add-companies prompt
-- [ ] e2e: after adding AAPL, `/today` shows "On your watchlist · Apple Inc."
-- [ ] Unit: the store's default `watch` is `[]`; the sample is loaded only by an explicit action
-- [ ] Watchlist and Compass empty states give guidance, not a blank screen
-- [ ] Works at 390×844 touch and 1440×900
+- [x] e2e with an empty localStorage at 390×844: `/today` contains no text "on your watchlist" and shows an add-companies prompt
+- [x] e2e: after adding AAPL, `/today` shows "On your watchlist · Apple Inc."
+- [x] Unit: the store's default `watch` is `[]`; the sample is loaded only by an explicit action
+- [x] Watchlist and Compass empty states give guidance, not a blank screen
+- [x] Works at 390×844 touch and 1440×900
 
 ## Test plan
 `tests/unit` for store defaults. `tests/e2e/everyday.spec.ts` for both the empty and the added-watchlist Today flows (fixtures may need an explicit seed now).

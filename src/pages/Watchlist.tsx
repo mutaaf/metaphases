@@ -7,10 +7,10 @@ import { actions, useStore } from "../lib/store";
 import { GradeBadge, Icon, Phase, Skeleton, Term, Tile } from "../components/bits";
 import { PageHero } from "../components/Hero";
 import { IcsButtons } from "../components/Depth";
+import { PopularChips } from "../components/PopularChips";
 import { isDated } from "../../shared/pending";
 import { shownSession } from "../../shared/contestedTime";
 
-export const POPULAR = ["AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "NFLX"];
 
 function WatchRow({ s, buy, note }: { s: string; buy?: number; note?: string }) {
   const { data, loading } = useTicker(s);
@@ -30,24 +30,6 @@ function WatchRow({ s, buy, note }: { s: string; buy?: number; note?: string }) 
       <span className="wl-num"><span className="eyebrow">Buy below</span>{buy ? `$${buy.toFixed(2)}` : "—"}</span>
       <span className="wl-grades"><GradeBadge g={data?.setup.grade ?? null} size="sm" /><GradeBadge g={data?.compass.grade ?? null} size="sm" /></span>
     </button>
-  );
-}
-
-/** One-tap starter chips: star a popular company without searching. */
-export function PopularChips({ label = "Popular:" }: { label?: string }) {
-  const { watch } = useStore();
-  return (
-    <div className="chip-row" aria-label="Popular companies">
-      <span className="eyebrow">{label}</span>
-      {POPULAR.map((s) => {
-        const on = watch.some((w) => w.s === s);
-        return (
-          <button key={s} className={`chip chip-star ${on ? "on" : ""}`} aria-pressed={on} onClick={() => actions.toggleWatch(s)}>
-            <Icon name="star" size={11} /> {s}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
