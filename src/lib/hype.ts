@@ -106,7 +106,8 @@ export function redFlags(t: TickerResponse | null, opts: { tracked: boolean; tod
   if (de != null && de > 2) F.push({ key: "debt", tone: "amber", label: "Carries heavy debt", why: `It owes about ${de.toFixed(1)}× what shareholders own. Debt gets harder when sales slow or rates rise.` });
   const val = t.compass.factors.find((f) => f.key === "valuation")?.grade;
   if (val === "F" || val === "D") F.push({ key: "pricey", tone: "info", label: "Expensive compared with its profits", why: "Investors are paying up for future growth. If growth disappoints, the price can fall far." });
-  if (isDated(t.next) && opts.today) {
+  // 0078: a feed day Nasdaq contests isn't a report day, so no "Reports today" once it has come.
+  if (isDated(t.next) && opts.today && !(t.next.nasdaq && t.next.nasdaq.date !== t.next.date && t.next.date <= opts.today)) {
     const n = Math.round((Date.parse(t.next.date) - Date.parse(opts.today)) / 86400000);
     if (n >= 0 && n <= 7) F.push({ key: "soon", tone: "info", label: n === 0 ? "Reports today" : `Reports in ${n} day${n === 1 ? "" : "s"}`, why: "Buying right before a report means betting on how it lands." });
   }

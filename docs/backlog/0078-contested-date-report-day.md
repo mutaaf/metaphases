@@ -1,12 +1,12 @@
 ---
 id: 0078
 title: An unconfirmed date that reaches its day isn't a report (PDD "4 reporting · Figures pending" on Nov 16 while Nasdaq lists Thu Nov 19 and PDD hasn't announced)
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-16
-pr:
+pr: 132
 by: critic
 ---
 
@@ -27,11 +27,11 @@ But PDD has not announced a date, and Nasdaq's day calendar lists PDD on **Nov 1
 - Once Nasdaq's day passes too with no figures, the existing overdue rules apply.
 
 ## Acceptance criteria
-- [ ] Unit: a PDD-shaped row (`d` today, `h: bmo`, `x: differs`, `xd` +3 days, no `o`, clock 19:00Z) → not results-pending, not counted as reporting; the same row with `o` set → results-pending as today
-- [ ] e2e on fixtures at 390×844 and 1440×900: the day drawer lists the contested row under "Date not confirmed" with both dates, and the day's count excludes it
-- [ ] `ogTitle` for that sheet names both dates ("unconfirmed; Nasdaq lists …"), never "results expected"
-- [ ] The AI facts for that sheet don't say results were expected that day
-- [ ] Loading / empty / error / partial states handled
+- [x] Unit: a PDD-shaped row (`d` today, `h: bmo`, `x: differs`, `xd` +3 days, no `o`, clock 19:00Z) → not results-pending, not counted as reporting; the same row with `o` set → results-pending as today
+- [x] e2e on fixtures at 390×844 and 1440×900: the day drawer lists the contested row under "Date not confirmed" with both dates, and the day's count excludes it
+- [x] `ogTitle` for that sheet names both dates ("unconfirmed; Nasdaq lists …"), never "results expected"
+- [x] The AI facts for that sheet don't say results were expected that day
+- [x] Loading / empty / error / partial states handled
 
 ## Test plan
 Vitest on `shared/reported.ts` (outcome), `shared/pending.ts` (og title, `figuresPending`) with the contested row. Extend the closed/overdue day-drawer e2e spec with a contested report-day fixture row.

@@ -80,7 +80,7 @@ function tickerFacts(t: Obj): string[] {
       : `Just reported: Q${j.quarter} ${j.year} on ${clip(j.date, 10)}; EPS ${epsIn(j.epsA, cur3(j.currency))} against an estimate of ${epsIn(jv.est ?? j.epsE, cur3(j.currency))}.`);
   }
   if (t.next?.status === "results-pending") L.push(`Q${t.next.quarter} ${t.next.year} results were expected on ${clip(t.next.date, 10)} and are not in the data yet; do not describe this report as upcoming and do not guess the results.`);
-  else if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} ${t.next.closed || t.next.overdue ? "(date not confirmed yet)" : `on ${clip(t.next.date, 10)} ${nextTimeContested(t.next) ? "time unconfirmed (our feed and Nasdaq list different sessions that day; don't state either as fact)" : `${clip(t.next.session || "time TBD", 4)}${t.next.hs === "n" && t.next.session ? " (expected: the time is from Nasdaq's calendar, the company hasn't said; don't state it as fact)" : ""}`}`}; consensus EPS ${t.next.epsBasis ? "not quoted (this REIT's recent results were on a different measure from the feed's estimate, usually FFO vs net income; don't state an EPS estimate)" : epsIn(t.next.epsE, cur3(t.next.currency))}, revenue estimate ${moneyIn(t.next.revE, cur3(t.next.currency))}${isUsd(cur3(t.next.currency)) ? "" : ` (estimates in ${cur3(t.next.currency) || "local currency"}, not USD; never compare them with USD figures)`}.`);
+  else if (t.next) L.push(`Next report: Q${t.next.quarter} ${t.next.year} ${t.next.closed || t.next.overdue ? "(date not confirmed yet)" : `on ${clip(t.next.date, 10)} ${t.next.nasdaq && t.next.nasdaq.date !== t.next.date ? `date unconfirmed (our feed says ${clip(t.next.date, 10)}, Nasdaq's calendar lists ${clip(t.next.nasdaq.date, 10)}, and the company hasn't announced one; don't state either date as fact, don't say results were expected on either day, and don't guess the results)` : nextTimeContested(t.next) ? "time unconfirmed (our feed and Nasdaq list different sessions that day; don't state either as fact)" : `${clip(t.next.session || "time TBD", 4)}${t.next.hs === "n" && t.next.session ? " (expected: the time is from Nasdaq's calendar, the company hasn't said; don't state it as fact)" : ""}`}`}; consensus EPS ${t.next.epsBasis ? "not quoted (this REIT's recent results were on a different measure from the feed's estimate, usually FFO vs net income; don't state an EPS estimate)" : epsIn(t.next.epsE, cur3(t.next.currency))}, revenue estimate ${moneyIn(t.next.revE, cur3(t.next.currency))}${isUsd(cur3(t.next.currency)) ? "" : ` (estimates in ${cur3(t.next.currency) || "local currency"}, not USD; never compare them with USD figures)`}.`);
   else L.push("Next report date: not available.");
   // 0060: the two calendars disagree on the session; say how the moves were measured (enum-checked, never free text).
   const ms = t.moveSession as Obj | undefined, S: Record<string, string> = { bmo: "before the open", amc: "after the close" };
@@ -102,7 +102,9 @@ function tickerFacts(t: Obj): string[] {
 }
 
 // 0067: a row the feed projects onto a market holiday (`cx` names it) has no confirmed date or session.
-const unconfirmedNote = (e: Obj) => e.cx ? ` (date not confirmed: our data feed projects ${clip(e.cx, 30)}, when markets are closed; don't state this date or a session)` : "";
+const unconfirmedNote = (e: Obj) => e.cx ? ` (date not confirmed: our data feed projects ${clip(e.cx, 30)}, when markets are closed; don't state this date or a session)`
+  // 0078: Nasdaq's calendar lists another day and the company hasn't said: neither date is a fact, nor "results expected".
+  : e.xd ? ` (date unconfirmed: Nasdaq's calendar lists ${clip(e.xd, 10)}; the company hasn't announced it, so don't state either date as fact or say results were expected)` : "";
 
 function eventLine(e: Obj): string {
   const c = cur3(e.cur);

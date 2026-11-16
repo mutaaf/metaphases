@@ -718,6 +718,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   let pending: { quarter: number; year: number; passed: string; hour: Session; eE: number | null; rE: number | null } | null = null;
   let skipRow: EarningsEvent | null = null;
   let companyDated = false;
+  let skipContested: { date: string; session: Session } | null = null;
   if (skip) {
     const row = skipRow = await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
     // Only call it pending when the calendar shows the quarter's day passed at least two trading days ago with no
@@ -727,7 +728,14 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // whatever the cached Finnhub projection (Nov 2) says: the feeds are only behind.
     const ov = activeOverrides(OVERRIDES, today)[symbol];
     companyDated = !!ov && ov.quarter === skip.quarter && ov.year === skip.year;
-    if (!companyDated && row && row.eA == null && row.rA == null && tradingDaysSince(row.d, today) >= 2) {
+    // 0078: Nasdaq still lists this quarter on a later day (and the company hasn't dated it): the passed feed day
+    // is contested, not missed and not "results expected". Same check as the calendar's row (crossOne's past path).
+    if (!companyDated && row && row.eA == null && row.rA == null && !row.od) {
+      const w = nqWin ?? (await nasdaqWindow(today, ctx, false).catch(() => null));
+      const c = w ? crossOne(symbol, row.d, (row.h ?? "") as Session, w) : null;
+      if (c?.x === "differs" && c.xd && c.xd !== row.d) skipContested = { date: c.xd, session: c.xh ?? "" };
+    }
+    if (!companyDated && !skipContested && row && row.eA == null && row.rA == null && tradingDaysSince(row.d, today) >= 2) {
       pending = { ...skip, passed: row.d, hour: (row.h ?? "") as Session, eE: row.eE ?? null, rE: row.rE ?? null };
     }
   }
@@ -744,7 +752,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const nyNow = todayNY();
   const nowMin = nyNow.getHours() * 60 + nyNow.getMinutes();
   let outcome: Outcome = null;
-  if (nextE && nextE.date === today) {
+  // 0078: Nasdaq lists the report on another day and the company hasn't dated it: the feed's day coming isn't a
+  // report day, so it stays an unconfirmed date (with Nasdaq's day named below), never "results expected".
+  const todayContested = !!nextE && nextE.date === today && !nextE.source && !!nqWin && nextE.epsActual == null && nextE.revenueActual == null
+    && (() => { const c = crossOne(symbol, today, (nextE.hour || "") as Session, nqWin); return c?.x === "differs" && !!c.xd && c.xd !== today; })();
+  if (nextE && nextE.date === today && !todayContested) {
     const row = await passedRow(symbol, nextE, [today]);
     const snapRaw = (await readSnap(today))[symbol]?.eE;
     const snapE = sameEpsUnit(symbol, snapRaw, nextE.epsEstimate ?? row?.eE) ? snapRaw : undefined;
@@ -756,7 +768,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       ...(row && row.nA !== undefined ? { nA: row.nA } : {}),
     };
     outcome = reportOutcome(day, today, nowMin);
-  } else if (skip && skipRow && !pending && !companyDated) {
+  } else if (skip && skipRow && !pending && !companyDated && !skipContested) {
     outcome = reportOutcome({ date: skipRow.d, hour: skipRow.h ?? "", quarter: skip.quarter, year: skip.year, eE: skipRow.eE ?? null, eA: skipRow.eA ?? null, rE: skipRow.rE ?? null, rA: skipRow.rA ?? null, ...(skipRow.nE != null ? { nE: skipRow.nE } : {}), ...(skipRow.nA !== undefined ? { nA: skipRow.nA } : {}) }, today, nowMin);
   }
   const reported = outcome?.kind === "reported" ? outcome.row : null;
@@ -764,7 +776,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // What the sheet calls "next": after a same-day report, the following quarter (if the feed lists one).
   const upNext = reported && nextE && reported.date === nextE.date
     ? cal.filter((e) => e.date > today && !(e.quarter === nextE.quarter && e.year === nextE.year)).sort((a, b) => a.date.localeCompare(b.date))[0]
-    : duePending ? undefined : nextE;
+    : duePending ? undefined
+    // 0078: the skipped quarter's contested feed day stays the "next" report, with Nasdaq's day named.
+    : skipContested && skipRow ? { date: skipRow.d, hour: skipRow.h ?? "", quarter: skip!.quarter, year: skip!.year, epsEstimate: skipRow.eE ?? null, revenueEstimate: skipRow.rE ?? null }
+    : nextE;
 
   // 0057: a dated row's own session, else the habit. A company-dated row (override) without a session is unknown:
   // never filled from a feed's guess.
@@ -850,7 +865,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const out = reported || duePending;
   const projected = !!upNext && !pending && !duePending && !closed && isProjected({ date: upNext.date, session: upNext.hour || "", source: upNext.source }, today);
   // 0015: name Nasdaq's day when it lists the next report elsewhere (the date itself stays the feed's).
-  let nqNext: { date: string; session: Session } | undefined;
+  let nqNext: { date: string; session: Session } | undefined = skipContested ?? undefined;
   if (nqWin && upNext && upNext === nextE && !duePending && !pending && !reported && !upNext.source && !closed) {
     const c = crossOne(symbol, upNext.date, (upNext.hour || "") as Session, nqWin);
     if (c?.x === "differs" && c.xd) nqNext = { date: c.xd, session: c.xh ?? "" };
@@ -866,6 +881,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   } else if (upNext && projected && !nqNext) {
     // 0007: the feed's projection, not the company's date: "expected around", and no session stated as fact.
     read.push(`${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} is expected around ${longDay(upNext.date)}, but the company hasn't confirmed the date yet.`);
+  } else if (upNext && nqNext && nqNext.date !== upNext.date && upNext.date <= today) {
+    // 0078: the feed's day has come, Nasdaq lists another, the company hasn't said: no "reports today", no "expected".
+    read.push(`${name}'s Q${upNext.quarter} report date isn't confirmed: our data feed put it on ${longDay(upNext.date)}, but Nasdaq's calendar lists ${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}, and no results are in our data yet.`);
   } else if (upNext) {
     const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; the company hasn't said)" : ""}` : nqNext ? "" : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
