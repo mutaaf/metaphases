@@ -1,7 +1,7 @@
 ---
 id: 0023
 title: Don't tell a first-time visitor that Apple is "on your watchlist"
-status: ready
+status: in-progress
 priority: P1
 size: S
 lens: clarity

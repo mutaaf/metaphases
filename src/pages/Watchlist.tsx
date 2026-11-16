@@ -70,6 +70,7 @@ export default function WatchlistPage({ onSearch }: { onSearch: () => void }) {
           <p className="muted">Star a company and Metaphases tracks its next report, its setup and how far it is from your buy price.</p>
           <button className="cta cta-primary" onClick={onSearch}><Icon name="star" size={14} /> Star your first company</button>
           <PopularChips label="Or one tap:" />
+          <button className="cta cta-ghost" onClick={() => actions.loadSampleWatch()}>Try a sample watchlist</button>
         </section>
       ) : (
         <>

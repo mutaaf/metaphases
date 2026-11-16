@@ -7,8 +7,11 @@ export interface Prefs { theme: "auto" | "light" | "dark"; tiles: "logo" | "tick
 
 const KEY = "metaphases:v1";
 interface State { watch: WatchItem[]; holdings: Holding[]; prefs: Prefs }
-const DEFAULT: State = {
-  watch: [{ s: "AAPL", added: "2026-10-31" }, { s: "NVDA", added: "2026-10-31" }, { s: "DIS", added: "2026-10-31" }],
+/** The sample a visitor can load on purpose ("Try a sample watchlist"). Never the default: a new visitor
+ *  hasn't starred anything, so nothing may say a company is "on your watchlist" until she does (0023). */
+export const SAMPLE_WATCH = ["AAPL", "NVDA", "DIS"] as const;
+export const DEFAULT: State = {
+  watch: [],
   holdings: [],
   prefs: { theme: "auto", tiles: "logo", view: "month", filter: "popular", sector: "", brief: "auto", intro: "new", lens: "unset", install: "new" },
 };
@@ -24,12 +27,19 @@ function set(next: Partial<State>) {
   subs.forEach((f) => f());
 }
 const subscribe = (f: () => void) => { subs.add(f); return () => subs.delete(f); };
-export const useStore = () => useSyncExternalStore(subscribe, () => state);
+export const getState = () => state;
+export const useStore = () => useSyncExternalStore(subscribe, getState);
 
 export const actions = {
   toggleWatch(s: string) {
     const has = state.watch.some((w) => w.s === s);
     set({ watch: has ? state.watch.filter((w) => w.s !== s) : [...state.watch, { s, added: new Date().toISOString().slice(0, 10) }] });
+  },
+  /** Star the sample companies (keeping any she already starred). Only ever called from an explicit tap. */
+  loadSampleWatch() {
+    const added = new Date().toISOString().slice(0, 10);
+    const have = new Set(state.watch.map((w) => w.s));
+    set({ watch: [...state.watch, ...SAMPLE_WATCH.filter((s) => !have.has(s)).map((s) => ({ s, added }))] });
   },
   updateWatch(s: string, patch: Partial<WatchItem>) { set({ watch: state.watch.map((w) => (w.s === s ? { ...w, ...patch } : w)) }); },
   setHoldings(holdings: Holding[]) { set({ holdings }); },

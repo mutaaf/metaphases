@@ -3,6 +3,8 @@
 //
 // `lens` presets the viewer's lens before the app boots: "trader" (default — the full desk the older
 // specs were written against), "everyday", or "unset" (a true first visit, shows the lens picker).
+// `seedWatch` stars these before boot for a returning viewer (the older specs assume AAPL, NVDA, DIS); a new
+// visitor's real default is an empty watchlist (0023), so "unset" seeds nothing and `seedWatch: []` opts out.
 import { test as base, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 const fx = (n: string) => readFileSync(new URL(`../fixtures/${n}`, import.meta.url), "utf8");
@@ -10,9 +12,10 @@ const fx = (n: string) => readFileSync(new URL(`../fixtures/${n}`, import.meta.u
 // 1×1 transparent PNG, stands in for the worker-rendered story cards.
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
 
-export const test = base.extend<{ lens: "trader" | "everyday" | "kids" | "unset" }>({
+export const test = base.extend<{ lens: "trader" | "everyday" | "kids" | "unset"; seedWatch: string[] }>({
   lens: ["trader", { option: true }],
-  page: async ({ page, lens }, use) => {
+  seedWatch: [["AAPL", "NVDA", "DIS"], { option: true }],
+  page: async ({ page, lens, seedWatch }, use) => {
     await page.clock.setFixedTime(new Date("2026-10-31T15:00:00-04:00"));
     if (lens !== "unset") {
       await page.addInitScript((l) => {
@@ -22,6 +25,13 @@ export const test = base.extend<{ lens: "trader" | "everyday" | "kids" | "unset"
           if (!cur.prefs?.lens) localStorage.setItem(k, JSON.stringify({ ...cur, prefs: { ...(cur.prefs || {}), lens: l } }));
         } catch {}
       }, lens);
+      if (seedWatch.length) await page.addInitScript((syms) => {
+        try {
+          const k = "metaphases:v1";
+          const cur = JSON.parse(localStorage.getItem(k) || "{}");
+          if (!Array.isArray(cur.watch)) localStorage.setItem(k, JSON.stringify({ ...cur, watch: syms.map((s) => ({ s, added: "2026-10-31" })) }));
+        } catch {}
+      }, seedWatch);
     }
     await page.route("**/api/macro", (r) => r.fulfill({ contentType: "application/json", body: fx("macro.json") }));
     await page.route("**/api/calendar**", (r) => {
