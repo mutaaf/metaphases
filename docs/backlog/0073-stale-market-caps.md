@@ -30,3 +30,6 @@ Unit test on the scaling helper in `shared/marketCap.ts`; worker test that `buil
 
 ## Out of scope
 Changing `.github/workflows/data-refresh.yml` (frozen). Intraday caps.
+
+## Critic evidence 2026-11-16 19:00 UTC
+Worse with this week's fall: the NVDA sheet reads "$4.93T" beside "$156.40 −3.96%" (`shots/p_nvda.png`), and Biggest Reporters at 1440×900 still ranks the week by these caps ("NVDA … $4.93T", `shots/d_fab.png`). At $156.40 the cap is about $3.8T, so the header overstates it by ~$1.1T (~29%) the day before NVIDIA reports. Bar unchanged: the header cap within 5% of price × shares on the day shown.
