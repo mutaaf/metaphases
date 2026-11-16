@@ -37,7 +37,9 @@ export function WeekBrief({ week, current, cal, calLoading, calError, macro, mac
   );
   const partial = b.missingDays.length > 0;
   const allMissing = partial && b.total === 0;
-  const quiet = ready && !partial && b.total === 0;
+  // 0067: holiday projections aren't counted, so a week holding only those isn't "quiet": it has unconfirmed dates.
+  const quiet = ready && !partial && b.total === 0 && b.unconfirmed === 0;
+  const unconf = b.unconfirmed > 0 ? <span className="muted" data-testid="brief-unconfirmed-count"> · {b.unconfirmed} date{b.unconfirmed === 1 ? "" : "s"} not confirmed</span> : null;
   const atLeast = partial ? "at least " : "";
   const nBig = b.largest.reporting.length;
   const bigLine = `${nBig > 0 ? nBig : "none"} of the ${b.largest.of} largest`;
@@ -52,7 +54,8 @@ export function WeekBrief({ week, current, cal, calLoading, calError, macro, mac
             : !ready ? <Skeleton w={180} h={14} />
             : allMissing ? "Earnings for this week didn't load"
             : quiet ? "A quiet week"
-            : <>{atLeast}<b>{b.tracked}</b> popular {b.tracked === 1 ? "company reports" : "companies report"} ({b.total} in all) · {bigLine} S&amp;P 500 companies</>}
+            : b.total === 0 ? <>No confirmed reports{unconf}</>
+            : <>{atLeast}<b>{b.tracked}</b> popular {b.tracked === 1 ? "company reports" : "companies report"} ({b.total} in all) · {bigLine} S&amp;P 500 companies{unconf}</>}
         </span>
         <span className={`chev ${open ? "up" : ""}`}><Icon name="down" size={12} /></span>
       </button>

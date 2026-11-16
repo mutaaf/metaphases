@@ -108,8 +108,11 @@ function DayCell({ day, events, inMonth, today, next, macro, onOpen, unknown }: 
   const reported = events.filter((e) => e.eA != null).length;
   // 0064: a row projected onto a holiday isn't reporting that day, so it isn't counted.
   const dated = splitClosed(events).dated.length;
+  // 0067: a holiday cell holding the feed's projections says so, to the eye and to a screen reader.
+  const unconfirmedN = holiday ? events.length - dated : 0;
+  const aria = unconfirmedN > 0 ? `${fmtLong(day)}: market closed for ${holiday}. ${unconfirmedN} report date${unconfirmedN === 1 ? "" : "s"} not confirmed inside` : undefined;
   return (
-    <div className={`cell ${inMonth ? "" : "out"} ${isNext ? "next" : ""} ${past ? "past" : ""} ${holiday ? "holiday" : ""}`} onClick={events.length ? onOpen : undefined} role={events.length ? "button" : undefined} tabIndex={events.length ? 0 : -1} onKeyDown={(e) => e.key === "Enter" && events.length && onOpen()}>
+    <div className={`cell ${inMonth ? "" : "out"} ${isNext ? "next" : ""} ${past ? "past" : ""} ${holiday ? "holiday" : ""}`} aria-label={aria} onClick={events.length ? onOpen : undefined} role={events.length ? "button" : undefined} tabIndex={events.length ? 0 : -1} onKeyDown={(e) => e.key === "Enter" && events.length && onOpen()}>
       <div className="cell-head">
         {isNext ? (
           <span className="next-badge"><i />{MON3[d.getMonth()]} {String(d.getDate()).padStart(2, "0")} · {day === today ? "Today" : "Next trading day"}</span>
@@ -122,7 +125,10 @@ function DayCell({ day, events, inMonth, today, next, macro, onOpen, unknown }: 
         <div className="cell-macro">{macro.map((m) => <span key={m.key} className={`mtag kind-${m.kind}`} title={m.blurb}>{m.name}</span>)}</div>
       )}
       {holiday ? (
-        <span className="empty-tag">Market closed · {holiday}</span>
+        <>
+          <span className="empty-tag">Market closed · {holiday}</span>
+          {unconfirmedN > 0 && <span className="cell-unconfirmed" data-testid="cell-unconfirmed" aria-hidden="true"><Phase h="" size={10} projected /> {unconfirmedN} unconfirmed</span>}
+        </>
       ) : events.length === 0 ? (
         !inMonth ? null
           : unknown === "failed" ? <span className="empty-tag unknown-tag">Didn't load</span>

@@ -1,12 +1,12 @@
 ---
 id: 0067
 title: The AI, the week brief's counts and the month totals still treat a Thanksgiving row as a dated report
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-13
-pr:
+pr: 127
 by: builder
 ---
 
@@ -23,12 +23,12 @@ by: builder
 - The holiday cell gets an "N unconfirmed" hint and an aria-label when it holds `c` rows.
 
 ## Acceptance criteria
-- [ ] Unit: the AI context for a week with a `c` row marks it unconfirmed and states no session
-- [ ] Unit: `buildBrief` doesn't count a `c` row as reporting this week (or the copy says "about")
-- [ ] e2e: the Thanksgiving cell exposes an accessible hint that unconfirmed rows are inside
-- [ ] Works at 390×844 and 1440×900; loading / empty / error / partial states unchanged
+- [x] Unit: the AI context for a week with a `c` row marks it unconfirmed and states no session
+- [x] Unit: `buildBrief` doesn't count a `c` row as reporting this week (or the copy says "about")
+- [x] e2e: the Thanksgiving cell exposes an accessible hint that unconfirmed rows are inside
+- [x] Works at 390×844 and 1440×900; loading / empty / error / partial states unchanged
 
-- [ ] The `?day=<holiday>` unfurl doesn't count the row as a report: today `og:title` for `/?day=2026-11-26` is "1 earnings on Thursday, November 26" and `og:description` lists "VEEV — sorted by session" (critic 2026-11-13 19:00, build `132f08ed`); it should say the market is closed and the date is unconfirmed
+- [x] The `?day=<holiday>` unfurl doesn't count the row as a report: today `og:title` for `/?day=2026-11-26` is "1 earnings on Thursday, November 26" and `og:description` lists "VEEV — sorted by session" (critic 2026-11-13 19:00, build `132f08ed`); it should say the market is closed and the date is unconfirmed
 
 ## Test plan
 Vitest on `aiContext` and `buildBrief` with a `c` row. e2e on the closedday fixture, extended.

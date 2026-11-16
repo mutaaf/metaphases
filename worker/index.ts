@@ -26,6 +26,7 @@ import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayA
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
+import { dayShareText } from "../shared/dayShare";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
 import { shownSession } from "../shared/contestedTime";
@@ -1032,10 +1033,12 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
       const base = flagClosed(applyToEvents(withSupp, OVERRIDES, day, day, today, (s) => s in U));
       const past = await settlePast(base, today, ctx, false).catch(() => base);
       const settled = await oneRowInRange(past, day, day, today, ctx).catch(() => oneReportOneRow(past));
-      const evs = settled.filter((e) => e.t && !e.c && !e.od).sort((a, b) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0));
-      const top = evs.slice(0, 4).map((e) => e.s).join(", ");
-      return { title: `${evs.length} earnings on ${label} · Metaphases`, desc: evs.length ? `${top}${evs.length > 4 ? ` and ${evs.length - 4} more` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.` };
-    } catch { return { title: `Earnings on ${label} · Metaphases`, desc: PAGES["/"].desc }; }
+      const byCap = (a: EarningsEvent, b: EarningsEvent) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0);
+      const evs = settled.filter((e) => e.t && !e.c && !e.od).sort(byCap);
+      // 0067: on a holiday the title says the market is closed and the feed's rows there are named as unconfirmed.
+      const unconfirmed = settled.filter((e) => e.t && e.c).sort(byCap).map((e) => e.s);
+      return dayShareText(label, closedDay(day), evs.map((e) => e.s), unconfirmed);
+    } catch { const h = closedDay(day); return h ? dayShareText(label, h, [], []) : { title: `Earnings on ${label} · Metaphases`, desc: PAGES["/"].desc }; }
   }
   if (path.startsWith("/kids/")) {
     const pre = ["/kids/school/", "/kids/league/", "/kids/pack/"].find((x) => path.startsWith(x));
