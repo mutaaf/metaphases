@@ -11,7 +11,8 @@ import { addDays, nowMinNY, todayISO } from "../lib/dates";
 import { currencyName, epsIn, isUsd, money } from "../lib/format";
 import { moodPlain, movePlain, whatTheyDo, whenPlain } from "../lib/plain";
 import { BASE, navigate, setParam } from "../lib/router";
-import { useStore } from "../lib/store";
+import { actions, useStore } from "../lib/store";
+import { PopularChips } from "./Watchlist";
 import { pickStories, type Story } from "../lib/stories";
 
 /** Share a story card as a 9:16 image: native share sheet with the file when possible, else download. */
@@ -140,6 +141,16 @@ export default function TodayPage() {
               </>
             ); })()}
             {s.kind === "report" && <ReportCard s={s} today={today} />}
+            {s.kind === "start" && (
+              <>
+                <span className="st-why">Make it yours</span>
+                <h2>Add the companies <em>you own</em>.</h2>
+                <p className="st-line">Star a company, or paste what you hold, and Today leads with your reports and how much of your money rides on each.</p>
+                <button className="cta cta-primary st-cta" onClick={() => navigate("/compass")}>Add what I own</button>
+                <PopularChips label="Or star one:" />
+                <button className="cta cta-ghost st-cta" onClick={() => actions.loadSampleWatch()}>Try a sample watchlist</button>
+              </>
+            )}
             {s.kind === "macro" && (
               <>
                 <span className="st-why">The big event this week</span>

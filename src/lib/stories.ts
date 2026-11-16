@@ -8,6 +8,7 @@ export type Story =
   | { kind: "mood"; score: number; label: string }
   | { kind: "report"; e: EarningsEvent; why: "watch" | "owned" | "fund" | "big"; via?: string }
   | { kind: "macro"; m: MacroEvent }
+  | { kind: "start" } // nothing of hers yet: invite her to add the companies she owns (0023)
   | { kind: "cta" };
 
 const MACRO_RANK: Record<string, number> = { fomc: 5, cpi: 4, jobs: 3, pce: 2, gdp: 2, retail: 1, ppi: 1, jolts: 0 };
@@ -28,6 +29,8 @@ export function pickStories(o: {
   const max = o.max ?? 3;
   const out: Story[] = [];
   if (o.macro?.mood) out.push({ kind: "mood", score: o.macro.mood.score, label: o.macro.mood.label });
+  // A first visit has no names of hers: never pretend she follows one. Her card asks her to add them instead.
+  if (!o.watch.length && !o.holdings.length) out.push({ kind: "start" });
 
   const upcoming = o.events.filter((e) => e.d >= o.today && e.d <= o.horizon && !(o.nowMin != null && figuresPending(e, o.today, o.nowMin)));
   const watch = new Set(o.watch.map((w) => w.s));

@@ -181,3 +181,43 @@ test.describe("everyday", () => {
     await expect(page.locator(".tbtn[title*='(NVO)']").first()).toHaveAttribute("title", /DKK 4\.85/);
   });
 });
+
+// 0023: a first-time visitor has starred nothing, so nothing may say a company is "on your watchlist".
+test.describe("new visitor, nothing starred (0023)", () => {
+  test.use({ lens: "everyday", seedWatch: [] });
+  for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+    test(`Today asks her to add her companies, then leads with the one she stars (${vp.width}px)`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto("./today");
+      const story = page.locator(".story");
+      await expect(story).toHaveClass(/story-mood/);
+      // Walk every card: none claims a watchlist she never made.
+      const tabs = page.getByRole("tab");
+      const n = await tabs.count();
+      for (let k = 0; k < n; k++) {
+        await tabs.nth(k).click();
+        await expect(story).toHaveAttribute("aria-label", `Story ${k + 1} of ${n}`);
+        await expect(story).not.toContainText(/on your watchlist/i);
+      }
+      await tabs.nth(1).click();
+      await expect(story).toHaveClass(/story-start/);
+      await expect(story.getByRole("heading", { level: 2 })).toHaveText("Add the companies you own.");
+      await expect(story.getByRole("button", { name: "Add what I own" })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await story.getByRole("button", { name: "AAPL", pressed: false }).click();
+      await expect(story).toHaveClass(/story-report/);
+      await expect(story.locator(".st-why")).toHaveText("On your watchlist");
+      await expect(story.locator(".st-co .eyebrow")).toHaveText("AAPL");
+    });
+  }
+
+  test("an empty watchlist offers the sample only as an explicit tap", async ({ page }) => {
+    await page.goto("./watchlist");
+    await expect(page.getByRole("heading", { name: "Nothing in orbit yet." })).toBeVisible();
+    await expect(page.locator(".wl-row")).toHaveCount(0);
+    await page.getByRole("button", { name: "Try a sample watchlist" }).click();
+    await expect(page.locator(".wl-row")).toHaveCount(3);
+    await page.goto("./?t=AAPL");
+    await expect(page.locator(".sheet-cta").getByRole("button", { name: /on your watchlist/i })).toBeVisible();
+  });
+});
