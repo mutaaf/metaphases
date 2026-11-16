@@ -451,6 +451,9 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       {data && !data.warnings.length && (data.pending ?? 0) > 0 && (
         <Notice>Some overseas companies' report dates are still being checked, so a few may be missing for now.</Notice>
       )}
+      {prefs.filter === "watch" && store.watch.length === 0 && (
+        <Notice>You haven't starred any companies yet. <button className="link" onClick={onSearch}>Find one</button> or <button className="link" onClick={() => actions.loadSampleWatch()}>try a sample watchlist</button>.</Notice>
+      )}
       {prefs.filter === "holdings" && store.holdings.length === 0 && (
         <Notice>You haven't added holdings yet. <button className="link" onClick={() => navigate("/compass")}>Open Compass</button> to paste them in — funds count too.</Notice>
       )}

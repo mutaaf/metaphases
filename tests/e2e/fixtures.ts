@@ -29,7 +29,7 @@ export const test = base.extend<{ lens: "trader" | "everyday" | "kids" | "unset"
         try {
           const k = "metaphases:v1";
           const cur = JSON.parse(localStorage.getItem(k) || "{}");
-          if (!Array.isArray(cur.watch)) localStorage.setItem(k, JSON.stringify({ ...cur, watch: syms.map((s) => ({ s, added: "2026-10-31" })) }));
+          if (!Array.isArray(cur.watch)) localStorage.setItem(k, JSON.stringify({ ...cur, watch: syms.map((s) => ({ s, added: "2026-10-30" })) })); // not 10-31: that exact seed is the pre-0023 default, dropped on load
         } catch {}
       }, seedWatch);
     }

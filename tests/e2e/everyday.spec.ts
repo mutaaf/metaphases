@@ -221,3 +221,19 @@ test.describe("new visitor, nothing starred (0023)", () => {
     await expect(page.locator(".sheet-cta").getByRole("button", { name: /on your watchlist/i })).toBeVisible();
   });
 });
+
+test.describe("returning trader, nothing starred (0023)", () => {
+  test.use({ seedWatch: [] });
+  test("the calendar and sheet claim nothing; the empty watch filter says what to do (390px)", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("./");
+    await expect(page.locator(".grid")).toBeVisible();
+    await expect(page.locator(".tbtn-star")).toHaveCount(0);
+    await page.goto("./?t=AAPL");
+    await expect(page.locator(".sheet-cta").getByRole("button", { name: /add to watchlist/i })).toBeVisible();
+    await expect(page.locator(".sheet")).not.toContainText(/is on your watchlist/i);
+    await page.evaluate(() => { const k = "metaphases:v1"; const c = JSON.parse(localStorage.getItem(k) || "{}"); localStorage.setItem(k, JSON.stringify({ ...c, prefs: { ...c.prefs, filter: "watch" } })); });
+    await page.goto("./");
+    await expect(page.locator(".notice", { hasText: "haven't starred any companies" })).toBeVisible();
+  });
+});
