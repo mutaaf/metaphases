@@ -20,6 +20,8 @@ export interface EarningsEvent {
   od?: true;
   /** 0041: the company's report history (Nasdaq) dates its report on exactly this row's day, so of two twin rows this is the one that happened. */
   nd?: 1;
+  /** 0076: the feed's day, when the company's report history moved this past row to the day it actually reported (`d`). */
+  fd?: string;
   /** After the print, where eE/rE came from (0035): "s" = our pre-report snapshot of Finnhub's estimates, "n" = Nasdaq's pre-report EPS consensus. Absent = Finnhub's current figure, which may have been revised toward the actual. */
   pr?: "s" | "n";
   /** 0049: Nasdaq's pre-report EPS consensus when `eE` is on another basis from `eA` (REIT FFO vs GAAP EPS) and Nasdaq's is on the actual's. Judge with `epsVerdict`. */

@@ -12,15 +12,15 @@ import worker from "../../worker/index";
 // last report was Sep 2, so it's flagged and not counted as reporting.
 
 const ev = (s: string, d: string, extra: Partial<EarningsEvent> = {}): EarningsEvent => ({ s, d, h: "amc", q: 1, y: 2027, eE: 0.96, eA: null, rE: 5.9e9, rA: null, t: 1, ...extra });
-const surprise = (rows: [string, number | string, number | string][]) => ({
-  data: { earningsSurpriseTable: { rows: rows.map(([dateReported, eps, consensusForecast]) => ({ fiscalQtrEnd: "Sep 2026", dateReported, eps, consensusForecast, percentageSurprise: 0 })) } },
+const surprise = (rows: ([string, number | string, number | string] | [string, number | string, number | string, string])[]) => ({
+  data: { earningsSurpriseTable: { rows: rows.map(([dateReported, eps, consensusForecast, fiscalQtrEnd = "Sep 2026"]) => ({ fiscalQtrEnd, dateReported, eps, consensusForecast, percentageSurprise: 0 })) } },
 });
 const TODAY = "2026-11-14";
 
 describe("0072 settlePastRow", () => {
   it("parses Nasdaq's table, newest first, skipping rows with no date", () => {
     const r = nqReports(surprise([["8/14/2026", 0.71, 0.7], ["11/4/2026", "0.95", "$0.96"], ["n/a", 1, 1]]));
-    expect(r).toEqual([{ date: "2026-11-04", eps: 0.95, est: 0.96 }, { date: "2026-08-14", eps: 0.71, est: 0.7 }]);
+    expect(r).toEqual([{ date: "2026-11-04", eps: 0.95, est: 0.96, pe: "2026-09-30" }, { date: "2026-08-14", eps: 0.71, est: 0.7, pe: "2026-09-30" }]);
   });
 
   it("checks only past rows two or more trading days old with no figures, no holiday flag", () => {
@@ -63,7 +63,8 @@ describe("0072 settlePastRow", () => {
     const row = ev("Z", "2026-11-04");
     expect(settlePastRow(row, null, true, TODAY)).toBe(row); // history unreadable
     expect(settlePastRow(row, [], true, TODAY)).toBe(row); // no history
-    expect(settlePastRow(row, nqReports(surprise([["11/10/2026", 1, 1]])), true, TODAY)).toBe(row); // reported on another day since
+    // Reported on another day since, for the quarter before (0076: a same-quarter report would move the row).
+    expect(settlePastRow(row, nqReports(surprise([["11/10/2026", 1, 1, "Jun 2026"]])), true, TODAY)).toBe(row);
     expect(settlePastRow(row, nqReports(surprise([["10/1/2026", 1, 1]])), true, TODAY)).toBe(row); // a report weeks before: dated elsewhere
     expect(settlePastRow({ ...row, o: "https://example.com" }, nqReports(surprise([["6/1/2026", 1, 1]])), true, TODAY).od).toBeUndefined(); // company-dated
     // A matching report in another currency's unit isn't filled into a non-dollar row.

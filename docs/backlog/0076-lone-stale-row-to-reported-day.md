@@ -1,7 +1,7 @@
 ---
 id: 0076
 title: A lone stale row moves to the day the company actually reported (ROKU on Nov 2, not Nov 3)
-status: ready
+status: in-progress
 priority: P1
 size: S
 lens: data-quality

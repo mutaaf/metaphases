@@ -33,7 +33,7 @@ import { shownSession } from "../shared/contestedTime";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
-import { needsPastCheck, nqReports, settlePastRow } from "../shared/pastRows";
+import { MOVE_REACH_DAYS, needsPastCheck, nqReports, settlePastRow } from "../shared/pastRows";
 import { oneReportOneRow, SAME_REPORT_DAYS } from "../shared/oneRow";
 import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
@@ -454,24 +454,30 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
  * Call after settlePast: its `nd` mark decides between twins.
  */
 async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, today: string, ctx: ExecutionContext): Promise<EarningsEvent[]> {
-  const syms = new Set(fixed.map((e) => e.s));
-  if (!syms.size) return fixed;
-  const padFrom = addDays(from, -SAME_REPORT_DAYS), padTo = addDays(to, SAME_REPORT_DAYS);
+  const inRange = (e: EarningsEvent) => e.d >= from && e.d <= to;
+  const syms = new Set(fixed.filter(inRange).map((e) => e.s));
+  // 0076: a past row may move up to MOVE_REACH_DAYS to the day the company reported, into this range or out of it.
+  const padFrom = addDays(from, -Math.max(SAME_REPORT_DAYS, MOVE_REACH_DAYS)), padTo = addDays(to, Math.max(SAME_REPORT_DAYS, MOVE_REACH_DAYS));
+  const near = (d: string) => d >= addDays(from, -SAME_REPORT_DAYS) && d <= addDays(to, SAME_REPORT_DAYS);
   const days: string[] = [];
   for (let d = padFrom; d <= padTo; d = addDays(d, 1)) {
     const wd = new Date(d + "T12:00:00Z").getUTCDay();
-    if ((d < from || d > to) && wd !== 0 && wd !== 6) days.push(d);
+    if ((d < from || d > to) && wd !== 0 && wd !== 6 && (near(d) || d < today)) days.push(d);
   }
+  if (!syms.size && !days.some((d) => d < today)) return fixed.filter(inRange);
   const read = async (d: string) => {
     const hit = (await caches.default.match(CAL_DAY(d)).catch(() => undefined)) ?? (await caches.default.match(CAL(`cal:stale:v3:${d}`)).catch(() => undefined));
     return hit ? ((await hit.json().catch(() => [])) as EarningsEvent[]) : [];
   };
-  const raw = (await Promise.all(days.map(read))).flat().filter((e) => syms.has(e.s));
-  const outside = (e: EarningsEvent) => (e.d < from || e.d > to) && syms.has(e.s);
+  // A neighbour's row counts if it's a twin of a row here, or a past row with no figures that may move here.
+  const raw = (await Promise.all(days.map(read))).flat().filter((e) => (syms.has(e.s) && near(e.d)) || needsPastCheck(e, today));
+  const outside = (e: EarningsEvent) => !inRange(e);
   let pad = flagClosed(applyToEvents(raw, OVERRIDES, padFrom, padTo, today, (s) => s in U)).filter(outside);
-  if (!pad.length) return oneReportOneRow(fixed);
-  if (padFrom < today) pad = await settlePast(pad, today, ctx, false).catch(() => pad);
-  return oneReportOneRow([...fixed, ...pad]).filter((e) => e.d >= from && e.d <= to);
+  if (pad.length && padFrom < today) pad = await settlePast(pad, today, ctx, false).catch(() => pad);
+  // Keep the twins of rows here and the rows that moved here; the rest only rode along to be checked.
+  pad = pad.filter((e) => inRange(e) || (syms.has(e.s) && near(e.d)));
+  if (!pad.length) return oneReportOneRow(fixed.filter(inRange));
+  return oneReportOneRow([...fixed, ...pad]).filter(inRange);
 }
 
 async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -509,7 +515,7 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
   let fixed = flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U));
   if (from < today) fixed = await settlePast(fixed, today, ctx).catch(() => fixed);
   // 0041: one report, one row (after the past check, whose `nd` mark picks the twin that happened).
-  fixed = await oneRowInRange(fixed, from, to, today, ctx).catch(() => oneReportOneRow(fixed));
+  fixed = await oneRowInRange(fixed, from, to, today, ctx).catch(() => oneReportOneRow(fixed.filter((e) => e.d >= from && e.d <= to)));
   // 0015: only ranges that reach the next 14 days (or a month past them, for a projected date Nasdaq lists sooner).
   // A Nasdaq failure leaves the events as Finnhub has them. It isn't a calendar failure, so it's not a warning:
   // warnings make the client say "busy" and retry (0047). `unchecked` counts the days that couldn't be compared.
@@ -1032,7 +1038,7 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
       // 0072 (and 0064): a projection that never happened, or one on a holiday, isn't counted. Cache only here.
       const base = flagClosed(applyToEvents(withSupp, OVERRIDES, day, day, today, (s) => s in U));
       const past = await settlePast(base, today, ctx, false).catch(() => base);
-      const settled = await oneRowInRange(past, day, day, today, ctx).catch(() => oneReportOneRow(past));
+      const settled = await oneRowInRange(past, day, day, today, ctx).catch(() => oneReportOneRow(past.filter((e) => e.d === day)));
       const byCap = (a: EarningsEvent, b: EarningsEvent) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0);
       const evs = settled.filter((e) => e.t && !e.c && !e.od).sort(byCap);
       // 0067: on a holiday the title says the market is closed and the feed's rows there are named as unconfirmed.
