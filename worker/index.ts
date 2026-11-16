@@ -33,7 +33,7 @@ import { shownSession } from "../shared/contestedTime";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
-import { MOVE_REACH_DAYS, needsPastCheck, nqReports, settlePastRow } from "../shared/pastRows";
+import { needsPastCheck, nqReports, settlePastRow } from "../shared/pastRows";
 import { oneReportOneRow, SAME_REPORT_DAYS } from "../shared/oneRow";
 import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
@@ -405,6 +405,8 @@ const nqSurpriseReq = (s: string) => CAL(`nq:surprise:${s}`);
 const nqSurpriseFail = (s: string) => CAL(`nq:surprise:fail:v1:${s}`);
 /** At most this many symbols are fetched fresh per request (pooled, short timeout); the rest wait for a later read. */
 const PAST_FETCH_MAX = 8;
+/** 0076: neighbouring symbols checked per request for a past row moving into the range (one cache read each). */
+const MOVE_IN_MAX = 4;
 
 /**
  * Fill a past row's figures from Nasdaq when the company did report (AMCR, ATO), flag it `od` when it didn't
@@ -456,26 +458,33 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
 async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, today: string, ctx: ExecutionContext): Promise<EarningsEvent[]> {
   const inRange = (e: EarningsEvent) => e.d >= from && e.d <= to;
   const syms = new Set(fixed.filter(inRange).map((e) => e.s));
-  // 0076: a past row may move up to MOVE_REACH_DAYS to the day the company reported, into this range or out of it.
-  const padFrom = addDays(from, -Math.max(SAME_REPORT_DAYS, MOVE_REACH_DAYS)), padTo = addDays(to, Math.max(SAME_REPORT_DAYS, MOVE_REACH_DAYS));
-  const near = (d: string) => d >= addDays(from, -SAME_REPORT_DAYS) && d <= addDays(to, SAME_REPORT_DAYS);
+  // 0076: a past row may have moved out (dropped below) or may move in from a neighbour: MOVE_MAX_DAYS ≤ SAME_REPORT_DAYS,
+  // so the same neighbour read covers it, with no extra days.
+  const padFrom = addDays(from, -SAME_REPORT_DAYS), padTo = addDays(to, SAME_REPORT_DAYS);
   const days: string[] = [];
   for (let d = padFrom; d <= padTo; d = addDays(d, 1)) {
     const wd = new Date(d + "T12:00:00Z").getUTCDay();
-    if ((d < from || d > to) && wd !== 0 && wd !== 6 && (near(d) || d < today)) days.push(d);
+    if ((d < from || d > to) && wd !== 0 && wd !== 6) days.push(d);
   }
-  if (!syms.size && !days.some((d) => d < today)) return fixed.filter(inRange);
+  const pastPad = padFrom < today;
+  if (!syms.size && !pastPad) return fixed.filter(inRange);
   const read = async (d: string) => {
     const hit = (await caches.default.match(CAL_DAY(d)).catch(() => undefined)) ?? (await caches.default.match(CAL(`cal:stale:v3:${d}`)).catch(() => undefined));
     return hit ? ((await hit.json().catch(() => [])) as EarningsEvent[]) : [];
   };
-  // A neighbour's row counts if it's a twin of a row here, or a past row with no figures that may move here.
-  const raw = (await Promise.all(days.map(read))).flat().filter((e) => (syms.has(e.s) && near(e.d)) || needsPastCheck(e, today));
-  const outside = (e: EarningsEvent) => !inRange(e);
-  let pad = flagClosed(applyToEvents(raw, OVERRIDES, padFrom, padTo, today, (s) => s in U)).filter(outside);
-  if (pad.length && padFrom < today) pad = await settlePast(pad, today, ctx, false).catch(() => pad);
+  const all = (await Promise.all(days.map(read))).flat();
+  // A neighbour's row counts if it's a twin of a row here, or (0076) a past row with no figures that may move here.
+  // Those cost one cache read each in settlePast, so at most MOVE_IN_MAX symbols, biggest first.
+  const movers = new Set(
+    [...new Set(all.filter((e) => !syms.has(e.s) && needsPastCheck(e, today)).map((e) => e.s))]
+      .sort((x, y) => (U[y]?.mc ?? 0) - (U[x]?.mc ?? 0)).slice(0, MOVE_IN_MAX),
+  );
+  const raw = all.filter((e) => syms.has(e.s) || movers.has(e.s));
+  if (!raw.length) return oneReportOneRow(fixed.filter(inRange));
+  let pad = flagClosed(applyToEvents(raw, OVERRIDES, padFrom, padTo, today, (s) => s in U)).filter((e) => !inRange(e));
+  if (pad.length && pastPad) pad = await settlePast(pad, today, ctx, false).catch(() => pad);
   // Keep the twins of rows here and the rows that moved here; the rest only rode along to be checked.
-  pad = pad.filter((e) => inRange(e) || (syms.has(e.s) && near(e.d)));
+  pad = pad.filter((e) => inRange(e) || syms.has(e.s));
   if (!pad.length) return oneReportOneRow(fixed.filter(inRange));
   return oneReportOneRow([...fixed, ...pad]).filter(inRange);
 }

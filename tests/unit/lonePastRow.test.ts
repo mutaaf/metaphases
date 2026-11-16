@@ -44,15 +44,24 @@ describe("0076 settlePastRow moves a lone row", () => {
     // 4 trading days later, for the Sep quarter the row stands for.
     const later = settlePastRow(row, nqReports(surprise([["11/10/2026", 1, 0.9, "Sep 2026"]])), true, TODAY);
     expect(later).toMatchObject({ d: "2026-11-10", fd: "2026-11-04", h: "", eA: 1 });
-    // 10 trading days earlier (Oct 21) moves; 11 (Oct 20) is too far to call.
-    expect(settlePastRow(row, nqReports(surprise([["10/21/2026", 1, 1, "Sep 2026"]])), true, TODAY).d).toBe("2026-10-21");
-    expect(settlePastRow(row, nqReports(surprise([["10/20/2026", 1, 1, "Sep 2026"]])), true, TODAY)).toBe(row);
+    // A week earlier (Oct 28, 5 trading days) moves; 8+ calendar days (Oct 27) stays, where the receiving range's
+    // ±7-day neighbour read couldn't find it (MOVE_MAX_DAYS; a wider read costs the Worker too many cache calls).
+    expect(settlePastRow(row, nqReports(surprise([["10/28/2026", 1, 1, "Sep 2026"]])), true, TODAY).d).toBe("2026-10-28");
+    expect(settlePastRow(row, nqReports(surprise([["10/27/2026", 1, 1, "Sep 2026"]])), true, TODAY)).toBe(row);
+    expect(settlePastRow(row, nqReports(surprise([["10/21/2026", 1, 1, "Sep 2026"]])), true, TODAY)).toBe(row);
     // A late filer's previous quarter (Jun) a few days off is a different report.
     expect(settlePastRow(row, nqReports(surprise([["11/10/2026", 1, 1, "Jun 2026"]])), true, TODAY)).toBe(row);
     expect(settlePastRow(row, nqReports(surprise([["10/29/2026", 1, 1, "Jun 2026"]])), true, TODAY)).toBe(row);
     // No quarter given: can't tell.
     const noPe = nqReports({ data: { earningsSurpriseTable: { rows: [{ dateReported: "11/10/2026", eps: 1, consensusForecast: 1 }] } } });
     expect(settlePastRow(row, noPe, true, TODAY)).toBe(row);
+  });
+
+  it("never lands a row on a market holiday or a weekend", () => {
+    // Fri Nov 27 before the open; history dated Thanksgiving (Thu Nov 26) or Sun Nov 22.
+    const row = ev("X", "2026-11-27", { h: "bmo" });
+    expect(settlePastRow(row, nqReports(surprise([["11/26/2026", 1, 1, "Oct 2026"]])), true, "2026-12-07").d).toBe("2026-11-27");
+    expect(settlePastRow(row, nqReports(surprise([["11/22/2026", 1, 1, "Oct 2026"]])), true, "2026-12-07").d).toBe("2026-11-27");
   });
 
   it("never moves a company-dated row, and a moved non-dollar row keeps the feed's figures", () => {
@@ -66,8 +75,8 @@ describe("0076 settlePastRow moves a lone row", () => {
 });
 
 // Through the worker: a made-up symbol (no live override can touch it) whose feed row is on Tue Nov 3 while its
-// history says Mon Nov 2 (ZZROK), and one 6 trading days off across a week edge (ZZFAR: feed Fri Oct 30, history
-// Mon Nov 9, same quarter).
+// history says Mon Nov 2 (ZZROK), and one a week off across a week edge (ZZFAR: feed Fri Oct 30, history Fri Nov 6,
+// same quarter). ZZFAR has no other row in the week it moves to, so that week finds it as a neighbour moving in.
 class MemCache {
   store = new Map<string, string>();
   async match(req: Request) { const v = this.store.get(req.url); return v === undefined ? undefined : new Response(v); }
@@ -100,7 +109,7 @@ describe("0076 through /api/calendar", () => {
       }
       const m = /\/api\/company\/([A-Z]+)\/earnings-surprise/.exec(url.pathname);
       if (m?.[1] === "ZZROK") return new Response(JSON.stringify(surprise([["11/2/2026", 1.35, 0.55, "Sep 2026"], ["7/31/2026", 1.2, 0.61, "Jun 2026"]])));
-      if (m?.[1] === "ZZFAR") return new Response(JSON.stringify(surprise([["11/9/2026", 0.8, 0.7, "Sep 2026"]])));
+      if (m?.[1] === "ZZFAR") return new Response(JSON.stringify(surprise([["11/6/2026", 0.8, 0.7, "Sep 2026"]])));
       return new Response("{}", { status: 404 });
     }));
   });
@@ -117,7 +126,10 @@ describe("0076 through /api/calendar", () => {
   it("a row moving across a week edge leaves its week and joins the week it moved to", async () => {
     const before = await get("/api/calendar?from=2026-10-26&to=2026-10-30");
     expect(rows(before, "ZZFAR")).toEqual([]);
-    const after = await get("/api/calendar?from=2026-11-09&to=2026-11-13");
-    expect(rows(after, "ZZFAR")).toEqual([expect.objectContaining({ d: "2026-11-09", fd: "2026-10-30", eA: 0.8, h: "" })]);
+    const after = await get("/api/calendar?from=2026-11-02&to=2026-11-06");
+    expect(rows(after, "ZZFAR")).toEqual([expect.objectContaining({ d: "2026-11-06", fd: "2026-10-30", eA: 0.8, h: "" })]);
+    // The share title's single day agrees.
+    expect(rows(await get("/api/calendar?from=2026-11-06&to=2026-11-06"), "ZZFAR")).toHaveLength(1);
+    expect(rows(await get("/api/calendar?from=2026-10-30&to=2026-10-30"), "ZZFAR")).toEqual([]);
   });
 });

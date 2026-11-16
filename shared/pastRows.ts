@@ -10,13 +10,16 @@
 // 0076: a lone row on the wrong day moves to the day the company's history gives, but only when that's unambiguous
 // (`fd` keeps the feed's day). Nasdaq dates some after-close reports the next morning, so a one-day gap alone can't
 // tell which day is right, with one exception: history BEFORE the row (ROKU: row Nov 3, history Nov 2). Nasdaq never
-// dates a report before it was out, so whatever the row's session, the report was out by the history's day. History
+// dates a report before it was out, so whatever the row's session, the report was out by the history's day (the
+// "reverse" in `nearDay` is this case: the feed, not Nasdaq, put an evening report on the next morning). History
 // one day AFTER the row stays ambiguous (the next-morning habit) and the row keeps its day. Further off (2 to 10
-// trading days) the history's report must be for the quarter the row stands for (its fiscal quarter ended within
-// PERIOD_LAG_MAX_DAYS before the row); a report for the quarter before never moves it. A moved row's session is
+// trading days, and at most MOVE_MAX_DAYS calendar days) the history's report must be for the quarter the row stands
+// for (its fiscal quarter ended within PERIOD_LAG_MAX_DAYS before the row); a report for the quarter before never
+// moves it. A row never lands on a weekend or market holiday. A moved row's session is
 // blanked: the history gives a day, not a time, and the feed's time belonged to the wrong day.
 import type { EarningsEvent } from "./types";
 import { daysApart, nqDate, tradingDaysSince } from "./pending";
+import { closedDay } from "./dateOverrides";
 
 export interface NqReport { date: string; eps: number | null; est: number | null; /** 0076: the fiscal quarter's last day ("Sep 2026" → 2026-09-30), when Nasdaq gives it. */ pe?: string }
 
@@ -63,13 +66,18 @@ function addDays(d: string, n: number): string {
 
 /** 0076: a row moves to a same-quarter report this many trading days away, at most (and at least 2: closer is `nearDay`). */
 export const MOVE_MAX_TRADING_DAYS = 10;
-/** Calendar days that covers, with a holiday: how far `oneRowInRange` looks for past rows moving into a range. */
-export const MOVE_REACH_DAYS = 16;
+/**
+ * …and never further than this many calendar days, so the range that receives a moved row finds it in the ±7-day
+ * neighbour read it already makes (0041's `oneRowInRange`). Reading further would cost the Worker more cache calls
+ * per request than the free plan allows (0047). A same-quarter report 8+ days off leaves the row where it is.
+ */
+export const MOVE_MAX_DAYS = 7;
 /** A row stands for the fiscal quarter that ended at most this many days before it (10-K reports run to ~90). */
 export const PERIOD_LAG_MAX_DAYS = 95;
 
 const tradingGap = (a: string, b: string) => (a <= b ? tradingDaysSince(a, b) : tradingDaysSince(b, a));
-const weekday = (d: string) => { const w = new Date(d + "T12:00:00Z").getUTCDay(); return w !== 0 && w !== 6; };
+/** A trading day: a weekday the NYSE is open (a holiday cell would show the row as closed-day noise, 0045). */
+const tradingDay = (d: string) => { const w = new Date(d + "T12:00:00Z").getUTCDay(); return w !== 0 && w !== 6 && !closedDay(d); };
 /** The history's report is for the quarter the row stands for. */
 const samePeriod = (r: NqReport, day: string) => r.pe != null && r.pe < day && daysApart(r.pe, day) <= PERIOD_LAG_MAX_DAYS;
 
@@ -88,10 +96,10 @@ export function settlePastRow(e: EarningsEvent, reports: NqReport[] | null, usd:
   if (hit) {
     if (hit.date < e.d && !e.o) to = hit.date; // history before the row: out by then, whatever the session
   } else if (!e.o) {
-    const far = reports.find((r) => { const g = tradingGap(r.date, e.d); return g >= 2 && g <= MOVE_MAX_TRADING_DAYS && samePeriod(r, e.d); });
+    const far = reports.find((r) => { const g = tradingGap(r.date, e.d); return g >= 2 && g <= MOVE_MAX_TRADING_DAYS && daysApart(r.date, e.d) <= MOVE_MAX_DAYS && samePeriod(r, e.d); });
     if (far) { hit = far; to = far.date; }
   }
-  if (to && !weekday(to)) to = null; // no grid cell to land on: keep the row where it is
+  if (to && !tradingDay(to)) to = null; // no trading-day cell to land on: keep the row where it is
   if (hit && !to && hit.date !== e.d && !nearDay(hit.date, e.d)) hit = undefined; // a far report that can't be landed
   if (hit) {
     // 0041: Nasdaq dates the report on this very day, so of two twin rows (Nov 2 and Nov 3) this one happened.
