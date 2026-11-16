@@ -1,5 +1,6 @@
 // Grounding for every AI surface: compact, structured facts built from data the page already has.
 // Pure functions (unit-tested) — the worker renders them into prompt lines and trims to a budget.
+import { unconfirmedRow } from "../../shared/closedRows";
 import type { EarningsEvent, MacroResponse, TickerResponse } from "../../shared/types";
 import { co, curOf, epsOf, heldVia, resultOf, surprise, UNIVERSE } from "./data";
 import { epsJudged, revenueBeatRate, revenueSkipped, revenueVerdict } from "../../shared/compare";
@@ -15,7 +16,7 @@ const slimEvent = (e: EarningsEvent) => {
   const epsNC = ej.v === "not-comparable";
   // The estimate it was judged against (Nasdaq's when Finnhub's is on another basis), never a figure that contradicts `res`.
   // 0067: a row projected onto a market holiday (`c`) carries no session and is marked unconfirmed (`cx`).
-  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.c ? "" : e.h, ...(e.c ? { cx: e.c } : e.hs === "n" && e.h ? { hx: 1 } : {}), eE: ej.pending ? null : ej.via ? ej.est : e.eE, eA: ej.act ?? e.eA, epsNC: epsNC || undefined, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: c?.ec, res: resultOf(e) ?? undefined };
+  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.c ? "" : e.h, ...(e.c ? { cx: e.c } : e.hs === "n" && e.h ? { hx: 1 } : {}), ...(!e.c && e.x === "differs" && e.xd && e.xd !== e.d ? { xd: e.xd } : {}), eE: ej.pending ? null : ej.via ? ej.est : e.eE, eA: ej.act ?? e.eA, epsNC: epsNC || undefined, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: c?.ec, res: resultOf(e) ?? undefined };
 };
 
 export function slimMacro(m: MacroResponse | null | undefined, from: string, to: string) {
@@ -32,7 +33,7 @@ export function weekContext(events: EarningsEvent[], macro: MacroResponse | null
   const inRange = events.filter((e) => e.t && !e.od && e.d >= from && e.d <= to);
   const top = [...inRange].sort((a, b) => (UNIVERSE[b.s]?.mc ?? 0) - (UNIVERSE[a.s]?.mc ?? 0)).slice(0, limit);
   // 0067: a holiday projection is passed (marked) but not counted as reporting in the window.
-  return { today, range: { from, to }, total: inRange.filter((e) => !e.c).length, events: top.sort((a, b) => a.d.localeCompare(b.d)).map(slimEvent), macro: slimMacro(macro, from, to) };
+  return { today, range: { from, to }, total: inRange.filter((e) => !unconfirmedRow(e, today)).length, events: top.sort((a, b) => a.d.localeCompare(b.d)).map(slimEvent), macro: slimMacro(macro, from, to) };
 }
 
 /** Which upcoming reports touch this portfolio — directly and through its funds. */

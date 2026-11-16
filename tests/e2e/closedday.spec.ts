@@ -181,3 +181,41 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) 
     await page.screenshot({ path: test.info().outputPath(`closedday-brief-${size.width}.png`) });
   });
 }
+
+// 0078: a feed date Nasdaq lists on another day (no company date) isn't a report once its day comes. Fri Oct 30
+// (the frozen clock is Sat Oct 31): CVX's feed row, Nasdaq says Tue Nov 3; XOM reported that day.
+test.describe("0078 a contested date that reached its day", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/api/calendar**", (r) => {
+      const to = new URL(r.request().url()).searchParams.get("to") ?? "";
+      if (to >= "2026-11-07") return r.fulfill({ contentType: "application/json", body: fx("calendar-2026-11.json") });
+      const body = JSON.parse(fx("calendar-2026-10.json"));
+      body.events.push(
+        { s: "CVX", d: "2026-10-30", h: "bmo", q: 3, y: 2026, eE: 1.7, eA: null, rE: 4.9e10, rA: null, t: 1, x: "differs", xd: "2026-11-03", xh: "bmo" },
+        { s: "XOM", d: "2026-10-30", h: "bmo", q: 3, y: 2026, eE: 1.8, eA: 1.9, rE: 8.4e10, rA: 8.5e10, t: 1 },
+      );
+      r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    });
+  });
+
+  for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+    test(`Oct 30 drawer at ${size.width}: "1 reporting", CVX under "Date not confirmed" with both days, never "Figures pending"`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await page.goto("./?d=2026-10-30&day=2026-10-30");
+      const drawer = page.locator(".drawer[role=dialog]");
+      await expect(drawer.locator(".drawer-head .eyebrow")).toHaveText("1 reporting");
+      const group = drawer.getByTestId("unconfirmed-group");
+      await expect(group.locator(".sess-head")).toContainText("Date not confirmed");
+      await expect(group.getByTestId("contested-note")).toHaveText("Our data feed put this report on this day, but Nasdaq's calendar lists another day (shown on the row) and the company hasn't announced one, so it isn't counted as reporting.");
+      await expect(group.getByTestId("overdue-note")).toHaveCount(0);
+      const cvx = group.locator(".erow", { hasText: "CVX" });
+      await expect(cvx.locator(".erow-x")).toHaveText("Nasdaq: Tue, Nov 3, before open");
+      await expect(cvx.getByTestId("figures-pending")).toHaveCount(0);
+      await expect(drawer.locator(".sess .erow", { hasText: "CVX" })).toHaveCount(1); // only in the group
+      await expect(drawer.locator(".sess .erow", { hasText: "XOM" })).toHaveCount(1);
+      await noSideScroll(page);
+      await group.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: test.info().outputPath(`contested-drawer-${size.width}.png`) });
+    });
+  }
+});

@@ -9,6 +9,8 @@ import type { EarningsEvent, Session } from "./types";
 export const XCHECK_DAYS = 14;
 /** A Finnhub date this far past the window can still be compared with a Nasdaq listing inside it (CSCO-shaped). */
 export const XCHECK_REACH = 31;
+/** 0078: a figure-less row this many calendar days back is still compared with the window (Nasdaq may list it ahead). */
+export const XCHECK_PAST_DAYS = 7;
 /** Untracked Nasdaq rows are kept only for companies at least this large (the calendar's other gate is revenue). */
 export const XCHECK_MIN_CAP = 1e9;
 
@@ -77,8 +79,11 @@ const dayNum = (d: string) => Date.parse(d + "T12:00:00Z") / 86400000;
  * - `null`: nothing to say (outside the window, or that day's Nasdaq answer failed).
  */
 export function crossOne(s: string, d: string, h: Session, w: NqWindow): Cross | null {
-  if (!w.loaded.length || d < w.from) return null;
+  if (!w.loaded.length) return null;
   const list = w.idx[s] ?? [];
+  // 0078: a feed day that passed this past week with no figures, while Nasdaq still lists the company ahead: the
+  // date is contested, not "figures pending". Older rows are 0072's (`od`), and an empty list says nothing.
+  if (d < w.from) return list.length && dayNum(w.from) - dayNum(d) <= XCHECK_PAST_DAYS ? { x: "differs", xd: list[0].d, ...(list[0].h ? { xh: list[0].h } : {}) } : null;
   if (d > w.to) {
     // A projected date past the window while Nasdaq lists this company inside it: likely the same report.
     if (!list.length || dayNum(d) - dayNum(w.to) > XCHECK_REACH) return null;
@@ -104,6 +109,7 @@ export function crossCheck(events: EarningsEvent[], w: NqWindow): EarningsEvent[
   if (!w.loaded.length) return events;
   return events.map((e) => {
     if (e.o || e.c || e.eA != null || e.rA != null) return e; // company-dated, closed-day or already reported: the date is settled
+    if (e.od || e.nd || e.fd) return e; // 0072/0076: the past check already settled where this row stands
     const c = crossOne(e.s, e.d, e.h, w);
     if (!c) return e;
     return { ...e, h: c.h ?? e.h, ...(c.h ? { hs: "n" as const } : {}), x: c.x, ...(c.xd ? { xd: c.xd } : {}), ...(c.xh ? { xh: c.xh } : {}) };

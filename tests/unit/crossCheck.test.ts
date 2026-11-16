@@ -80,10 +80,20 @@ describe("crossOne", () => {
     expect(crossOne("OTHER", "2026-11-30", "", w)).toBeNull();
   });
 
-  it("ignores past days and an empty window", () => {
+  it("ignores past days Nasdaq doesn't list ahead, days over a week back, and an empty window", () => {
     const w = win({ "2026-11-11": { CSCO: "amc" } });
-    expect(crossOne("CSCO", "2026-11-06", "", w)).toBeNull();
+    expect(crossOne("OTHER", "2026-11-06", "", w)).toBeNull();
+    expect(crossOne("CSCO", "2026-11-01", "", w)).toBeNull(); // 8 days back: 0072's overdue rules
     expect(crossOne("CSCO", "2026-11-11", "", { ...w, loaded: [] })).toBeNull();
+  });
+
+  it("0078: a figure-less day this past week that Nasdaq still lists ahead is contested, naming Nasdaq's day", () => {
+    const w = win({ "2026-11-12": { PDD: "bmo" } });
+    expect(crossOne("PDD", "2026-11-06", "bmo", w)).toEqual({ x: "differs", xd: "2026-11-12", xh: "bmo" });
+    expect(crossOne("PDD", "2026-11-02", "bmo", w)).toEqual({ x: "differs", xd: "2026-11-12", xh: "bmo" }); // 7 days back
+    // crossCheck leaves past rows the past check settled (overdue, moved, or dated by Nasdaq's history) alone.
+    const rows = crossCheck([ev("PDD", "2026-11-06", "bmo"), ev("PDD", "2026-11-05", "", { od: true }), ev("PDD", "2026-11-04", "", { nd: 1 })], w);
+    expect(rows.map((e) => e.x)).toEqual(["differs", undefined, undefined]);
   });
 });
 
@@ -119,7 +129,7 @@ let nqInFlight = 0, nqPeak = 0;
 let nasdaq: (day: string) => Response | Promise<Response>;
 const fhRow = (symbol: string, date: string, hour = "") => ({ symbol, date, hour, quarter: 1, year: 2027, epsEstimate: 1, epsActual: null, revenueEstimate: 5e9, revenueActual: null });
 // Made-up symbols, so no live entry in data/date-overrides.json can win (LESSONS 2026-11-06).
-const FH_ROWS = [fhRow("QQXA", "2026-11-11"), fhRow("QQXB", "2026-11-18", "bmo"), fhRow("QQXC", "2026-11-12"), fhRow("QQXD", "2026-11-09"),
+const FH_ROWS = [fhRow("QQXA", "2026-11-11"), fhRow("QQXB", "2026-11-18", "bmo"), fhRow("QQXC", "2026-11-12"), fhRow("QQXD", "2026-11-09"), fhRow("QQXF", "2026-11-09", "bmo"), { ...fhRow("QQXF", "2027-02-22", "bmo"), quarter: 2 },
   { ...fhRow("QQXE", "2026-11-09"), epsEstimate: null, epsActual: 1.1 }]; // no estimate: keeps the 0035 EPS lookup out of these counts
 const store = () => (globalThis as any).caches.default.store as Map<string, string>;
 /** A minute passes: the per-colo builder lock expires. */
@@ -133,6 +143,7 @@ beforeEach(() => {
   nasdaq = (day) => new Response(JSON.stringify(nqDay(
     day === "2026-11-09" ? [{ symbol: "QQXD", time: "time-pre-market" }, { symbol: "QQXE", time: "time-pre-market" }] :
     day === "2026-11-11" ? [{ symbol: "QQXA", time: "time-after-hours" }] :
+    day === "2026-11-12" ? [{ symbol: "QQXF", time: "time-pre-market" }] : // 0078: PDD-shaped, the feed says Mon 11-09
     day === "2026-11-17" ? [{ symbol: "QQXB", time: "time-pre-market" }] :
     [{ symbol: "FILLER", time: "time-not-supplied" }],
   )));
@@ -144,13 +155,16 @@ beforeEach(() => {
       await Promise.resolve();
       try { return await nasdaq(url.searchParams.get("date")!); } finally { nqInFlight--; }
     }
-    if (url.hostname === "api.nasdaq.com") return new Response(JSON.stringify({ data: { earningsSurpriseTable: { rows: [] } } }));
+    // 0078: QQXF reports quarterly (Aug 10, May 11), so Feb 22 skips the Nov quarter and the sheet looks back for it.
+    if (url.hostname === "api.nasdaq.com") return new Response(JSON.stringify({ data: { earningsSurpriseTable: { rows: url.pathname.includes("/QQXF/")
+      ? [{ dateReported: "8/10/2026", eps: 1, consensusForecast: 1, fiscalQtrEnd: "Jun 2026" }, { dateReported: "5/11/2026", eps: 1, consensusForecast: 1, fiscalQtrEnd: "Mar 2026" }] : [] } } }));
     if (url.pathname.endsWith("/calendar/earnings")) {
       const sym = url.searchParams.get("symbol");
       if (sym) return new Response(JSON.stringify({ earningsCalendar: FH_ROWS.filter((r) => r.symbol === sym) }));
       const from = url.searchParams.get("from")!, to = url.searchParams.get("to")!;
       return new Response(JSON.stringify({ earningsCalendar: FH_ROWS.filter((r) => r.date >= from && r.date <= to) }));
     }
+    if (url.pathname.endsWith("/stock/earnings")) return new Response("[]");
     return new Response(JSON.stringify({}), { status: 200 });
   }));
 });
@@ -252,6 +266,31 @@ describe("/api/ticker cross-check (0015)", () => {
     await warm();
     const t = await call("/api/ticker/QQXD");
     expect(t.next).toMatchObject({ date: "2026-11-09", session: "bmo", status: "results-pending" });
+  });
+
+  it("0078: on the feed's day, a date Nasdaq lists three days later isn't 'results expected': it's unconfirmed, naming both days", async () => {
+    await warm();
+    const t = await call("/api/ticker/QQXF");
+    expect(t.next.status).toBeUndefined();
+    expect(t.next).toMatchObject({ date: "2026-11-09", nasdaq: { date: "2026-11-12", session: "bmo" } });
+    expect(t.read[0]).toMatch(/report date isn't confirmed: our data feed put it on Monday, Nov 9, but Nasdaq's calendar lists Thursday, Nov 12 before the opening bell, and no results are in our data yet/);
+    expect(t.read.join(" ")).not.toMatch(/were expected|reports Q/);
+    // The calendar files the same row as contested, with both days.
+    const cal = await call("/api/calendar?from=2026-11-09&to=2026-11-13");
+    expect(cal.events.find((e: EarningsEvent) => e.s === "QQXF")).toMatchObject({ d: "2026-11-09", x: "differs", xd: "2026-11-12" });
+  });
+
+  it("0078: the day after, the contested quarter is still the next report with Nasdaq's day, not 'results expected' or overdue", async () => {
+    await warm();
+    for (const [day, iso] of [["Tue", "2026-11-10T15:00:00Z"], ["Wed", "2026-11-11T15:00:00Z"]]) {
+      vi.setSystemTime(new Date(iso));
+      unlock(); await call("/api/calendar?from=2026-11-09&to=2026-11-13"); // the colo's window for the new day
+      const t = await call("/api/ticker/QQXF");
+      expect(t.next.status, day).toBeUndefined();
+      expect(t.next.overdue, day).toBeUndefined();
+      expect(t.next, day).toMatchObject({ date: "2026-11-09", quarter: 1, nasdaq: { date: "2026-11-12", session: "bmo" } });
+      expect(t.read[0], day).toMatch(/report date isn't confirmed: our data feed put it on Monday, Nov 9, but Nasdaq's calendar lists Thursday, Nov 12/);
+    }
   });
 
   it("without a cached window, the sheet is unchanged and Nasdaq's calendar is read only for the report's own day", async () => {

@@ -10,7 +10,7 @@ import { figuresPending, noResultYet } from "../../shared/pending";
 import { eventProjected } from "../../shared/projected";
 import { dateMark } from "../lib/dateMark";
 import { sessionText } from "../lib/sessionText";
-import { splitClosed, unconfirmedRow } from "../../shared/closedRows";
+import { contestedDay, splitClosed, unconfirmedRow } from "../../shared/closedRows";
 import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, nowMinNY, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
@@ -107,7 +107,7 @@ function DayCell({ day, events, inMonth, today, next, macro, onOpen, unknown }: 
   const past = day < today;
   const reported = events.filter((e) => e.eA != null).length;
   // 0064: a row projected onto a holiday isn't reporting that day, so it isn't counted.
-  const dated = splitClosed(events).dated.length;
+  const dated = splitClosed(events, todayISO()).dated.length;
   // 0067: a holiday cell holding the feed's projections says so, to the eye and to a screen reader.
   const unconfirmedN = holiday ? events.length - dated : 0;
   const aria = unconfirmedN > 0 ? `${fmtLong(day)}: market closed for ${holiday}. ${unconfirmedN} report date${unconfirmedN === 1 ? "" : "s"} not confirmed inside` : undefined;
@@ -182,7 +182,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         ? <span className="erow-num" data-testid="nq-actual" title={`Our data feed's figure is ${epsIn(e.eA, cur)}. This is Nasdaq's figure on the same basis as the estimate, and the result is judged on that pair.`}><span className="eyebrow">Nasdaq actual</span>{epsIn(j.act, cur)}</span>
         : <span className="erow-num"><span className="eyebrow">{e.eA != null ? "Actual" : "Rev est"}</span>{e.eA != null ? epsIn(e.eA, cur) : moneyIn(e.rE, cur)}</span>; })()}
       <span className="erow-res">
-        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : e.eA != null && epsOf(e).pending ? <span className="chip chip-nores" data-testid="eps-pending" title="This estimate is Nasdaq's, and Nasdaq posts its result on the same basis a day or two after the report. Until then we don't call it a beat or a miss.">Judging soon</span> : pendingNow(e) ? <span className="chip chip-nores" data-testid="figures-pending" title={PENDING_WHY}>Figures pending</span> : !e.c && !e.od && noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : e.c || e.od ? "Unconfirmed" : PHASE_LABEL[e.h]}</span>}
+        {r ? <><span className={`chip res-${r}`}>{r}{s != null ? ` ${pct(s, 0)}` : ""}</span>{(() => { const rv = revenueVerdict(e, cur); return revenueSkipped(rv) && <span className="eps-only" title={rv === "revised" ? "Judged on EPS only: the revenue estimate was revised after the report, so we can't tell if it was a miss." : "Judged on EPS only: the reported revenue isn't counted the same way as the forecast."}>EPS only</span>; })()}</> : e.eA != null && epsBasisDiffers(e) ? <span className="chip chip-nores" data-testid="eps-basis" title="EPS basis differs from the estimate (e.g. FFO vs net income), so it isn't called a beat or a miss.">Basis differs</span> : e.eA != null && epsOf(e).pending ? <span className="chip chip-nores" data-testid="eps-pending" title="This estimate is Nasdaq's, and Nasdaq posts its result on the same basis a day or two after the report. Until then we don't call it a beat or a miss.">Judging soon</span> : pendingNow(e) ? <span className="chip chip-nores" data-testid="figures-pending" title={PENDING_WHY}>Figures pending</span> : !unconfirmedRow(e, todayISO()) && noResultYet(e, todayISO()) ? <span className="chip chip-nores" title="The data feed expected a report this day but has no figures for it yet. If the company has reported, they'll show here once the feed catches up.">No figures yet</span> : <span className="chip">{c?.sec ? c.sec.split(" ")[0] : unconfirmedRow(e, todayISO()) ? "Unconfirmed" : PHASE_LABEL[e.h]}</span>}
       </span>
     </button>
   );
@@ -190,18 +190,20 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
 
 function groupBySession(evs: EarningsEvent[]) {
   const order: EarningsEvent["h"][] = ["bmo", "dmh", "amc", ""];
-  const { dated } = splitClosed(evs);
+  const { dated } = splitClosed(evs, todayISO());
   return order.map((h) => ({ h, list: dated.filter((e) => e.h === h) })).filter((g) => g.list.length);
 }
 
 // 0064: rows our feed projects onto a market holiday. Never counted as reporting, never under a session.
 // 0072: so are past projections no report came out on (`od`).
 function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compact?: boolean }) {
-  const { unconfirmed } = splitClosed(events);
+  const { unconfirmed } = splitClosed(events, todayISO());
   if (!unconfirmed.length) return null;
   const holiday = unconfirmed.find((e) => e.c)?.c;
-  const closedN = unconfirmed.filter((e) => e.c).length, passedN = unconfirmed.length - closedN;
-  const why = (e: EarningsEvent) => e.c ? `our data feed projects ${e.c}, when markets are closed` : "our data feed expected a report this day, but none came out";
+  // 0078: a feed day Nasdaq lists elsewhere, now that it has come; the row's own mark names Nasdaq's day.
+  const isContested = (e: EarningsEvent) => !e.c && !e.od && contestedDay(e, todayISO());
+  const closedN = unconfirmed.filter((e) => e.c).length, contestedN = unconfirmed.filter(isContested).length, passedN = unconfirmed.length - closedN - contestedN;
+  const why = (e: EarningsEvent) => e.c ? `our data feed projects ${e.c}, when markets are closed` : isContested(e) ? `our data feed says this day, but Nasdaq's calendar lists ${fmtDay(e.xd!)} and the company hasn't announced a date` : "our data feed expected a report this day, but none came out";
   if (compact) return (
     <div className="wsess" data-testid="unconfirmed-group">
       <span className="eyebrow sess-mini"><Phase h="" size={10} projected /> Date not confirmed</span>
@@ -217,6 +219,7 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
     <section className="sess" data-testid="unconfirmed-group">
       <h3 className="sess-head"><Phase h="" size={14} projected /> <Term k="unconfirmed">Date not confirmed</Term> <span className="muted">· {unconfirmed.length}</span></h3>
       {closedN > 0 && <p className="muted small sess-note">Our data feed projects {closedN === 1 ? "this report" : "these reports"} on {holiday}, when markets are closed, so {closedN === 1 ? "it's" : "they're"} likely not the real date. The real date is probably a nearby trading day.</p>}
+      {contestedN > 0 && <p className="muted small sess-note" data-testid="contested-note">Our data feed put {contestedN === 1 ? "this report" : "these reports"} on this day, but Nasdaq's calendar lists another day (shown on {contestedN === 1 ? "the row" : "each row"}) and the company hasn't announced one, so {contestedN === 1 ? "it isn't" : "they aren't"} counted as reporting.</p>}
       {passedN > 0 && <p className="muted small sess-note" data-testid="overdue-note">Our data feed expected {passedN === 1 ? "this report" : "these reports"} on this day, but no results came out then, so {passedN === 1 ? "it isn't" : "they aren't"} counted as reporting. Check the company's own announcements for the real date.</p>}
       {unconfirmed.map((e) => <EventRow key={e.s} e={e} />)}
     </section>
@@ -226,7 +229,7 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
 // The drawer has its own shareable URL (?day=), so an empty day there gets the same
 // guidance as the grid, never a blank under "0 reporting" (0051, 0026).
 type DrawerUnknown = "loading" | "failed" | "outside";
-function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean, unconfirmed = false) {
+function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean, unconfirmed = false, contested = false) {
   const holiday = HOLIDAY[day];
   const dow = parse(day).getDay();
   if (holiday) return { eyebrow: "Market closed", body: unconfirmed ? <>Market closed · {holiday}. The exchanges are shut, so the dates below aren't confirmed.</> : <>Market closed · {holiday}. No companies report while the exchanges are shut.</> };
@@ -236,7 +239,10 @@ function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: 
   if (unknown === "outside") return { eyebrow: "Not on screen", body: <>This day isn't in the range on screen. Open the day view to see who reports.</> };
   if (unknown === "failed") return { eyebrow: "Didn't load", body: <>This day's earnings didn't load, so we can't say who reports. Try again in a moment.</> };
   // 0072: only rows that never happened here, so nothing is said to report, and nothing contradicts them.
-  if (unconfirmed) return { eyebrow: "None confirmed", body: <>No report we follow is confirmed for {WEEKDAY_LONG[dow]}. The ones below were expected but didn't come out that day.</> };
+  if (unconfirmed) return { eyebrow: "None confirmed", body: contested
+    // 0078: rows Nasdaq lists on another day: they may still come, just not (we know) today.
+    ? <>No report we follow is confirmed for {WEEKDAY_LONG[dow]}. Our data feed put the ones below here, but their dates are disputed.</>
+    : <>No report we follow is confirmed for {WEEKDAY_LONG[dow]}. The ones below were expected but didn't come out that day.</> };
   if (narrowed) return { eyebrow: "None with these filters", body: <>None with these filters report on {WEEKDAY_LONG[dow]}. Try <b>Everything</b>.</> };
   return { eyebrow: "None we follow", body: <><Term k="follow">{NONE_OURS}</Term> report on {WEEKDAY_LONG[dow]}. Smaller companies, and some listed only overseas, may.</> };
 }
@@ -247,8 +253,8 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
   const { prefs } = useStore();
   const openDayView = () => { onClose(); actions.setPref("view", "day"); setParam("d", day); };
   // 0064: holiday rows aren't reporting that day, so a holiday with only those still reads "Market closed".
-  const dated = splitClosed(events).dated;
-  const empty = dated.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector, events.length > 0);
+  const dated = splitClosed(events, todayISO()).dated;
+  const empty = dated.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector, events.length > 0, events.some((e) => !e.c && !e.od && contestedDay(e, todayISO())));
   return (
     <div className="drawer-scrim" onClick={onClose}>
       <aside className="drawer" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Earnings on ${fmtLong(day)}`}>
@@ -346,7 +352,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
     const c: Record<string, number> = {};
     if (!data) return c; // unknown, not zero: a failed load must never read "· 0" (0026)
     // 0072/0064: a row that isn't a dated report (holiday projection, passed unreported) isn't counted.
-    const scoped = (view === "month" ? all.filter((e) => inMonth(e.d)) : all).filter((e) => !unconfirmedRow(e));
+    const scoped = (view === "month" ? all.filter((e) => inMonth(e.d)) : all).filter((e) => !unconfirmedRow(e, today));
     const watchSet = new Set(store.watch.map((w) => w.s));
     const direct = new Set(store.holdings.map((h) => h.s));
     c.popular = scoped.filter((e) => e.t).length;
@@ -394,7 +400,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
 
   const label = view === "month" ? `${MONTHS[a.getMonth()]} ${a.getFullYear()}` : view === "week" ? `Week of ${MON3[parse(weeks[0][0]).getMonth()]} ${parse(weeks[0][0]).getDate()}` : fmtLong(anchor).toUpperCase();
   const reported = monthEvents.filter((e) => e.eA != null);
-  const datedCount = monthEvents.filter((e) => !unconfirmedRow(e)).length;
+  const datedCount = monthEvents.filter((e) => !unconfirmedRow(e, today)).length;
   const beats = reported.filter((e) => resultOf(e) === "beat").length;
 
   return (
@@ -481,7 +487,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
 
 function WeekColumn({ day, events, next, macro, failed, loaded, checking = false }: { day: string; events: EarningsEvent[]; next: string; macro: MacroEvent[]; failed?: boolean; loaded?: boolean; checking?: boolean }) {
   const d = parse(day);
-  const dated = splitClosed(events).dated.length;
+  const dated = splitClosed(events, todayISO()).dated.length;
   return (
     <div className={`wcol ${day === next ? "next" : ""}`}>
       <div className="cell-head"><span className="cell-date">{MON3[d.getMonth()]} <b>{String(d.getDate()).padStart(2, "0")}</b></span>{!failed && !(HOLIDAY[day] && !dated) && <span className="cell-count">{dated}</span>}</div>

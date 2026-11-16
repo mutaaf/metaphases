@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Factor, Reaction, TickerResponse } from "../../shared/types";
 import { useTicker } from "../lib/api";
 import { co, curOf, heldVia, nameOf, ETF_ASOF } from "../lib/data";
-import { daysBetween, fmtLong, todayISO } from "../lib/dates";
+import { daysBetween, fmtDay, fmtLong, todayISO } from "../lib/dates";
 import { currencyName, eps, epsIn, isUsd, mcap, money, moneyIn, pct } from "../lib/format";
 import { actions, useStore } from "../lib/store";
 import { BASE } from "../lib/router";
@@ -158,11 +158,15 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   const nextIn = isDated(data?.next) ? daysBetween(today, data.next.date) : null;
   const just = data?.justReported;
   const due = data?.next?.status === "results-pending";
+  // 0078: the feed's day has come but Nasdaq lists another and the company hasn't said: not a report day.
+  const dayContested = !!data?.next?.nasdaq && data.next.nasdaq.date !== data.next.date && !due && !data.next.overdue && !data.next.closed && data.next.date <= today;
   const shareText = just
     ? `${name} reported Q${just.quarter}${just.epsA != null ? `: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? vsExpected(just, (v) => epsIn(v, just.currency)) : ""}` : ""}.`
     : due ? `${name}'s Q${data!.next!.quarter} results were expected; none are in yet.`
     : data?.next?.closed || data?.next?.overdue
     ? `${name}: report date not confirmed yet — earnings track record, quality grade and setup.`
+    : dayContested
+    ? `${name}: report date unconfirmed (our data feed said ${fmtDay(data!.next!.date)}; Nasdaq lists ${fmtDay(data!.next!.nasdaq!.date)}) — ${data!.beatRate ? `beat ${data!.beatRate.beats} of its last ${data!.beatRate.total}` : "see the setup"}.`
     : data?.next
     ? `${name} reports ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}${data.next.nasdaq ? (data.next.nasdaq.date === data.next.date ? " (time unconfirmed)" : " (date unconfirmed)") : ""} — ${data.beatRate ? `beat ${data.beatRate.beats} of its last ${data.beatRate.total}` : "see the setup"}${data.expectedMove ? `, typical move ±${data.expectedMove.toFixed(1)}%` : ""}.`
     : `${name}: earnings track record, quality grade and setup.`;
@@ -205,11 +209,12 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                 <div className="nc-phase"><Phase h={shownSession(data.next)} size={44} projected={proj} /></div>
                 <div>
                   <span className="eyebrow">{due ? "This report" : "Next report"} · Q{data.next.quarter} {data.next.year}</span>
-                  <h3>{data.next.closed || data.next.overdue ? "Date not confirmed" : proj ? `Around ${fmtLong(data.next.date)}` : fmtLong(data.next.date)}</h3>
+                  <h3>{data.next.closed || data.next.overdue || dayContested ? "Date not confirmed" : proj ? `Around ${fmtLong(data.next.date)}` : fmtLong(data.next.date)}</h3>
                   {data.next.closed && <span className="muted nc-closed">The data feed projects {fmtLong(data.next.date)}, but markets are closed that day ({data.next.closed}).</span>}
                   {data.next.overdue && <span className="muted nc-closed">{data.next.date ? `The data feed expected it on ${fmtLong(data.next.date)}, and there are no results yet.` : "The data feed has no date for this quarter yet, and there are no results yet."} The new date isn't confirmed.</span>}
                   {due && <span className="muted nc-closed">Results were expected {shownSession(data.next) ? `${PHASE_LABEL[shownSession(data.next)].toLowerCase()} ` : ""}{data.next.date === today ? "today" : `on ${fmtLong(data.next.date)}`}. None are in our data yet.</span>}
-                  {!data.next.overdue && !due && <span className="muted" data-testid="nc-session">{contested ? <Term k="xcheck">Time unconfirmed</Term> : <Term k={data.next.session || "bmo"}>{sessionText(data.next.session, data.next.hs)}</Term>}{proj && data.next.session && !contested ? " (projected)" : ""}{nextIn != null && nextIn >= 0 && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
+                  {dayContested && <span className="muted nc-closed" data-testid="nc-contested">Our data feed put it on {fmtLong(data.next.date)}{data.next.session ? `, ${PHASE_LABEL[data.next.session].toLowerCase()}` : ""}, and no results are in our data yet.</span>}
+                  {!data.next.overdue && !due && !dayContested && <span className="muted" data-testid="nc-session">{contested ? <Term k="xcheck">Time unconfirmed</Term> : <Term k={data.next.session || "bmo"}>{sessionText(data.next.session, data.next.hs)}</Term>}{proj && data.next.session && !contested ? " (projected)" : ""}{nextIn != null && nextIn >= 0 && !dayContested && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
                   {data.next.nasdaq && !data.next.overdue && !due && <span className="muted nc-xcheck small" data-testid="nc-xcheck"><Term k="xcheck">Two calendars disagree.</Term> {contested
                     ? `Our data feed lists it ${SESSION_WORDS[data.next.session]}; Nasdaq's calendar, ${SESSION_WORDS[data.next.nasdaq.session]}.${data.moveSession?.session === "bmo" || data.moveSession?.session === "amc" ? ` Past moves point to ${SESSION_WORDS[data.moveSession.session]}.` : ""}`
                     : data.next.nasdaq.date === data.next.date
