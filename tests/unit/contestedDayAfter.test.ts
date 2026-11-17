@@ -94,6 +94,25 @@ describe("0078: the day after a contested feed day, with no future feed row", ()
   });
 });
 
+describe("0078 self-review: the no-future-row path's other outcomes", () => {
+  it("a passed row with figures in is the report it was: just reported, not overdue", async () => {
+    cache.store.set(CAL("cal:v3:2026-11-16"), JSON.stringify([{ ...feedDay, eA: 20.1, rA: 118e9 }]));
+    nasdaqLists(null);
+    const t = await sheet();
+    expect(t.justReported).toMatchObject({ date: "2026-11-16", quarter: 3 });
+    expect(t.next?.overdue).toBeUndefined();
+  });
+
+  it("an unreadable calendar day cache leaves the sheet as it was, never a 500", async () => {
+    const real = cache.match.bind(cache);
+    cache.match = async (req: Request) => { if (/cal(%3A|:)(stale(%3A|:))?v3/.test(req.url)) throw new Error("cache down"); return real(req); };
+    const r = await worker.fetch(new Request(`https://mutaafaziz.com/metaphases/api/ticker/${SYM}`), env, ctx);
+    await Promise.all(waits); waits = [];
+    expect(r.status).toBe(200);
+    expect((await r.json() as any).next ?? null).toBeNull();
+  });
+});
+
 describe("passedQuarter (0078)", () => {
   const rep = ["2026-08-24", "2026-05-27", "2026-03-25"];
   it("a row after the newest report is the quarter still to come", () => {

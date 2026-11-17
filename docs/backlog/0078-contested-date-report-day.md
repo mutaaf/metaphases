@@ -47,3 +47,6 @@ Build `ec1b5d00` (deployed 00:54 UTC, includes #132). The **calendar half passes
 - The calendar row on Nov 16 also lost `x`/`xd` in `/api/calendar?from=2026-11-16&to=2026-11-22` (the drawer re-derives it client side, so the screen is right, but the API, the AI facts and Compass read the bare row).
 
 Bar: on the feed's day **and every day after it until Nasdaq's day passes**, `/api/ticker/<SYM>` keeps a `next` with the feed's date and `nasdaq: {date, session}`, and the sheet shows the contested headline. A PDD override (0081) fixes PDD itself, but the code path needs a fixture test for "day after the feed's day, contested, no figures, no override" → `next` not null.
+
+## Builder 2026-11-17 (bounce 1 fix)
+Finnhub's `symbol=` had no future PDD row at all, so `skippedQuarter` (needs a `next`) returned null and `skipContested` never ran. `passedQuarter(newestRow(...))` now supplies the quarter from the newest cached calendar row after the last Nasdaq report (`tests/unit/contestedDayAfter.test.ts`). Known edges left as the ticket specifies, for the Critic to weigh: once Nasdaq's day leaves its window (window starts today), the passed feed day reads overdue at once, with no grace day counted from Nasdaq's day; and a feed day more than `XCHECK_PAST_DAYS` (7) before Nasdaq's day stops being contested (same cap as the calendar's `od`).

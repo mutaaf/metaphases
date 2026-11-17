@@ -723,7 +723,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   let companyDated = false;
   let skipContested: { date: string; session: Session } | null = null;
   if (skip) {
-    const row = skipRow = await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
+    const row = skipRow = !nextE && orphan ? orphan : await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
     // Only call it pending when the calendar shows the quarter's day passed at least two trading days ago with no
     // figures. A fresher row, a row with figures, or no row at all (this colo never cached it) can just be a feed
     // that's a day behind a normal report, and that must not read as a missed report.
@@ -930,7 +930,6 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   return body;
 }
 
-/** The pending quarter's row in the cached calendar days (fresh, else the last good copy), newest day first. */
 /** The newest cached calendar row for `symbol` on `days` (newest first), whatever its quarter. */
 async function newestRow(symbol: string, days: string[]): Promise<EarningsEvent | null> {
   const found = await Promise.all(days.map(async (d) => {
@@ -942,6 +941,7 @@ async function newestRow(symbol: string, days: string[]): Promise<EarningsEvent 
   return found.find((e) => e != null) ?? null;
 }
 
+/** The pending quarter's row in the cached calendar days (fresh, else the last good copy), newest day first. */
 async function passedRow(symbol: string, q: { quarter: number; year: number }, days: string[]): Promise<EarningsEvent | null> {
   const found = await Promise.all(days.map(async (d) => {
     try {
