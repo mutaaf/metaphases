@@ -118,3 +118,36 @@ export function settlePastRow(e: EarningsEvent, reports: NqReport[] | null, usd:
   if (daysApart(newest, e.d) <= OVERDUE_GAP_DAYS) return e; // a report in the weeks before: likely this quarter, dated elsewhere
   return { ...e, od: true };
 }
+
+// 0080: a past row the feed FILLED with figures can be wrong too (UiPath: "Nov 12 · missed by 44%", while its Q3
+// was dated Dec 3 and Nasdaq's history ends Sep 3). The same evidence as `od` says no report came out that day.
+/** Most rows with figures are real reports, so only this many suspects (`nx`) per request read a history. */
+export const FIGURES_CHECK_MAX = 6;
+
+/**
+ * 0080: the company's report history says the feed's figures for day `d` aren't a report: the row is at least
+ * OVERDUE_AFTER_TRADING_DAYS old, nothing in the history is within a trading day of it, nothing is newer, and the
+ * newest report is more than OVERDUE_GAP_DAYS back. No history (null or empty) or a company-dated row: never.
+ */
+export function phantomReport(d: string, reports: NqReport[] | null, today: string, companyDated?: unknown): boolean {
+  if (companyDated || !reports || !reports.length) return false;
+  if (tradingDaysSince(d, today) < OVERDUE_AFTER_TRADING_DAYS) return false;
+  if (reports.some((r) => nearDay(r.date, d))) return false;
+  const newest = reports[0].date;
+  return newest < d && daysApart(newest, d) > OVERDUE_GAP_DAYS;
+}
+
+/**
+ * 0080: a past row with figures worth a history read: Nasdaq's calendar for its day didn't list the company
+ * (`nx`, set when the day is built), and it's old enough for Nasdaq's history to have the report if there was one.
+ */
+export const needsFiguresCheck = (e: EarningsEvent, today: string) =>
+  !!e.nx && (e.eA != null || e.rA != null) && !e.o && !e.c && !e.od && e.d < today && e.d >= addDays(today, -PAST_LOOKBACK_DAYS)
+  && tradingDaysSince(e.d, today) >= OVERDUE_AFTER_TRADING_DAYS;
+
+/** 0080: the row without the feed's figures, flagged like 0072's (`od`) and marked as figures withheld (`pf`). */
+export function settleFiguresRow(e: EarningsEvent, reports: NqReport[] | null, today: string): EarningsEvent {
+  if (!phantomReport(e.d, reports, today, e.o)) return e;
+  const { nA: _nA, nE: _nE, nx: _nx, ...rest } = e; // the actual's companions go with it; the estimates stay
+  return { ...rest, eA: null, rA: null, od: true, pf: 1 };
+}

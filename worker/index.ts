@@ -33,7 +33,7 @@ import { shownSession } from "../shared/contestedTime";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
-import { needsPastCheck, nqReports, settlePastRow } from "../shared/pastRows";
+import { FIGURES_CHECK_MAX, needsFiguresCheck, needsPastCheck, nqReports, phantomReport, settleFiguresRow, settlePastRow } from "../shared/pastRows";
 import { oneReportOneRow, SAME_REPORT_DAYS } from "../shared/oneRow";
 import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
@@ -186,8 +186,9 @@ async function readSnap(day: string): Promise<EstSnapshot> {
 }
 
 /** Nasdaq's day calendar: pre-report EPS consensus (`e`) and, on the same basis, the reported EPS (`a`, 0058) for that day's reporters (one call per day, cached). */
+const NQ_CAL = (day: string) => CAL(`nq:cal:v2:${day}`);
 async function nasdaqDay(day: string, today: string, ctx: ExecutionContext): Promise<{ e: Record<string, number>; a: Record<string, number> | null }> {
-  const req = CAL(`nq:cal:v2:${day}`);
+  const req = NQ_CAL(day);
   const hit = await readJson<{ e: Record<string, number>; a: Record<string, number> | null }>(req);
   if (hit) return hit;
   // A slow Nasdaq must not hold up the calendar, and an empty answer isn't cached for a week.
@@ -212,9 +213,17 @@ const usdEstimates = (s: string) => s in U && isUsd(U[s].ec ?? "USD");
 async function preReportDay(day: string, events: EarningsEvent[], today: string, ctx: ExecutionContext): Promise<EarningsEvent[]> {
   const snap = await readSnap(day);
   // Also for a reported row whose EPS is on another basis from its estimate (0049): Nasdaq's figure may settle it.
-  const needNq = events.some((e) => ((e.eA != null || e.rA != null) && !snap[e.s] && e.eE != null) || (usdEstimates(e.s) && needsEpsBasis(e, snap[e.s]?.eE)));
+  const figured = (e: EarningsEvent) => e.eA != null || e.rA != null;
+  // 0080: a past day with figures always reads it (one cached call per day), to see who Nasdaq lists that day.
+  const pastFigures = day < today && events.some(figured);
+  const needNq = pastFigures || events.some((e) => (figured(e) && !snap[e.s] && e.eE != null) || (usdEstimates(e.s) && needsEpsBasis(e, snap[e.s]?.eE)));
   const nq = needNq ? await nasdaqDay(day, today, ctx).catch(() => null) : null;
-  const { events: out, updates } = applyPreReport(events, snap, nq?.e ?? {}, usdEstimates, day > today, nq?.a);
+  const pre = applyPreReport(events, snap, nq?.e ?? {}, usdEstimates, day > today, nq?.a);
+  const updates = pre.updates;
+  // 0080: a row with figures that Nasdaq's day calendar doesn't list is a suspect (`nx`): settlePast checks it
+  // against the company's report history. Most are a next-morning listing; the history check tells them apart.
+  const listed = pastFigures && nq ? new Set([...Object.keys(nq.e), ...Object.keys(nq.a ?? {})]) : null;
+  const out = listed ? pre.events.map((e) => (figured(e) && !listed.has(e.s) ? { ...e, nx: 1 as const } : e)) : pre.events;
   if (Object.keys(updates).length) {
     // Re-read just before writing and add only our entries: another request's newer snapshot survives (0047).
     ctx.waitUntil((async () => {
@@ -223,6 +232,16 @@ async function preReportDay(day: string, events: EarningsEvent[], today: string,
     })().catch(() => {}));
   }
   return out;
+}
+
+/**
+ * 0080: Nasdaq's day calendar for `day` doesn't list `sym` (the calendar's `nx` test), through the same cached call
+ * the calendar makes, so a cold colo (a link unfurl) answers like a warm one. Only asked once the history already
+ * says no report (rare). A failed or empty read is false: the figures stay, as on the calendar.
+ */
+async function nasdaqDayOmits(sym: string, day: string, today: string, ctx: ExecutionContext): Promise<boolean> {
+  const hit = await nasdaqDay(day, today, ctx).catch(() => null);
+  return !!hit && typeof hit.e === "object" && !(sym in hit.e) && !(sym in (hit.a ?? {}));
 }
 
 // ── 0015: cross-check the next 14 days against Nasdaq's per-day calendar ──
@@ -407,14 +426,19 @@ const nqSurpriseFail = (s: string) => CAL(`nq:surprise:fail:v1:${s}`);
 const PAST_FETCH_MAX = 8;
 /** 0076: neighbouring symbols checked per request for a past row moving into the range (one cache read each). */
 const MOVE_IN_MAX = 4;
+/** 0080: neighbouring rows with suspect figures checked per request (cache only). */
+const PAD_FIGURES_MAX = 3;
 
 /**
  * Fill a past row's figures from Nasdaq when the company did report (AMCR, ATO), flag it `od` when it didn't
  * (NIO). Never fails the calendar: a symbol whose history can't be read keeps its row as it was.
  * `fetchFresh: false` (share cards) reads the cache only.
  */
-async function settlePast(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true): Promise<EarningsEvent[]> {
-  const syms = [...new Set(events.filter((e) => needsPastCheck(e, today)).map((e) => e.s))];
+async function settlePast(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true, figuresMax = FIGURES_CHECK_MAX): Promise<EarningsEvent[]> {
+  // 0080: plus up to `figuresMax` suspect rows with figures (`nx`), biggest first, so the reads stay bounded.
+  const suspects = new Set([...new Set(events.filter((e) => needsFiguresCheck(e, today)).map((e) => e.s))]
+    .sort((x, y) => (U[y]?.mc ?? 0) - (U[x]?.mc ?? 0) || x.localeCompare(y)).slice(0, figuresMax));
+  const syms = [...new Set([...events.filter((e) => needsPastCheck(e, today)).map((e) => e.s), ...suspects])];
   if (!syms.length) return events;
   const reports = new Map<string, ReturnType<typeof nqReports> | null>();
   const misses: string[] = [];
@@ -445,7 +469,14 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
   }
   // Nasdaq's figures are dollars: fill only rows whose figures are dollars too (untracked rows are shown in dollars).
   const usd = (s: string) => !(s in U) || isUsd(U[s].ec ?? "USD");
-  return events.map((e) => (needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today) : e));
+  return events.map((e) => {
+    const out = needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today)
+      : suspects.has(e.s) && needsFiguresCheck(e, today) ? settleFiguresRow(e, reports.get(e.s) ?? null, today)
+      : e;
+    if (out.nx == null) return out;
+    const { nx: _nx, ...rest } = out; // the day caches keep `nx` for the sheet; responses don't need it
+    return rest;
+  });
 }
 
 /**
@@ -482,7 +513,9 @@ async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, t
   const raw = all.filter((e) => syms.has(e.s) || movers.has(e.s));
   if (!raw.length) return oneReportOneRow(fixed.filter(inRange));
   let pad = flagClosed(applyToEvents(raw, OVERRIDES, padFrom, padTo, today, (s) => s in U)).filter((e) => !inRange(e));
-  if (pad.length && pastPad) pad = await settlePast(pad, today, ctx, false).catch(() => pad);
+  // 0080: a neighbouring twin with phantom figures would outrank this range's row, so suspects are settled here too
+  // (cache only, fewer of them).
+  if (pad.length && pastPad) pad = await settlePast(pad, today, ctx, false, PAD_FIGURES_MAX).catch(() => pad);
   // Keep the twins of rows here and the rows that moved here; the rest only rode along to be checked.
   pad = pad.filter((e) => inRange(e) || syms.has(e.s));
   if (!pad.length) return oneReportOneRow(fixed.filter(inRange));
@@ -645,6 +678,13 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const epsSeries: unknown = metric?.series?.quarterly?.eps;
   const quarterly = Array.isArray(epsSeries) ? { ...metric.series.quarterly, eps: epsSeries.map((p) => ({ ...p, v: shareEps(symbol, p.v) })) } : metric?.series?.quarterly;
   const cal: any[] = applyToRows(symbol, upcoming?.earningsCalendar ?? [], OVERRIDES, today);
+  // 0080: figures on a past day the company's report history says it never reported on (PATH, Nov 12) aren't a
+  // report: drop them, so the quarter reads as not reported yet instead of "Just reported · missed by 44%".
+  const nqHist = nasdaq ? nqReports(nasdaq) : null;
+  // Both of the calendar's signals (0080's `nx` and the history), so the sheet and the calendar agree.
+  for (const e of cal) {
+    if (e.date < today && (e.epsActual != null || e.revenueActual != null) && phantomReport(e.date, nqHist, today, e.source) && (await nasdaqDayOmits(symbol, e.date, today, ctx))) { e.epsActual = null; e.revenueActual = null; }
+  }
   const nextE = cal.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
   const lastE = cal.filter((e) => e.date < today).sort((a, b) => b.date.localeCompare(a.date))[0];
   // 0015/0059: the calendar's Nasdaq cross-check, from the cached days (folded or not: one slow day must not
@@ -723,7 +763,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   let companyDated = false;
   let skipContested: { date: string; session: Session } | null = null;
   if (skip) {
-    const row = skipRow = !nextE && orphan ? orphan : await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
+    let row = !nextE && orphan ? orphan : await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
+    // 0080: the cached calendar row keeps the feed's figures; the same history check withholds them here.
+    if (row && (row.eA != null || row.rA != null) && phantomReport(row.d, nqHist, today, row.o) && (row.nx || (await nasdaqDayOmits(symbol, row.d, today, ctx)))) row = settleFiguresRow(row, nqHist, today);
+    skipRow = row;
     // Only call it pending when the calendar shows the quarter's day passed at least two trading days ago with no
     // figures. A fresher row, a row with figures, or no row at all (this colo never cached it) can just be a feed
     // that's a day behind a normal report, and that must not read as a missed report.
