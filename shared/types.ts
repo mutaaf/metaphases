@@ -18,6 +18,10 @@ export interface EarningsEvent {
   c?: string; // a projected date on an NYSE holiday ("Thanksgiving"): not a real date yet (0045)
   /** 0072: the feed's projected day passed with no results from either feed and the company's last report is a quarter back: it didn't report that day. Not a dated report (`splitClosed`). */
   od?: true;
+  /** 0080: with `od`, the feed had figures for this day that the company's report history says never came out; they're withheld (eA/rA null). */
+  pf?: 1;
+  /** 0080: a past row with figures whose day Nasdaq's calendar doesn't list the company on; the calendar checks its report history (`needsFiguresCheck`). */
+  nx?: 1;
   /** 0041: the company's report history (Nasdaq) dates its report on exactly this row's day, so of two twin rows this is the one that happened. */
   nd?: 1;
   /** 0076: the feed's day, when the company's report history moved this past row to the day it actually reported (`d`). */

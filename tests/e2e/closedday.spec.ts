@@ -125,6 +125,8 @@ test.describe("0072 past projections that never happened", () => {
       body.events.push(
         { s: "NIO", d: "2026-10-14", h: "", q: 3, y: 2026, eE: -2.1, eA: null, rE: 2.2e10, rA: null, t: 1, od: true },
         { s: "XPEV", d: "2026-10-12", h: "", q: 3, y: 2026, eE: -0.4, eA: null, rE: 1.9e10, rA: null, t: 1, od: true },
+        // 0080: the feed had figures for PATH that its own report history doesn't have; the worker withheld them.
+        { s: "PATH", d: "2026-10-14", h: "dmh", q: 3, y: 2027, eE: 0.1954, eA: null, rE: 451950780, rA: null, t: 1, od: true, pf: 1 },
       );
       r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
     });
@@ -144,6 +146,13 @@ test.describe("0072 past projections that never happened", () => {
       await expect(nio.getByTestId("erow-overdue")).toHaveText("No report that day");
       await expect(nio).not.toContainText("No figures yet");
       await expect(drawer.locator(".sess .erow", { hasText: "NIO" })).toHaveCount(1); // only in the group, not under a session
+      // 0080: PATH's withheld figures: its own line, no beat or miss, not counted, not under "During hours".
+      await expect(group.getByTestId("phantom-note")).toHaveText("Our data feed listed results for this company on this day, but its own report history has no report then, so we don't show those figures or count it as reporting. Check the company's own announcements for the real date.");
+      const path = group.locator(".erow", { hasText: "PATH" });
+      await expect(path.getByTestId("erow-overdue")).toHaveText("No report that day");
+      await expect(path.locator(".chip.res-beat, .chip.res-miss")).toHaveCount(0);
+      await expect(path).not.toContainText("Actual");
+      await expect(drawer.locator(".sess .erow", { hasText: "PATH" })).toHaveCount(1);
       await noSideScroll(page);
       await group.scrollIntoViewIfNeeded();
       await page.screenshot({ path: test.info().outputPath(`overdue-drawer-${size.width}.png`) });
