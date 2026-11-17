@@ -41,6 +41,20 @@ export function skippedQuarter(next: NextRow | undefined | null, reported: strin
   return next.quarter > 1 ? { quarter: next.quarter - 1, year: next.year } : { quarter: 4, year: next.year - 1 };
 }
 
+/**
+ * 0078: the quarter of a passed feed row when the feed lists no future row at all (Finnhub's `symbol=` returns
+ * future dates only, so after a projected day passes there may be no `next` to find a skipped quarter from).
+ * `row`: the newest cached calendar row for the company; `reported`: Nasdaq report dates, newest first. Only a
+ * quarterly reporter's row that comes after its newest report (not that report itself) counts.
+ */
+export function passedQuarter(row: { d: string; q: number; y: number; o?: string } | null | undefined, reported: string[]): { quarter: number; year: number } | null {
+  if (!row || row.o || reported.length < 2) return null;
+  const [last, prev] = reported;
+  if (daysApart(prev, last) > QUARTERLY_MAX || daysApart(prev, last) < 30) return null;
+  if (daysApart(last, row.d) < 30) return null; // that's the report Nasdaq already has
+  return { quarter: row.q, year: row.y };
+}
+
 /** Calendar days (about 15 trading days) we look back through the cached calendar for the quarter's passed projected date. */
 export const LOOKBACK_DAYS = 21;
 

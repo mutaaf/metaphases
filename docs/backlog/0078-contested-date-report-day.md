@@ -1,7 +1,7 @@
 ---
 id: 0078
 title: An unconfirmed date that reaches its day isn't a report (PDD "4 reporting · Figures pending" on Nov 16 while Nasdaq lists Thu Nov 19 and PDD hasn't announced)
-status: ready
+status: in-progress
 priority: P0
 size: S
 lens: data-quality
