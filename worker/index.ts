@@ -27,7 +27,7 @@ import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
 import { dayShareText } from "../shared/dayShare";
-import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, skippedQuarter } from "../shared/pending";
+import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, passedQuarter, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
 import { shownSession } from "../shared/contestedTime";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
@@ -714,13 +714,16 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // only), so `nextE` may be the quarter after it. Keep the unreported quarter as the next report instead,
   // with its passed date and estimates when the cached calendar still holds its row.
   const reportedDates = rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null);
-  const skip = skippedQuarter(nextE, reportedDates);
+  // 0078: no future feed row at all (the quarter's projected day passed and `symbol=` dropped it): the newest cached
+  // row after the last report is the quarter still to come, so the sheet never goes blank before Nasdaq's day.
+  const orphan = !nextE && reportedDates.length >= 2 ? await newestRow(symbol, lookbackDays(today, addDays(reportedDates[0], 30))) : null;
+  const skip = skippedQuarter(nextE, reportedDates) ?? passedQuarter(orphan, reportedDates);
   let pending: { quarter: number; year: number; passed: string; hour: Session; eE: number | null; rE: number | null } | null = null;
   let skipRow: EarningsEvent | null = null;
   let companyDated = false;
   let skipContested: { date: string; session: Session } | null = null;
   if (skip) {
-    const row = skipRow = await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
+    const row = skipRow = !nextE && orphan ? orphan : await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
     // Only call it pending when the calendar shows the quarter's day passed at least two trading days ago with no
     // figures. A fresher row, a row with figures, or no row at all (this colo never cached it) can just be a feed
     // that's a day behind a normal report, and that must not read as a missed report.
@@ -925,6 +928,17 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   };
   if (ffo && body.next) body.next.epsBasis = "ffo";
   return body;
+}
+
+/** The newest cached calendar row for `symbol` on `days` (newest first), whatever its quarter. */
+async function newestRow(symbol: string, days: string[]): Promise<EarningsEvent | null> {
+  const found = await Promise.all(days.map(async (d) => {
+    try {
+      const hit = (await caches.default.match(CAL_DAY(d))) ?? (await caches.default.match(CAL(`cal:stale:v3:${d}`)));
+      return hit ? ((await hit.json()) as EarningsEvent[]).find((x) => x.s === symbol) ?? null : null;
+    } catch { return null; } // an unreadable day says nothing
+  }));
+  return found.find((e) => e != null) ?? null;
 }
 
 /** The pending quarter's row in the cached calendar days (fresh, else the last good copy), newest day first. */
