@@ -1,12 +1,12 @@
 ---
 id: 0081
 title: PDD, Intuit, Deere and UiPath have announced dates the feed gets wrong (Intuit shown Fri Nov 20; it reports Thu Nov 19)
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-17
-pr:
+pr: 140
 by: critic
 ---
 
@@ -34,6 +34,13 @@ Intuit is the sharpest: a trader planning around Friday would miss the print by 
 - [ ] `/api/ticker/PATH` → next `{2026-12-03, amc, confirmed}`
 - [ ] Unit: the override table's validator accepts every new row (https source, `checked` within 30 days in New York time)
 - [ ] Works at 390×844 touch and 1440×900
+
+## Builder notes (2026-11-17)
+- PDD (release "before U.S. markets open") and PATH ("after the market closes") state their session: `bmo` / `amc`.
+- INTU (IR events list: 4:30 PM ET call; the Oct 29 release wasn't readable) and DE (9:00 a.m. CT call, no release time) are **date-only**: `session: ""`, confirmed. By the time of this run Finnhub already had INTU on Nov 19 after the close; the override still confirms it and drops the feed's unconfirmed session.
+- PATH has no Finnhub row for Dec 3. Its only Q3 2027 row is the phantom Nov 12 one *with figures*, which the override matched by quarter label and, ranked by "has results", would have moved to Dec 3 as a reported miss. `applyToEvents`/`applyToRows` now carry a feed row's actual figures to the company's date only once that date has come, and only from a row on, after, or within 7 days before it (`figuresFit`), so PATH's Nov 12 figures never reach Dec 3, before or after it. The override adds Dec 3 with the feed's estimates and no figures; the Nov 12 row leaves its week; the projected Mar 9 Q4 row stays and is no longer `next`.
+- PDD's `symbol=` returns no future row, so the sheet's `next` now comes from the override (Nov 19, bmo).
+- Sweep (Nov 18–Dec 4): BBY has a blank session and no notice found (last year's Q3 call was 8 a.m. ET, but that's not this year's notice). ESTC, KEYS, A, HPE, J, ZM: the feed's session, no Nasdaq disagreement on today's calendar; left on the feed. WSM and CPRT are 0082.
 
 ## Test plan
 Override-table unit tests; e2e unchanged (live data).

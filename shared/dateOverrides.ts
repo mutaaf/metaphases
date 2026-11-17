@@ -36,8 +36,19 @@ export function activeOverrides(all: DateOverrides, today: string): DateOverride
 const sameReport = (o: DateOverride, d: string, q: number | undefined, y: number | undefined) =>
   (q === o.quarter && y === o.year) || gap(d, o.date) <= SAME_REPORT_DAYS;
 
-/** Which of several rows for the same report to keep: the one on the company's date, then one with results, then estimates. */
-const rank = (e: EarningsEvent, o: DateOverride) => (e.d === o.date ? 4 : 0) + (e.eA != null ? 2 : 0) + (e.eE != null ? 1 : 0);
+/** A row dated more than this many days before the company's date can't hold that report's results (0081). */
+export const FIGURES_EARLY_DAYS = 7;
+/**
+ * Whether a feed row's actual figures can belong to the company's report: only once the company's date has come,
+ * and only from a row on or after that date, or a few days before it (a feed projecting a day early). Figures on a
+ * row weeks earlier were misfiled by the feed (PATH's phantom Nov 12 "miss" for a Dec 3 report, 0080/0081), and
+ * moving them to the company's date would show a report that never happened.
+ */
+const figuresFit = (d: string, o: DateOverride, today: string) =>
+  o.date <= today && (d >= o.date || gap(d, o.date) <= FIGURES_EARLY_DAYS);
+/** Which of several rows for the same report to keep: the one on the company's date, then one with results that fit, then estimates. */
+const rank = (e: EarningsEvent, o: DateOverride, today: string) =>
+  (e.d === o.date ? 4 : 0) + (e.eA != null && figuresFit(e.d, o, today) ? 2 : 0) + (e.eE != null ? 1 : 0);
 
 /**
  * Calendar events for [from, to]: an overridden symbol's row for that report is moved to the company's date
@@ -53,7 +64,7 @@ export function applyToEvents(events: EarningsEvent[], all: DateOverrides, from:
     const o = live[e.s];
     if (o && sameReport(o, e.d, e.q, e.y)) {
       const prev = found.get(e.s);
-      if (!prev || rank(e, o) > rank(prev, o)) found.set(e.s, e);
+      if (!prev || rank(e, o, today) > rank(prev, o, today)) found.set(e.s, e);
       continue;
     }
     out.push(e);
@@ -64,7 +75,7 @@ export function applyToEvents(events: EarningsEvent[], all: DateOverrides, from:
     if (wd === 0 || wd === 6) continue;
     const base = found.get(s);
     out.push(base
-      ? { ...base, d: o.date, h: o.hour ?? "", o: o.source }
+      ? { ...base, d: o.date, h: o.hour ?? "", o: o.source, ...(figuresFit(base.d, o, today) ? {} : { eA: null, rA: null }) }
       : { s, d: o.date, h: o.hour ?? "", q: o.quarter, y: o.year, eE: null, eA: null, rE: null, rA: null, t: tracked(s) ? 1 : 0, o: o.source });
   }
   return out;
@@ -77,9 +88,9 @@ export function applyToRows(symbol: string, rows: any[], all: DateOverrides, tod
   if (!o) return rows;
   const mine = rows.filter((r) => sameReport(o, r.date, r.quarter, r.year));
   const rest = rows.filter((r) => !mine.includes(r));
-  const base = mine.find((r) => r.date === o.date) ?? mine.find((r) => r.epsActual != null) ?? mine.find((r) => r.epsEstimate != null) ?? mine[0];
+  const base = mine.find((r) => r.date === o.date) ?? mine.find((r) => r.epsActual != null && figuresFit(r.date, o, today)) ?? mine.find((r) => r.epsEstimate != null) ?? mine[0];
   const fixed = base
-    ? { ...base, date: o.date, hour: o.hour ?? "", source: o.source }
+    ? { ...base, date: o.date, hour: o.hour ?? "", source: o.source, ...(figuresFit(base.date, o, today) ? {} : { epsActual: null, revenueActual: null }) }
     : { symbol, date: o.date, hour: o.hour ?? "", quarter: o.quarter, year: o.year, epsEstimate: null, epsActual: null, revenueEstimate: null, revenueActual: null, source: o.source };
   return [...rest, fixed];
 }
