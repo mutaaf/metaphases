@@ -1,7 +1,7 @@
 ---
 id: 0079
 title: Medtronic and Autodesk announced Nov 24 two weeks ago, but their sheets say "Date not yet confirmed by the company · Time TBD"
-status: ready
+status: in-progress
 priority: P1
 size: S
 lens: data-quality
