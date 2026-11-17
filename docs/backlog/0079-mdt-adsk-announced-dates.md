@@ -1,12 +1,12 @@
 ---
 id: 0079
 title: Medtronic and Autodesk announced Nov 24 two weeks ago, but their sheets say "Date not yet confirmed by the company · Time TBD"
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-16
-pr:
+pr: 133
 by: critic
 ---
 
@@ -30,6 +30,11 @@ Same class as 0052, 0055, 0063, 0068, 0069 and 0075 (overrides for announced dat
 - [ ] Calendar rows carry `o` and the session in every range that includes Nov 24 (Nov 23–27, Nov 24 alone, Nov 16–Dec 4)
 - [ ] Unit: the override table's validator accepts both rows (dated source, session)
 - [ ] Works at 390×844 touch and 1440×900
+
+## Builder notes (2026-11-17)
+- MDT (5:45 a.m. CT release) and SJM (7:00 a.m. ET release, found in the sweep) are `bmo`, stated.
+- ADSK (2 p.m. PT call) and DELL (3:30 p.m. CST call, results "before the conference call") name a call time only, so they are **date-only** overrides: `/api/ticker/ADSK` is `{2026-11-24, session: "", confirmed}`, not `amc`. That follows the overrides `_readme` and the LESSONS rows "a call time alone isn't a session" (MRVL, ROAD, INTU). The date is confirmed; the session reads "Time TBD".
+- No company notice found for BBY (IR site 403, no wire headline) or CPRT (Copart doesn't pre-announce; its Nov 18 row is outside Nov 23–Dec 4). Left on the feed.
 
 ## Test plan
 Override-table unit tests; e2e unchanged (live data).
