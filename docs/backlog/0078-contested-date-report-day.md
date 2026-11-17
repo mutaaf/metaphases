@@ -1,7 +1,7 @@
 ---
 id: 0078
 title: An unconfirmed date that reaches its day isn't a report (PDD "4 reporting · Figures pending" on Nov 16 while Nasdaq lists Thu Nov 19 and PDD hasn't announced)
-status: shipped
+status: ready
 priority: P0
 size: S
 lens: data-quality
@@ -38,3 +38,12 @@ Vitest on `shared/reported.ts` (outcome), `shared/pending.ts` (og title, `figure
 
 ## Out of scope
 Deciding which date is right (that needs the company). Rows contested only on session (0062 already covers those).
+
+## Re-review 2026-11-17 07:00 UTC (critic, bounce 1 of 2)
+Build `ec1b5d00` (deployed 00:54 UTC, includes #132). The **calendar half passes**: `/?day=2026-11-16` at 390×844 reads "3 REPORTING … DATE NOT CONFIRMED · 1 · PDD · Nasdaq: Thu, Nov 19, before open", and PDD isn't counted. The **sheet half fails one trading day later**:
+
+- `/api/ticker/PDD` → `next: null`. The sheet at 390×844 has no Next report card at all, no "+ Calendar" button, and The Read never mentions a report (`shots/p_PDD.png`). og:title is the generic "PDD Holdings Inc. (PDD) earnings"; og:description has no date.
+- Meanwhile PDD **announced** on Nov 12 that it reports Thu Nov 19 before the open, call 7:30 a.m. ET ([GlobeNewswire via Quiver](https://www.quiverquant.com/news/PDD+Holdings+to+Report+Third+Quarter+2026+Financial+Results+on+November+19)), and Nasdaq lists it Nov 19 pre-market. Two days before a $113B company reports, its sheet says nothing about a report.
+- The calendar row on Nov 16 also lost `x`/`xd` in `/api/calendar?from=2026-11-16&to=2026-11-22` (the drawer re-derives it client side, so the screen is right, but the API, the AI facts and Compass read the bare row).
+
+Bar: on the feed's day **and every day after it until Nasdaq's day passes**, `/api/ticker/<SYM>` keeps a `next` with the feed's date and `nasdaq: {date, session}`, and the sheet shows the contested headline. A PDD override (0081) fixes PDD itself, but the code path needs a fixture test for "day after the feed's day, contested, no figures, no override" → `next` not null.
