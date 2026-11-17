@@ -235,11 +235,12 @@ async function preReportDay(day: string, events: EarningsEvent[], today: string,
 }
 
 /**
- * 0080: Nasdaq's day calendar for `day`, as the calendar route cached it, doesn't list `sym` (the `nx` test). Cache
- * only: no cached day (or an unreadable one) is false, so the sheet never withholds figures the calendar shows.
+ * 0080: Nasdaq's day calendar for `day` doesn't list `sym` (the calendar's `nx` test), through the same cached call
+ * the calendar makes, so a cold colo (a link unfurl) answers like a warm one. Only asked once the history already
+ * says no report (rare). A failed or empty read is false: the figures stay, as on the calendar.
  */
-async function nasdaqDayOmits(sym: string, day: string): Promise<boolean> {
-  const hit = await readJson<{ e: Record<string, number>; a: Record<string, number> | null }>(NQ_CAL(day));
+async function nasdaqDayOmits(sym: string, day: string, today: string, ctx: ExecutionContext): Promise<boolean> {
+  const hit = await nasdaqDay(day, today, ctx).catch(() => null);
   return !!hit && typeof hit.e === "object" && !(sym in hit.e) && !(sym in (hit.a ?? {}));
 }
 
@@ -425,17 +426,18 @@ const nqSurpriseFail = (s: string) => CAL(`nq:surprise:fail:v1:${s}`);
 const PAST_FETCH_MAX = 8;
 /** 0076: neighbouring symbols checked per request for a past row moving into the range (one cache read each). */
 const MOVE_IN_MAX = 4;
+/** 0080: neighbouring rows with suspect figures checked per request (cache only). */
+const PAD_FIGURES_MAX = 3;
 
 /**
  * Fill a past row's figures from Nasdaq when the company did report (AMCR, ATO), flag it `od` when it didn't
  * (NIO). Never fails the calendar: a symbol whose history can't be read keeps its row as it was.
  * `fetchFresh: false` (share cards) reads the cache only.
  */
-async function settlePast(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true, figures = true): Promise<EarningsEvent[]> {
-  // 0080: plus up to FIGURES_CHECK_MAX suspect rows with figures (`nx`), biggest first, so the reads stay bounded.
-  const suspects = figures
-    ? new Set([...new Set(events.filter((e) => needsFiguresCheck(e, today)).map((e) => e.s))].sort((x, y) => (U[y]?.mc ?? 0) - (U[x]?.mc ?? 0) || x.localeCompare(y)).slice(0, FIGURES_CHECK_MAX))
-    : new Set<string>();
+async function settlePast(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true, figuresMax = FIGURES_CHECK_MAX): Promise<EarningsEvent[]> {
+  // 0080: plus up to `figuresMax` suspect rows with figures (`nx`), biggest first, so the reads stay bounded.
+  const suspects = new Set([...new Set(events.filter((e) => needsFiguresCheck(e, today)).map((e) => e.s))]
+    .sort((x, y) => (U[y]?.mc ?? 0) - (U[x]?.mc ?? 0) || x.localeCompare(y)).slice(0, figuresMax));
   const syms = [...new Set([...events.filter((e) => needsPastCheck(e, today)).map((e) => e.s), ...suspects])];
   if (!syms.length) return events;
   const reports = new Map<string, ReturnType<typeof nqReports> | null>();
@@ -467,9 +469,14 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
   }
   // Nasdaq's figures are dollars: fill only rows whose figures are dollars too (untracked rows are shown in dollars).
   const usd = (s: string) => !(s in U) || isUsd(U[s].ec ?? "USD");
-  return events.map((e) => needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today)
-    : suspects.has(e.s) && needsFiguresCheck(e, today) ? settleFiguresRow(e, reports.get(e.s) ?? null, today)
-    : e);
+  return events.map((e) => {
+    const out = needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today)
+      : suspects.has(e.s) && needsFiguresCheck(e, today) ? settleFiguresRow(e, reports.get(e.s) ?? null, today)
+      : e;
+    if (out.nx == null) return out;
+    const { nx: _nx, ...rest } = out; // the day caches keep `nx` for the sheet; responses don't need it
+    return rest;
+  });
 }
 
 /**
@@ -506,8 +513,9 @@ async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, t
   const raw = all.filter((e) => syms.has(e.s) || movers.has(e.s));
   if (!raw.length) return oneReportOneRow(fixed.filter(inRange));
   let pad = flagClosed(applyToEvents(raw, OVERRIDES, padFrom, padTo, today, (s) => s in U)).filter((e) => !inRange(e));
-  // Figure suspects (0080) aren't read here: a neighbour's row with figures never moves, and the reads are budgeted.
-  if (pad.length && pastPad) pad = await settlePast(pad, today, ctx, false, false).catch(() => pad);
+  // 0080: a neighbouring twin with phantom figures would outrank this range's row, so suspects are settled here too
+  // (cache only, fewer of them).
+  if (pad.length && pastPad) pad = await settlePast(pad, today, ctx, false, PAD_FIGURES_MAX).catch(() => pad);
   // Keep the twins of rows here and the rows that moved here; the rest only rode along to be checked.
   pad = pad.filter((e) => inRange(e) || syms.has(e.s));
   if (!pad.length) return oneReportOneRow(fixed.filter(inRange));
@@ -675,7 +683,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const nqHist = nasdaq ? nqReports(nasdaq) : null;
   // Both of the calendar's signals (0080's `nx` and the history), so the sheet and the calendar agree.
   for (const e of cal) {
-    if (e.date < today && (e.epsActual != null || e.revenueActual != null) && phantomReport(e.date, nqHist, today, e.source) && (await nasdaqDayOmits(symbol, e.date))) { e.epsActual = null; e.revenueActual = null; }
+    if (e.date < today && (e.epsActual != null || e.revenueActual != null) && phantomReport(e.date, nqHist, today, e.source) && (await nasdaqDayOmits(symbol, e.date, today, ctx))) { e.epsActual = null; e.revenueActual = null; }
   }
   const nextE = cal.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
   const lastE = cal.filter((e) => e.date < today).sort((a, b) => b.date.localeCompare(a.date))[0];
@@ -757,7 +765,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   if (skip) {
     let row = !nextE && orphan ? orphan : await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
     // 0080: the cached calendar row keeps the feed's figures; the same history check withholds them here.
-    if (row && (row.eA != null || row.rA != null) && phantomReport(row.d, nqHist, today, row.o) && (row.nx || (await nasdaqDayOmits(symbol, row.d)))) row = settleFiguresRow(row, nqHist, today);
+    if (row && (row.eA != null || row.rA != null) && phantomReport(row.d, nqHist, today, row.o) && (row.nx || (await nasdaqDayOmits(symbol, row.d, today, ctx)))) row = settleFiguresRow(row, nqHist, today);
     skipRow = row;
     // Only call it pending when the calendar shows the quarter's day passed at least two trading days ago with no
     // figures. A fresher row, a row with figures, or no row at all (this colo never cached it) can just be a feed

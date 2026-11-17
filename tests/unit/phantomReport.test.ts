@@ -132,6 +132,7 @@ describe("0080 through /api/calendar", () => {
     expect(by("QQPH")).toMatchObject({ d: "2026-11-12", eA: null, rA: null, od: true, pf: 1 });
     expect(by("QQAM")).toMatchObject({ d: "2026-11-12", eA: 0.5 });
     expect(by("QQAM").od).toBeUndefined();
+    expect(by("QQAM").nx).toBeUndefined(); // the suspect mark stays in the day cache, out of the response
     expect(by("QQOK")).toMatchObject({ eA: 0.3 });
     expect(by("QQOK").nx).toBeUndefined();
     // Only the unlisted suspects cost a history read.
@@ -162,6 +163,15 @@ describe("0080 through /api/calendar", () => {
     expect(histCalls.filter((s) => s.startsWith("QQ"))).toEqual([]);
   });
 
+  it("a phantom twin just outside the range doesn't hide the company's row in it", async () => {
+    FEED.push({ ...fh("QQPH", "2026-11-18", null, null, ""), quarter: 3 }); // the feed's projected twin, next week
+    try {
+      await get("/api/calendar?from=2026-11-09&to=2026-11-13"); // settles and caches Nov 12 (and QQPH's history)
+      const next = await get("/api/calendar?from=2026-11-16&to=2026-11-20");
+      expect(next.body.events.filter((e: EarningsEvent) => e.s === "QQPH").map((e: EarningsEvent) => e.d)).toEqual(["2026-11-18"]);
+    } finally { FEED.splice(3); }
+  });
+
   it("caps the history reads for suspects with figures per request", async () => {
     expect(FIGURES_CHECK_MAX).toBeLessThanOrEqual(8);
     const many = Array.from({ length: 12 }, (_, i) => fh(`QQX${String.fromCharCode(65 + i)}`, "2026-11-10", 1, 4.5e9));
@@ -186,6 +196,27 @@ describe("0080 through /api/ticker", () => {
     expect(t.next).toMatchObject({ date: "2026-11-12", quarter: 3, year: 2027, overdue: true });
     expect(tickerShareTitle("QQPH", "Qqph Inc", t.next, t.justReported)).not.toMatch(/reported Q3/);
     expect(t.read.join(" ")).not.toMatch(/miss/i);
+  });
+
+  it("production's shape: symbol= has only the next quarter, so the passed quarter's cached row is withheld", async () => {
+    upcoming = [{ ...fh("QQPH", "2027-03-09", null, null), quarter: 4 }];
+    await get("/api/calendar?from=2026-11-09&to=2026-11-13");
+    const t = await sheet();
+    expect(t.history.find((h: any) => h.date === "2026-11-12")).toBeUndefined();
+    expect(t.justReported ?? null).toBeNull();
+    expect(t.next).toMatchObject({ date: "2026-11-12", quarter: 3, year: 2027, overdue: true });
+  });
+
+  it("a cold colo (no calendar read, no cached Nasdaq day) answers the same: it reads the day itself", async () => {
+    upcoming = [fh("QQPH", "2026-11-12", 0.11, 3.5e9, "dmh"), { ...fh("QQPH", "2027-03-09", null, null), quarter: 4 }];
+    const t = await sheet();
+    expect(t.history.find((h: any) => h.date === "2026-11-12")).toBeUndefined();
+    expect(t.justReported ?? null).toBeNull();
+    // Nasdaq's day calendar down: the figures stay, as on the calendar.
+    (globalThis as any).caches = { default: new MemCache() };
+    nqDayRows = () => null;
+    const t2 = await sheet();
+    expect(t2.history.some((h: any) => h.date === "2026-11-12")).toBe(true);
   });
 
   it("with only the past row in the feed (no future row), the sheet still never says it reported", async () => {
