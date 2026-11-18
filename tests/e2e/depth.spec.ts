@@ -113,8 +113,7 @@ test("an unreported quarter reads as not confirmed, never as the quarter after i
   await expect(card.locator(".nc-closed")).toContainText("expected it on Tuesday, October 27");
   await expect(card).not.toContainText(/in \d+ days|today|tomorrow/);
   await expect(page.locator(".pc-proj")).toHaveCount(0); // no "typical move into <date>" band
-  await expect(page.locator(".sheet .ics-one")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Write the preview/ })).toHaveCount(0);
+  await expect(page.locator(".sheet-actions")).not.toContainText(/calendar/i);
   const w = await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth), document.documentElement.scrollWidth - document.documentElement.clientWidth));
   expect(w).toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath("overdue-sheet.png") });
@@ -172,7 +171,7 @@ test("a report whose session passed without figures says results are due, never 
 
 // 0083: the feed's day passed with no figures while Nasdaq's calendar couldn't be compared (a cold window): the sheet
 // says only what's known (unit-tested in coldContest.test.ts); here the sheet gets its output shape.
-test("a passed feed day the cross-check couldn't compare yet reads 'waiting on figures', never 'results expected' (0083)", async ({ page }) => {
+test("a passed feed day the cross-check couldn't compare yet reads 'date being checked', never 'results expected' (0083)", async ({ page }) => {
   await page.route("**/api/ticker/PDD", async (r) => {
     const body = nvdaAs("PDD");
     body.profile = { ...body.profile, name: "PDD Holdings Inc" };
@@ -183,12 +182,13 @@ test("a passed feed day the cross-check couldn't compare yet reads 'waiting on f
   await page.goto("./t/PDD");
   const card = page.locator(".next-card");
   await expect(card.locator(".eyebrow").first()).toContainText("This report · Q3 2026");
-  await expect(card.locator("h3")).toHaveText("Waiting on figures");
+  await expect(card.locator("h3")).toHaveText("Date being checked");
   await expect(card.getByTestId("nc-checking")).toContainText("Our data feed put it on Friday, October 30, before open, and no results are in our data yet.");
   await expect(card.getByTestId("nc-checking")).toContainText("still comparing that date with Nasdaq's calendar");
   await expect(card).not.toContainText(/were expected|expects/);
   await expect(card.getByTestId("nc-session")).toHaveCount(0);
-  await expect(page.locator(".sheet-actions")).not.toContainText(/Add to calendar|\.ics/i);
+  await expect(page.locator(".sheet-actions")).not.toContainText(/calendar/i); // the ICS button's text is "Calendar"
+  await expect(page.getByRole("button", { name: /Write the preview/ })).toHaveCount(0);
   const w = await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth), document.documentElement.scrollWidth - document.documentElement.clientWidth));
   expect(w).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `test-results/0083-checking-${test.info().project.name}.png` });

@@ -21,7 +21,8 @@ class MemKv {
   store = new Map<string, string>();
   puts = 0;
   async get(k: string) { return this.store.get(k) ?? null; }
-  async put(k: string, v: string) { this.puts++; this.store.set(k, v); }
+  fail = 0;
+  async put(k: string, v: string) { if (this.fail > 0) { this.fail--; throw new Error("429"); } this.puts++; this.store.set(k, v); }
 }
 let kv: MemKv;
 let env: any;
@@ -71,7 +72,7 @@ const nasdaqLists = (on: string | null, today = "2026-11-17") => {
   for (const d of windowDays(today)) cache.store.set(CAL(`nq:x:v1:${d}`), JSON.stringify(d === on ? { [SYM]: "bmo" } : { FILLER: "" }));
 };
 /** Another colo: none of the Nasdaq days, the folded window or the sheet's own edge copy. */
-const goCold = () => { for (const k of [...cache.store.keys()]) if (/nq%3Ax%3A|tk%3A/.test(k)) cache.store.delete(k); };
+const goCold = () => { for (const k of [...cache.store.keys()]) if (/nq%3Ax%3A|tk%3A|xc%3A/.test(k)) cache.store.delete(k); };
 const noResultsExpected = (t: any) => {
   expect(t.next?.status).not.toBe("results-pending");
   expect(tickerShareTitle(SYM, "Qqpe Holdings", t.next, t.justReported)).not.toMatch(/results expected/i);
@@ -144,6 +145,33 @@ describe("0083: a contest seen once survives a cold read", () => {
     delete env.SUPPORT;
     const t = await sheet();
     expect(t.next.status).toBe("checking");
+  });
+});
+
+describe("0083 self-review", () => {
+  it("a full window that lists it nowhere beats an old memo, and drops it", async () => {
+    kv.store.set("xc:v1", JSON.stringify({ [SYM]: { d: "2026-11-16", xd: "2026-11-19", xh: "bmo", at: "2026-11-17" } }));
+    nasdaqLists(null);
+    const t = await sheet();
+    expect(t.next).toMatchObject({ date: "2026-11-16", status: "results-pending" });
+    expect(t.next.nasdaq).toBeUndefined();
+    expect(JSON.parse(kv.store.get("xc:v1")!)[SYM]).toBeUndefined();
+  });
+
+  it("the day after, Nasdaq's own day calendar listing it on the feed's day is evidence: results expected", async () => {
+    cache.store.set(CAL("nq:cal:v2:2026-11-16"), JSON.stringify({ e: { [SYM]: 19.2 }, a: null }));
+    const t = await sheet();
+    expect(t.next).toMatchObject({ date: "2026-11-16", status: "results-pending" });
+  });
+
+  it("a failed KV write isn't marked done: the next read retries it", async () => {
+    nasdaqLists("2026-11-19");
+    kv.fail = 1;
+    await sheet();
+    expect(kv.store.get("xc:v1")).toBeUndefined();
+    for (const k of [...cache.store.keys()]) if (/tk%3A/.test(k)) cache.store.delete(k);
+    await sheet();
+    expect(JSON.parse(kv.store.get("xc:v1")!)[SYM]).toMatchObject({ xd: "2026-11-19" });
   });
 });
 

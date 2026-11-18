@@ -212,7 +212,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                 <div className="nc-phase"><Phase h={shownSession(data.next)} size={44} projected={proj} /></div>
                 <div>
                   <span className="eyebrow">{due || checking ? "This report" : "Next report"} · Q{data.next.quarter} {data.next.year}</span>
-                  <h3>{checking ? "Waiting on figures" : data.next.closed || data.next.overdue || dayContested ? "Date not confirmed" : proj ? `Around ${fmtLong(data.next.date)}` : fmtLong(data.next.date)}</h3>
+                  <h3>{checking ? "Date being checked" : data.next.closed || data.next.overdue || dayContested ? "Date not confirmed" : proj ? `Around ${fmtLong(data.next.date)}` : fmtLong(data.next.date)}</h3>
                   {data.next.closed && <span className="muted nc-closed">The data feed projects {fmtLong(data.next.date)}, but markets are closed that day ({data.next.closed}).</span>}
                   {data.next.overdue && <span className="muted nc-closed">{data.next.date ? `The data feed expected it on ${fmtLong(data.next.date)}, and there are no results yet.` : "The data feed has no date for this quarter yet, and there are no results yet."} The new date isn't confirmed.</span>}
                   {due && <span className="muted nc-closed">Results were expected {shownSession(data.next) ? `${PHASE_LABEL[shownSession(data.next)].toLowerCase()} ` : ""}{data.next.date === today ? "today" : `on ${fmtLong(data.next.date)}`}. None are in our data yet.</span>}

@@ -36,26 +36,31 @@ export function dayStanding(s: string, d: string, h: Session, w: NqWindow | null
   const c = w ? crossOne(s, d, h, w) : null;
   if (c?.x === "differs" && c.xd && c.xd !== d) return { k: "contested", c };
   if (c?.x === "agree" || (c?.x === "differs" && c.xd === d)) return { k: "clear" };
+  // A fully loaded window that lists no other day is current evidence: it beats an older memo.
+  if (windowCovered(w, today)) return { k: "clear" };
   const m = memoCross(memos, s, d, today);
   if (m) return { k: "contested", c: m };
-  return windowCovered(w, today) ? { k: "clear" } : { k: "checking" };
+  return { k: "checking" };
 }
+
+/** A memo seen this recently isn't re-stamped (fewer KV writes); it stays fresh for XMEMO_DAYS anyway. */
+const RESTAMP_DAYS = 3;
 
 /**
  * Fold what a read found into the memos: a day contest is (re)noted, a current agreement on the same feed day
- * drops it, and stale entries are pruned. Returns null when nothing changed (so nothing is written).
+ * (or `clear`: a fully loaded window that lists no other day) drops it, and stale entries are pruned. Returns
+ * null when nothing changed (so nothing is written).
  */
-export function noteContests(memos: XMemos | null | undefined, found: { s: string; d: string; c: Cross | null }[], today: string): XMemos | null {
+export function noteContests(memos: XMemos | null | undefined, found: { s: string; d: string; c: Cross | null; clear?: boolean }[], today: string): XMemos | null {
   const out: XMemos = {};
   let changed = false;
   for (const [s, m] of Object.entries(memos ?? {})) { if (fresh(m, today)) out[s] = m; else changed = true; }
-  for (const { s, d, c } of found) {
-    if (!c) continue;
+  for (const { s, d, c, clear } of found) {
     const m = out[s];
-    if (c.x === "differs" && c.xd && c.xd !== d) {
+    if (c?.x === "differs" && c.xd && c.xd !== d) {
       const next: XMemo = { d, xd: c.xd, ...(c.xh ? { xh: c.xh } : {}), at: today };
-      if (!m || m.d !== d || m.xd !== next.xd || m.xh !== next.xh || m.at !== today) { out[s] = next; changed = true; }
-    } else if (m && m.d === d && (c.x === "agree" || (c.x === "differs" && c.xd === d))) { delete out[s]; changed = true; }
+      if (!m || m.d !== d || m.xd !== next.xd || m.xh !== next.xh || dayNum(today) - dayNum(m.at) >= RESTAMP_DAYS) { out[s] = next; changed = true; }
+    } else if (m && m.d === d && (clear || c?.x === "agree" || (c?.x === "differs" && c.xd === d))) { delete out[s]; changed = true; }
   }
   return changed ? out : null;
 }
@@ -63,9 +68,9 @@ export function noteContests(memos: XMemos | null | undefined, found: { s: strin
 /** Rows a contest can be read for: figure-less, not company-dated, not closed or already settled (crossCheck's rule). */
 const comparable = (e: EarningsEvent) => !e.o && !e.c && e.eA == null && e.rA == null && !e.od && !e.nd && !e.fd;
 
-/** Calendar rows the window left unflagged get the remembered contest (a warm read's own flag always wins). */
-export function applyMemos(events: EarningsEvent[], memos: XMemos | null | undefined, today: string): EarningsEvent[] {
-  if (!memos || !Object.keys(memos).length) return events;
+/** Calendar rows the window left unflagged get the remembered contest (a warm read's own flag always wins, and a fully loaded window is current evidence). */
+export function applyMemos(events: EarningsEvent[], memos: XMemos | null | undefined, today: string, w?: NqWindow | null): EarningsEvent[] {
+  if (!memos || !Object.keys(memos).length || windowCovered(w, today)) return events;
   return events.map((e) => {
     if (e.x || !comparable(e)) return e;
     const m = memoCross(memos, e.s, e.d, today);
@@ -73,6 +78,7 @@ export function applyMemos(events: EarningsEvent[], memos: XMemos | null | undef
   });
 }
 
-/** The contests (and agreements) a crossChecked calendar shows, for `noteContests`. */
-export const contestsIn = (events: EarningsEvent[]) =>
-  events.filter((e) => comparable(e) && (e.x === "differs" || e.x === "agree")).map((e) => ({ s: e.s, d: e.d, c: { x: e.x!, ...(e.xd ? { xd: e.xd } : {}), ...(e.xh ? { xh: e.xh } : {}) } as Cross }));
+/** The contests (and agreements) a crossChecked calendar shows, for `noteContests`. On a fully loaded window an unflagged row is cleared too. */
+export const contestsIn = (events: EarningsEvent[], covered = false) =>
+  events.filter((e) => comparable(e) && (e.x === "differs" || e.x === "agree" || (covered && !e.x)))
+    .map((e) => (e.x ? { s: e.s, d: e.d, c: { x: e.x, ...(e.xd ? { xd: e.xd } : {}), ...(e.xh ? { xh: e.xh } : {}) } as Cross } : { s: e.s, d: e.d, c: null, clear: true }));

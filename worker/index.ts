@@ -240,6 +240,11 @@ async function preReportDay(day: string, events: EarningsEvent[], today: string,
  * the calendar makes, so a cold colo (a link unfurl) answers like a warm one. Only asked once the history already
  * says no report (rare). A failed or empty read is false: the figures stay, as on the calendar.
  */
+/** 0083: Nasdaq's day calendar lists `sym` on `day` (one cached call; a failed read is false: no evidence). */
+async function nasdaqDayLists(sym: string, day: string, today: string, ctx: ExecutionContext): Promise<boolean> {
+  const hit = await nasdaqDay(day, today, ctx).catch(() => null);
+  return !!hit && (sym in (hit.e ?? {}) || sym in (hit.a ?? {}));
+}
 async function nasdaqDayOmits(sym: string, day: string, today: string, ctx: ExecutionContext): Promise<boolean> {
   const hit = await nasdaqDay(day, today, ctx).catch(() => null);
   return !!hit && typeof hit.e === "object" && !(sym in hit.e) && !(sym in (hit.a ?? {}));
@@ -359,22 +364,40 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
 const XC_KEY = "xc:v1";
 const XC_TTL = (XMEMO_DAYS + 1) * 86400;
 const fnv = (str: string) => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x01000193) >>> 0; return h.toString(36); };
+/** Per-colo copy of the KV record (60 s) in front of KV, so a busy colo reads KV about once a minute. */
+const XC_LOCAL = CAL("xc:local:v1");
+/** At most this many KV writes per colo per day (the namespace also holds the support inbox; KV's free tier is 1,000 writes a day). */
+const XC_WRITES_PER_DAY = 25;
 async function readMemos(env: Env): Promise<XMemos | null> {
   if (!env.SUPPORT) return null;
-  try { const v = await env.SUPPORT.get(XC_KEY, { cacheTtl: 60 }); return v ? (JSON.parse(v) as XMemos) : null; } catch { return null; }
+  const local = await readJson<{ m: XMemos | null }>(XC_LOCAL);
+  if (local) return local.m;
+  try {
+    const v = await env.SUPPORT.get(XC_KEY, { cacheTtl: 60 });
+    const m = v ? (JSON.parse(v) as XMemos) : null;
+    await putJson(XC_LOCAL, { m }, 60);
+    return m;
+  } catch { return null; }
 }
-function rememberContests(env: Env, ctx: ExecutionContext, memos: XMemos | null, found: { s: string; d: string; c: Cross | null }[], today: string): void {
+function rememberContests(env: Env, ctx: ExecutionContext, memos: XMemos | null, found: { s: string; d: string; c: Cross | null; clear?: boolean }[], today: string): void {
   const kv = env.SUPPORT;
-  if (!kv || !noteContests(memos, found, today)) return;
+  const next = kv ? noteContests(memos, found, today) : null;
+  if (!kv || !next) return;
   ctx.waitUntil((async () => {
-    // Re-read without the edge copy and merge, so another colo's contest survives (as NQX_FAIL does, 0047).
-    const latest = await kv.get(XC_KEY).then((v) => (v ? (JSON.parse(v) as XMemos) : null)).catch(() => memos);
-    const next = noteContests(latest, found, today);
-    if (!next) return;
-    const mark = CAL(`xc:w:v1:${today}:${fnv(Object.entries(next).map(([s, m]) => `${s}|${m.d}|${m.xd}|${m.xh ?? ""}`).sort().join(","))}`);
+    // Last writer wins (KV has no compare-and-set): merge onto the newest copy this colo can see, so another colo's
+    // contest usually survives, and a lost one comes back on that colo's next read of it.
+    const mark = CAL(`xc:w:v1:${today}:${fnv(JSON.stringify(found.map((f) => [f.s, f.d, f.c?.x ?? "", f.c?.xd ?? "", f.clear ? 1 : 0])))}`);
     if (await caches.default.match(mark).catch(() => null)) return;
-    await caches.default.put(mark, new Response("1", { headers: { "Cache-Control": "public, max-age=86400" } })).catch(() => {});
-    await kv.put(XC_KEY, JSON.stringify(next), { expirationTtl: XC_TTL }).catch(() => {});
+    const countKey = CAL(`xc:n:v1:${today}`);
+    const n = (await readJson<number>(countKey)) ?? 0;
+    if (n >= XC_WRITES_PER_DAY) return;
+    const latest = await kv.get(XC_KEY).then((v) => (v ? (JSON.parse(v) as XMemos) : null)).catch(() => memos);
+    const merged = noteContests(latest, found, today);
+    if (!merged) { await putJson(mark, 1, 3600); return; }
+    try {
+      await kv.put(XC_KEY, JSON.stringify(merged), { expirationTtl: XC_TTL });
+    } catch { return; } // not marked: the next read retries
+    await Promise.all([putJson(mark, 1, 86400), putJson(countKey, n + 1, 86400), putJson(XC_LOCAL, { m: merged }, 60)]);
   })().catch(() => {}));
 }
 
@@ -599,8 +622,8 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     // 0083: what this read found is remembered for every colo (real evidence only), and a cold or partial read
     // gets the contests another read saw, so a flagged row stays flagged.
     const memos = await readMemos(env);
-    rememberContests(env, ctx, memos, contestsIn(fixed), today);
-    fixed = applyMemos(fixed, memos, today);
+    rememberContests(env, ctx, memos, contestsIn(fixed, windowCovered(w, today)), today);
+    fixed = applyMemos(fixed, memos, today, w);
     unchecked = windowDays(today).length - (w?.loaded.length ?? 0);
     // 0061: the days on screen that haven't been compared yet, so the client says "still checking" and asks again,
     // instead of showing a cold read as if it had been checked.
@@ -729,7 +752,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // 0083: the contests any colo has seen (read once, only when a cold window leaves a question open).
   let memosP: Promise<XMemos | null> | null = null;
   const memosOf = () => (memosP ??= readMemos(env));
-  const seen: { s: string; d: string; c: Cross | null }[] = [];
+  const seen: { s: string; d: string; c: Cross | null; clear?: boolean }[] = [];
   // 0057: the habit past reports are measured with. A company-dated row already carries its own session (or
   // none). Unless the window already loaded that day: read the one Nasdaq day the next report is on, on demand (one
   // shared, cached call per day), so the habit never waits for the window to reach that date. 0059: inside the
@@ -817,10 +840,12 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // 0083: a cold window is no evidence either way, so the row is "still checking", never "results expected".
     if (!companyDated && row && row.eA == null && row.rA == null && !row.od) {
       const w = nqWin ?? (await nasdaqWindow(today, ctx, false).catch(() => null));
-      if (w) seen.push({ s: symbol, d: row.d, c: crossOne(symbol, row.d, (row.h ?? "") as Session, w) });
-      const st = dayStanding(symbol, row.d, (row.h ?? "") as Session, w, await memosOf(), today);
+      if (w) seen.push({ s: symbol, d: row.d, c: crossOne(symbol, row.d, (row.h ?? "") as Session, w), clear: windowCovered(w, today) });
+      const st = dayStanding(symbol, row.d, (row.h ?? "") as Session, w, windowCovered(w, today) ? null : await memosOf(), today);
       if (st.k === "contested") skipContested = { date: st.c.xd!, session: st.c.xh ?? "" };
-      else if (st.k === "checking") skipChecking = true;
+      // Positive evidence that's usually cached already (0080's day read): Nasdaq's own calendar lists the company on
+      // the feed's day, so that was the report day and the figures are just late.
+      else if (st.k === "checking") skipChecking = !(await nasdaqDayLists(symbol, row.d, today, ctx));
     }
     if (!companyDated && !skipContested && row && row.eA == null && row.rA == null && tradingDaysSince(row.d, today) >= 2) {
       pending = { ...skip, passed: row.d, hour: (row.h ?? "") as Session, eE: row.eE ?? null, rE: row.rE ?? null };
@@ -962,12 +987,13 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   let nqNext: { date: string; session: Session } | undefined = skipContested ?? undefined;
   if (upNext && upNext === nextE && !duePending && !pending && !reported && !upNext.source && !closed) {
     const c = nqWin ? crossOne(symbol, upNext.date, (upNext.hour || "") as Session, nqWin) : null;
-    if (c) seen.push({ s: symbol, d: upNext.date, c });
+    if (c) seen.push({ s: symbol, d: upNext.date, c, clear: windowCovered(nqWin, today) });
     // 0083: a cold window keeps the day contest an earlier read saw (from any colo).
-    const use = c ?? memoCross(await memosOf(), symbol, upNext.date, today);
+    const use = c ?? (windowCovered(nqWin, today) ? null : memoCross(await memosOf(), symbol, upNext.date, today));
     if (use?.x === "differs" && use.xd) nqNext = { date: use.xd, session: use.xh ?? "" };
   }
-  if (seen.length) rememberContests(env, ctx, await memosOf(), seen, today);
+  // Only when there's something a memo could change: a contest, or current evidence against one.
+  if (seen.some((x) => x.clear || x.c?.x === "differs" || x.c?.x === "agree")) rememberContests(env, ctx, await memosOf(), seen, today);
   if (reported) read.push(reportedLine(name, { date: reported.date, session: reported.hour, quarter: reported.quarter, epsE: reported.eE, epsA: reported.eA, nE: usd ? reported.nE : undefined, nA: usd ? reported.nA : undefined, reit }, today, (v) => epsIn(v, currency)));
   if (checking) {
     read.push(`${name}'s Q${checking.quarter} report: our data feed dated it ${longDay(checking.date)}${checking.hour ? ` ${WHEN_LONG[checking.hour as Session] ?? ""}` : ""}, and no results are in our data yet. We're still comparing that date with Nasdaq's calendar, so it may not have been the report day.`);
