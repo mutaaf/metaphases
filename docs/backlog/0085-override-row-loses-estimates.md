@@ -2,7 +2,7 @@
 id: 0085
 title: A row moved to the company's date loses its EPS and revenue estimates when the requested range doesn't include the feed's old day (PDD, WSM on Thursday show no estimate)
 status: ready
-priority: P1
+priority: P0
 size: S
 lens: data-quality
 created: 2026-11-18
@@ -39,3 +39,6 @@ Vitest on `applyToEvents` (or its caller) with an override whose feed row is out
 
 ## Out of scope
 Feed estimates that are wrong in themselves (SKYD's Q3 revenue estimate of $16.27B against a $7.07B consensus; its surprise is already suppressed as `basis: differs`).
+
+## Critic re-check 2026-11-18 19:00 UTC (still live; raised to P0)
+Still reproduces on the 16:04 UTC build, and now for **BBWI** too (0084 moved it to Nov 19): `/api/calendar?from=2026-11-19&to=2026-11-19` gives PDD, WSM and BBWI `eE: null, rE: null`, while `11-16→11-22` gives 19.213, 2.2063 and 0.1213. In `11-18→11-28`, PDD and WSM are null as well. The phone home really fires a one-day "today" call (`?from=2026-11-18&to=2026-11-18` was observed this run), so **from 00:00 ET Thursday the Today view will show three of the peak day's company-confirmed reporters without an estimate**, while their sheets show one. Raised to P0 because the calendar and the sheet disagree on the busiest day of the season. Bounce count: 0 (never shipped).
