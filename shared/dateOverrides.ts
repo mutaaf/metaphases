@@ -60,11 +60,15 @@ export function applyToEvents(events: EarningsEvent[], all: DateOverrides, from:
   if (!Object.keys(live).length) return events;
   const out: EarningsEvent[] = [];
   const found = new Map<string, EarningsEvent>();
+  // 0085: the best-ranked row of the report that has an estimate, for a chosen row with none (a twin carries it).
+  const est = new Map<string, EarningsEvent>();
   for (const e of events) {
     const o = live[e.s];
     if (o && sameReport(o, e.d, e.q, e.y)) {
       const prev = found.get(e.s);
       if (!prev || rank(e, o, today) > rank(prev, o, today)) found.set(e.s, e);
+      const pe = est.get(e.s);
+      if ((e.eE != null || e.rE != null) && (!pe || rank(e, o, today) > rank(pe, o, today))) est.set(e.s, e);
       continue;
     }
     out.push(e);
@@ -73,12 +77,35 @@ export function applyToEvents(events: EarningsEvent[], all: DateOverrides, from:
     if (o.date < from || o.date > to) continue;
     const wd = new Date(o.date + "T12:00:00Z").getUTCDay();
     if (wd === 0 || wd === 6) continue;
-    const base = found.get(s);
+    const chosen = found.get(s);
+    const twin = est.get(s);
+    const base = chosen && twin && chosen.eE == null && chosen.rE == null ? { ...chosen, ...pickEstimates(twin) } : chosen;
     out.push(base
       ? { ...base, d: o.date, h: o.hour ?? "", o: o.source, ...(figuresFit(base.d, o, today) ? {} : { eA: null, rA: null }) }
       : { s, d: o.date, h: o.hour ?? "", q: o.quarter, y: o.year, eE: null, eA: null, rE: null, rA: null, t: tracked(s) ? 1 : 0, o: o.source });
   }
   return out;
+}
+
+/**
+ * 0085: an override row built without the feed's row (that row sat on a day outside the requested range) gets the
+ * estimates from the same override applied to the neighbouring days' rows (`moved`: in-range rows from a cache-only
+ * pad read). Only a row with neither estimate is filled, only from an override row on the same symbol and day, and
+ * only with estimates and their marks: never figures. Nothing found leaves it null ("—").
+ */
+/** A row's estimates and the marks that say what they are (0049 `nE`, the pre-report snapshot `pr`); never figures. */
+const pickEstimates = (m: EarningsEvent): Partial<EarningsEvent> => ({
+  eE: m.eE, rE: m.rE, ...(m.pr ? { pr: m.pr } : {}), ...(m.nE != null ? { nE: m.nE } : {}),
+});
+
+export function carryEstimates(rows: EarningsEvent[], moved: EarningsEvent[]): EarningsEvent[] {
+  const by = new Map(moved.filter((e) => e.o && (e.eE != null || e.rE != null)).map((e) => [`${e.s}|${e.d}`, e]));
+  if (!by.size) return rows;
+  return rows.map((e) => {
+    if (!e.o || e.eE != null || e.rE != null) return e;
+    const m = by.get(`${e.s}|${e.d}`);
+    return m ? { ...e, ...pickEstimates(m) } : e;
+  });
 }
 
 /** Finnhub `calendar/earnings?symbol=` rows for one symbol, with the company's date applied the same way. */

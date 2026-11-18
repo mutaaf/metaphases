@@ -1,12 +1,12 @@
 ---
 id: 0085
 title: A row moved to the company's date loses its EPS and revenue estimates when the requested range doesn't include the feed's old day (PDD, WSM on Thursday show no estimate)
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-18
-pr:
+pr: 147
 by: critic
 ---
 

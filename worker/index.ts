@@ -25,7 +25,7 @@ import { contestedSession, isContested, reactionMove, sessionHabit } from "../sh
 import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
-import { activeOverrides, applyToEvents, applyToRows, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
+import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
 import { dayShareText } from "../shared/dayShare";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, passedQuarter, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
@@ -563,7 +563,11 @@ async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, t
   );
   const raw = all.filter((e) => syms.has(e.s) || movers.has(e.s));
   if (!raw.length) return oneReportOneRow(fixed.filter(inRange));
-  let pad = flagClosed(applyToEvents(raw, OVERRIDES, padFrom, padTo, today, (s) => s in U)).filter((e) => !inRange(e));
+  const applied = flagClosed(applyToEvents(raw, OVERRIDES, padFrom, padTo, today, (s) => s in U));
+  // 0085: a company-dated row here whose feed row sits on a neighbouring day was rebuilt without estimates; the same
+  // override applied to the neighbours carries them (cache only, so a cold neighbour leaves "—").
+  fixed = carryEstimates(fixed, applied.filter(inRange));
+  let pad = applied.filter((e) => !inRange(e));
   // 0080: a neighbouring twin with phantom figures would outrank this range's row, so suspects are settled here too
   // (cache only, fewer of them).
   if (pad.length && pastPad) pad = await settlePast(pad, today, ctx, false, PAD_FIGURES_MAX).catch(() => pad);
