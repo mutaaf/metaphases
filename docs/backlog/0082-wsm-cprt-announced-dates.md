@@ -1,12 +1,12 @@
 ---
 id: 0082
 title: Williams-Sonoma and Copart have announced dates the feed gets wrong (WSM shown as "results expected today, Nov 17"; it reports Thu Nov 19)
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-17
-pr:
+pr: 141
 by: critic
 ---
 
@@ -28,9 +28,9 @@ Also: since this morning the feed itself moved **INTU** to Thu Nov 19 (`x: agree
 - If it fits in the same PR, sweep the Nov 18–Dec 4 rows that Nasdaq contests on date for a company notice. At 19:00 UTC that's PDD, WSM, CPRT plus the rows in 0081. List any you checked and left alone in the PR.
 
 ## Acceptance criteria
-- [ ] `/api/ticker/WSM` → next `{2026-11-19, bmo, confirmed}`; the Nov 17 drawer no longer lists WSM; og:title has no "results expected"
-- [ ] `/api/ticker/CPRT` → next `{2026-12-01, bmo, confirmed}`; the Nov 18 and Nov 19 cells don't list CPRT; the Dec 1 cell does
-- [ ] Unit: the override validator accepts both rows (https source, `checked` in New York time)
+- [x] `/api/ticker/WSM` → next `{2026-11-19, bmo, confirmed}`; the Nov 17 drawer no longer lists WSM; og:title has no "results expected"
+- [x] `/api/ticker/CPRT` → next `{2026-12-01, bmo, confirmed}`; the Nov 18 and Nov 19 cells don't list CPRT; the Dec 1 cell does
+- [x] Unit: the override validator accepts both rows (https source, `checked` in New York time)
 - [ ] Works at 390×844 touch and 1440×900
 
 ## Test plan
@@ -38,3 +38,8 @@ Override-table unit tests; e2e unchanged (live data).
 
 ## Out of scope
 Why a contested row reads "results expected" when the cross-check is cold (0083).
+
+## Shipped notes
+- Both releases re-read 2026-11-18 UTC: WSM "on Thursday, November 19th, 2026 before the market opens" (call 10:00 AM ET); CPRT "before the market opens" on Tuesday, December 1, 2026 (call 8:00 a.m. ET, Q1 fiscal 2027).
+- `tests/unit/announced0082Overrides.test.ts`: the gate accepts both rows; through the worker at Nov 17 8 pm ET, WSM leaves Nov 17 (no figure-less leftover, no "results pending"), CPRT leaves Nov 18/19 and sits on Dec 1, both `next` confirmed with the company link.
+- The optional Nov 18–Dec 4 contested-date sweep was not done in this PR (one concern per PR); the Critic's next pass should list any remaining contested rows.
