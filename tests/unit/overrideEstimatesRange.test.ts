@@ -30,6 +30,18 @@ describe("0085 carryEstimates", () => {
     expect(carryEstimates(here, moved).find((e) => e.s === "WSM")).toMatchObject({ d: "2026-11-19", h: "bmo", eE: 2.2063, rE: 2020000000, eA: null, rA: null });
   });
 
+  it("a feed row on the company's day without estimates takes them from its twin, in a wide range as in a narrow one", () => {
+    const onDay = { s: "WSM", d: "2026-11-19", h: "", q: 3, y: 2027, eE: null, eA: null, rE: null, rA: null, t: 1 } as any;
+    const twin = { ...ev(feed[1]), pr: "s" };
+    const wide = applyToEvents([twin, onDay], FILE, "2026-11-16", "2026-11-22", today).find((e) => e.s === "WSM");
+    const narrow = carryEstimates(
+      applyToEvents([onDay], FILE, "2026-11-19", "2026-11-19", today),
+      applyToEvents([twin], FILE, "2026-10-29", "2026-12-10", today).filter((e) => e.d === "2026-11-19"),
+    ).find((e) => e.s === "WSM");
+    expect(wide).toMatchObject({ d: "2026-11-19", eE: 2.2063, rE: 2020000000, pr: "s", eA: null });
+    expect(narrow).toEqual(wide);
+  });
+
   it("never fills a row that isn't company-dated, one that already has an estimate, or from another day", () => {
     const plain = { s: "X", d: "2026-11-19", h: "", eE: null, rE: null, eA: null, rA: null, t: 1 } as any;
     const has = { s: "Y", d: "2026-11-19", h: "", eE: 1, rE: null, eA: null, rA: null, t: 1, o: "https://a.b" } as any;
