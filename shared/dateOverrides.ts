@@ -81,6 +81,22 @@ export function applyToEvents(events: EarningsEvent[], all: DateOverrides, from:
   return out;
 }
 
+/**
+ * 0085: an override row built without the feed's row (that row sat on a day outside the requested range) gets the
+ * estimates from the same override applied to the neighbouring days' rows (`moved`: in-range rows from a cache-only
+ * pad read). Only a row with neither estimate is filled, only from an override row on the same symbol and day, and
+ * only with estimates: never figures. Nothing found leaves it null ("—").
+ */
+export function carryEstimates(rows: EarningsEvent[], moved: EarningsEvent[]): EarningsEvent[] {
+  const by = new Map(moved.filter((e) => e.o && (e.eE != null || e.rE != null)).map((e) => [`${e.s}|${e.d}`, e]));
+  if (!by.size) return rows;
+  return rows.map((e) => {
+    if (!e.o || e.eE != null || e.rE != null) return e;
+    const m = by.get(`${e.s}|${e.d}`);
+    return m ? { ...e, eE: m.eE, rE: m.rE } : e;
+  });
+}
+
 /** Finnhub `calendar/earnings?symbol=` rows for one symbol, with the company's date applied the same way. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function applyToRows(symbol: string, rows: any[], all: DateOverrides, today: string): any[] {
