@@ -4,7 +4,7 @@
 // rate limiting counts per salted SHA-256 hash, and those counters expire after an hour.
 
 export interface KvLike {
-  get(key: string): Promise<string | null>;
+  get(key: string, opts?: { cacheTtl?: number }): Promise<string | null>;
   put(key: string, value: string, opts?: { expirationTtl?: number; metadata?: unknown }): Promise<void>;
 }
 export interface SupportEnv { SUPPORT?: KvLike }

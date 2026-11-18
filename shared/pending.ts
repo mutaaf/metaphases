@@ -112,6 +112,8 @@ export function tickerShareTitle(sym: string, name: string, next: { date: string
   if (just) return just.epsA == null ? `${sym} reported Q${just.quarter} · Metaphases`
     : `${sym} reported Q${just.quarter}: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? vsExpected(just, (v) => epsIn(v, just.currency)) : ""} · Metaphases`;
   if (next?.status === "results-pending") return `${sym}'s Q${next.quarter} results expected: none in yet · Metaphases`;
+  // 0083: the feed's day passed with no figures, and Nasdaq's calendar couldn't be compared yet: no claim either way.
+  if (next?.status === "checking") return `${sym}'s Q${next.quarter} report: no figures yet, date being checked · Metaphases`;
   if (isDated(next)) {
     const day = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
     const when = day(next.date);

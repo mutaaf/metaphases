@@ -158,11 +158,14 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
   const nextIn = isDated(data?.next) ? daysBetween(today, data.next.date) : null;
   const just = data?.justReported;
   const due = data?.next?.status === "results-pending";
+  // 0083: the feed's day passed with no figures, and Nasdaq's calendar couldn't be compared yet.
+  const checking = data?.next?.status === "checking";
   // 0078: the feed's day has come but Nasdaq lists another and the company hasn't said: not a report day.
   const dayContested = !!data?.next?.nasdaq && data.next.nasdaq.date !== data.next.date && !due && !data.next.overdue && !data.next.closed && data.next.date <= today;
   const shareText = just
     ? `${name} reported Q${just.quarter}${just.epsA != null ? `: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? vsExpected(just, (v) => epsIn(v, just.currency)) : ""}` : ""}.`
     : due ? `${name}'s Q${data!.next!.quarter} results were expected; none are in yet.`
+    : checking ? `${name}: no Q${data!.next!.quarter} figures yet, and the report date is still being checked.`
     : data?.next?.closed || data?.next?.overdue
     ? `${name}: report date not confirmed yet — earnings track record, quality grade and setup.`
     : dayContested
@@ -187,7 +190,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
           </div>
           <div className="sheet-actions">
             <button className={`btn btn-box ${w ? "on" : ""}`} onClick={() => actions.toggleWatch(symbol)} aria-pressed={!!w}><Icon name="star" size={14} /> {w ? "Watching" : "Watch"}</button>
-            {data?.next && !data.next.overdue && !due && <IcsButtons symbols={[symbol]} compact />}
+            {data?.next && !data.next.overdue && !due && !checking && <IcsButtons symbols={[symbol]} compact />}
             <button className="btn btn-box sq" onClick={doShare} aria-label={`Share ${symbol}'s read`}><Icon name="share" size={14} /></button>
             <button className="icon-btn sheet-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
           </div>
@@ -208,20 +211,21 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
               <section className="next-card">
                 <div className="nc-phase"><Phase h={shownSession(data.next)} size={44} projected={proj} /></div>
                 <div>
-                  <span className="eyebrow">{due ? "This report" : "Next report"} · Q{data.next.quarter} {data.next.year}</span>
-                  <h3>{data.next.closed || data.next.overdue || dayContested ? "Date not confirmed" : proj ? `Around ${fmtLong(data.next.date)}` : fmtLong(data.next.date)}</h3>
+                  <span className="eyebrow">{due || checking ? "This report" : "Next report"} · Q{data.next.quarter} {data.next.year}</span>
+                  <h3>{checking ? "Waiting on figures" : data.next.closed || data.next.overdue || dayContested ? "Date not confirmed" : proj ? `Around ${fmtLong(data.next.date)}` : fmtLong(data.next.date)}</h3>
                   {data.next.closed && <span className="muted nc-closed">The data feed projects {fmtLong(data.next.date)}, but markets are closed that day ({data.next.closed}).</span>}
                   {data.next.overdue && <span className="muted nc-closed">{data.next.date ? `The data feed expected it on ${fmtLong(data.next.date)}, and there are no results yet.` : "The data feed has no date for this quarter yet, and there are no results yet."} The new date isn't confirmed.</span>}
                   {due && <span className="muted nc-closed">Results were expected {shownSession(data.next) ? `${PHASE_LABEL[shownSession(data.next)].toLowerCase()} ` : ""}{data.next.date === today ? "today" : `on ${fmtLong(data.next.date)}`}. None are in our data yet.</span>}
+                  {checking && <span className="muted nc-closed" data-testid="nc-checking">Our data feed put it on {fmtLong(data.next.date)}{data.next.session ? `, ${PHASE_LABEL[data.next.session].toLowerCase()}` : ""}, and no results are in our data yet. We're still comparing that date with <Term k="xcheck">Nasdaq's calendar</Term>, so it may not have been the report day.</span>}
                   {dayContested && <span className="muted nc-closed" data-testid="nc-contested">Our data feed put it on {fmtLong(data.next.date)}{data.next.session ? `, ${PHASE_LABEL[data.next.session].toLowerCase()}` : ""}, and no results are in our data yet.</span>}
-                  {!data.next.overdue && !due && !dayContested && <span className="muted" data-testid="nc-session">{contested ? <Term k="xcheck">Time unconfirmed</Term> : <Term k={data.next.session || "bmo"}>{sessionText(data.next.session, data.next.hs)}</Term>}{proj && data.next.session && !contested ? " (projected)" : ""}{nextIn != null && nextIn >= 0 && !dayContested && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
+                  {!data.next.overdue && !due && !checking && !dayContested && <span className="muted" data-testid="nc-session">{contested ? <Term k="xcheck">Time unconfirmed</Term> : <Term k={data.next.session || "bmo"}>{sessionText(data.next.session, data.next.hs)}</Term>}{proj && data.next.session && !contested ? " (projected)" : ""}{nextIn != null && nextIn >= 0 && !dayContested && ` · ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}`}</span>}
                   {data.next.nasdaq && !data.next.overdue && !due && <span className="muted nc-xcheck small" data-testid="nc-xcheck"><Term k="xcheck">Two calendars disagree.</Term> {contested
                     ? `Our data feed lists it ${SESSION_WORDS[data.next.session]}; Nasdaq's calendar, ${SESSION_WORDS[data.next.nasdaq.session]}.${data.moveSession?.session === "bmo" || data.moveSession?.session === "amc" ? ` Past moves point to ${SESSION_WORDS[data.moveSession.session]}.` : ""}`
                     : data.next.nasdaq.date === data.next.date
                     ? `Nasdaq's calendar lists it ${data.next.nasdaq.session ? PHASE_LABEL[data.next.nasdaq.session].toLowerCase() : "at another time"} that day.`
                     : `Nasdaq's calendar lists it on ${fmtLong(data.next.nasdaq.date)}${data.next.nasdaq.session ? `, ${PHASE_LABEL[data.next.nasdaq.session].toLowerCase()}` : ""}.`} Treat the {data.next.nasdaq.date === data.next.date ? "time" : "date"} as unconfirmed until the company announces it.</span>}
-                  {data.next.hs === "n" && data.next.session && !data.next.nasdaq && !proj && !data.next.overdue && !due && <span className="muted nc-expected small" data-testid="nc-expected">The time is from Nasdaq's calendar; our data feed left it blank and the company hasn't said.</span>}
-                  {proj && !data.next.overdue && !due && <span className="muted nc-projected small" data-testid="nc-projected"><Term k="unconfirmed">Date not yet confirmed by the company.</Term> The {data.next.session ? "date and time shown are" : "date shown is"} our data feed's projection and can move when the company announces its own.</span>}
+                  {data.next.hs === "n" && data.next.session && !data.next.nasdaq && !proj && !data.next.overdue && !due && !checking && <span className="muted nc-expected small" data-testid="nc-expected">The time is from Nasdaq's calendar; our data feed left it blank and the company hasn't said.</span>}
+                  {proj && !data.next.overdue && !due && !checking && <span className="muted nc-projected small" data-testid="nc-projected"><Term k="unconfirmed">Date not yet confirmed by the company.</Term> The {data.next.session ? "date and time shown are" : "date shown is"} our data feed's projection and can move when the company announces its own.</span>}
                   {data.next.confirmed && <span className="nc-confirmed small"><Term k="companydate">Confirmed by the company</Term> · <a href={data.next.confirmed} target="_blank" rel="noopener noreferrer">source</a></span>}
                 </div>
                 <dl className="nc-stats">
@@ -237,7 +241,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
               </section>
             )}
 
-            {!just && !due && <AiPreviewMount data={data} />}
+            {!just && !due && !checking && <AiPreviewMount data={data} />}
 
             {data.read.length > 0 && (
               <section className="read">

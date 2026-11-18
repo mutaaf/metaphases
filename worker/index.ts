@@ -30,7 +30,8 @@ import { dayShareText } from "../shared/dayShare";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, passedQuarter, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
 import { shownSession } from "../shared/contestedTime";
-import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type NqDay, type NqWindow } from "../shared/crossCheck";
+import { applyMemos, contestsIn, dayStanding, memoCross, noteContests, windowCovered, XMEMO_DAYS, type XMemos } from "../shared/contestMemo";
+import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
 import { FIGURES_CHECK_MAX, needsFiguresCheck, needsPastCheck, nqReports, phantomReport, settleFiguresRow, settlePastRow } from "../shared/pastRows";
@@ -350,6 +351,33 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
   return w;
 }
 
+// ── 0083: Nasdaq date contests every colo can read ──
+// The window above is per data center (caches.default), so a contest seen on a warm colo vanished on a cold one,
+// and PDD/WSM flipped back to "results expected". One small KV record holds the day contests seen in the last
+// XMEMO_DAYS. Reads are edge-cached by KV (60 s). A write happens only when a read finds something the record
+// doesn't hold yet, and at most once per change per colo per day (a cache marker), well inside KV's free writes.
+const XC_KEY = "xc:v1";
+const XC_TTL = (XMEMO_DAYS + 1) * 86400;
+const fnv = (str: string) => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x01000193) >>> 0; return h.toString(36); };
+async function readMemos(env: Env): Promise<XMemos | null> {
+  if (!env.SUPPORT) return null;
+  try { const v = await env.SUPPORT.get(XC_KEY, { cacheTtl: 60 }); return v ? (JSON.parse(v) as XMemos) : null; } catch { return null; }
+}
+function rememberContests(env: Env, ctx: ExecutionContext, memos: XMemos | null, found: { s: string; d: string; c: Cross | null }[], today: string): void {
+  const kv = env.SUPPORT;
+  if (!kv || !noteContests(memos, found, today)) return;
+  ctx.waitUntil((async () => {
+    // Re-read without the edge copy and merge, so another colo's contest survives (as NQX_FAIL does, 0047).
+    const latest = await kv.get(XC_KEY).then((v) => (v ? (JSON.parse(v) as XMemos) : null)).catch(() => memos);
+    const next = noteContests(latest, found, today);
+    if (!next) return;
+    const mark = CAL(`xc:w:v1:${today}:${fnv(Object.entries(next).map(([s, m]) => `${s}|${m.d}|${m.xd}|${m.xh ?? ""}`).sort().join(","))}`);
+    if (await caches.default.match(mark).catch(() => null)) return;
+    await caches.default.put(mark, new Response("1", { headers: { "Cache-Control": "public, max-age=86400" } })).catch(() => {});
+    await kv.put(XC_KEY, JSON.stringify(next), { expirationTtl: XC_TTL }).catch(() => {});
+  })().catch(() => {}));
+}
+
 async function fetchCalendarDay(day: string, env: Env): Promise<EarningsEvent[]> {
   const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${day}&to=${day}&token=${env.FINNHUB_API_KEY}`);
   return toEvents(data.earningsCalendar);
@@ -568,6 +596,11 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     const inRange = (d: string) => d >= from && d <= to;
     const w = await nasdaqWindow(today, ctx, from <= windowEnd(today), inRange).catch(() => null);
     if (w) fixed = crossCheck(fixed, w);
+    // 0083: what this read found is remembered for every colo (real evidence only), and a cold or partial read
+    // gets the contests another read saw, so a flagged row stays flagged.
+    const memos = await readMemos(env);
+    rememberContests(env, ctx, memos, contestsIn(fixed), today);
+    fixed = applyMemos(fixed, memos, today);
     unchecked = windowDays(today).length - (w?.loaded.length ?? 0);
     // 0061: the days on screen that haven't been compared yet, so the client says "still checking" and asks again,
     // instead of showing a cold read as if it had been checked.
@@ -693,6 +726,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // The rows the calendar's crossCheck compares: no company date, no figures in, not projected onto a closed day.
   const xcheck = !!nextE && !nextE.source && nextE.epsActual == null && nextE.revenueActual == null && !closedDay(nextE.date);
   let nqWin = xcheck ? await nasdaqWindow(today, ctx, false).catch(() => null) : null;
+  // 0083: the contests any colo has seen (read once, only when a cold window leaves a question open).
+  let memosP: Promise<XMemos | null> | null = null;
+  const memosOf = () => (memosP ??= readMemos(env));
+  const seen: { s: string; d: string; c: Cross | null }[] = [];
   // 0057: the habit past reports are measured with. A company-dated row already carries its own session (or
   // none). Unless the window already loaded that day: read the one Nasdaq day the next report is on, on demand (one
   // shared, cached call per day), so the habit never waits for the window to reach that date. 0059: inside the
@@ -762,6 +799,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   let skipRow: EarningsEvent | null = null;
   let companyDated = false;
   let skipContested: { date: string; session: Session } | null = null;
+  let skipChecking = false;
   if (skip) {
     let row = !nextE && orphan ? orphan : await passedRow(symbol, skip, lookbackDays(today, addDays(reportedDates[0], 45)));
     // 0080: the cached calendar row keeps the feed's figures; the same history check withholds them here.
@@ -776,10 +814,13 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     companyDated = !!ov && ov.quarter === skip.quarter && ov.year === skip.year;
     // 0078: Nasdaq still lists this quarter on a later day (and the company hasn't dated it): the passed feed day
     // is contested, not missed and not "results expected". Same check as the calendar's row (crossOne's past path).
+    // 0083: a cold window is no evidence either way, so the row is "still checking", never "results expected".
     if (!companyDated && row && row.eA == null && row.rA == null && !row.od) {
       const w = nqWin ?? (await nasdaqWindow(today, ctx, false).catch(() => null));
-      const c = w ? crossOne(symbol, row.d, (row.h ?? "") as Session, w) : null;
-      if (c?.x === "differs" && c.xd && c.xd !== row.d) skipContested = { date: c.xd, session: c.xh ?? "" };
+      if (w) seen.push({ s: symbol, d: row.d, c: crossOne(symbol, row.d, (row.h ?? "") as Session, w) });
+      const st = dayStanding(symbol, row.d, (row.h ?? "") as Session, w, await memosOf(), today);
+      if (st.k === "contested") skipContested = { date: st.c.xd!, session: st.c.xh ?? "" };
+      else if (st.k === "checking") skipChecking = true;
     }
     if (!companyDated && !skipContested && row && row.eA == null && row.rA == null && tradingDaysSince(row.d, today) >= 2) {
       pending = { ...skip, passed: row.d, hour: (row.h ?? "") as Session, eE: row.eE ?? null, rE: row.rE ?? null };
@@ -800,8 +841,12 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   let outcome: Outcome = null;
   // 0078: Nasdaq lists the report on another day and the company hasn't dated it: the feed's day coming isn't a
   // report day, so it stays an unconfirmed date (with Nasdaq's day named below), never "results expected".
-  const todayContested = !!nextE && nextE.date === today && !nextE.source && !!nqWin && nextE.epsActual == null && nextE.revenueActual == null
-    && (() => { const c = crossOne(symbol, today, (nextE.hour || "") as Session, nqWin); return c?.x === "differs" && !!c.xd && c.xd !== today; })();
+  // 0083: the same question when the window is cold: a contest another read saw still counts, and a day nothing can
+  // rule a contest out for yet is "still checking" once its session passes, not "results expected".
+  const todayStanding = !!nextE && nextE.date === today && !nextE.source && nextE.epsActual == null && nextE.revenueActual == null
+    ? dayStanding(symbol, today, (nextE.hour || "") as Session, nqWin, nqWin && windowCovered(nqWin, today) ? null : await memosOf(), today)
+    : null;
+  const todayContested = todayStanding?.k === "contested";
   if (nextE && nextE.date === today && !todayContested) {
     const row = await passedRow(symbol, nextE, [today]);
     const snapRaw = (await readSnap(today))[symbol]?.eE;
@@ -817,12 +862,15 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   } else if (skip && skipRow && !pending && !companyDated && !skipContested) {
     outcome = reportOutcome({ date: skipRow.d, hour: skipRow.h ?? "", quarter: skip.quarter, year: skip.year, eE: skipRow.eE ?? null, eA: skipRow.eA ?? null, rE: skipRow.rE ?? null, rA: skipRow.rA ?? null, ...(skipRow.nE != null ? { nE: skipRow.nE } : {}), ...(skipRow.nA !== undefined ? { nA: skipRow.nA } : {}) }, today, nowMin);
   }
+  // 0083: fail closed. A figure-less feed day whose Nasdaq contest can't be ruled out isn't stated as a missed report.
+  let checking: DayRow | null = null;
+  if (outcome?.kind === "results-pending" && (outcome.row.date === today ? todayStanding?.k === "checking" : skipChecking)) { checking = outcome.row; outcome = null; }
   const reported = outcome?.kind === "reported" ? outcome.row : null;
   const duePending = outcome?.kind === "results-pending" ? outcome.row : null;
   // What the sheet calls "next": after a same-day report, the following quarter (if the feed lists one).
   const upNext = reported && nextE && reported.date === nextE.date
     ? cal.filter((e) => e.date > today && !(e.quarter === nextE.quarter && e.year === nextE.year)).sort((a, b) => a.date.localeCompare(b.date))[0]
-    : duePending ? undefined
+    : duePending || checking ? undefined
     // 0078: the skipped quarter's contested feed day stays the "next" report, with Nasdaq's day named.
     : skipContested && skipRow ? { date: skipRow.d, hour: skipRow.h ?? "", quarter: skip!.quarter, year: skip!.year, epsEstimate: skipRow.eE ?? null, revenueEstimate: skipRow.rE ?? null }
     : nextE;
@@ -903,21 +951,27 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const name = profile?.name || U[symbol]?.n || symbol;
   // 0049: a REIT whose recent results were on another basis from the feed's estimate (FFO vs net income): its
   // upcoming estimate isn't quoted as the bar. Only on evidence: plenty of REITs' feed figures match (PLD, CCI).
-  const ffo = reit && reitEstimateOffBasis(history, duePending ? duePending.eE : pending ? pending.eE : upNext?.epsEstimate);
+  const ffo = reit && reitEstimateOffBasis(history, duePending ? duePending.eE : checking ? checking.eE : pending ? pending.eE : upNext?.epsEstimate);
   const read: string[] = [];
   // A projected date on a closed-market day isn't a date yet (0045): say so instead of stating it.
   const closed = upNext && !upNext.source && !pending ? closedDay(upNext.date) : null;
   const longDay = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
-  const out = reported || duePending;
+  const out = reported || duePending || checking;
   const projected = !!upNext && !pending && !duePending && !closed && isProjected({ date: upNext.date, session: upNext.hour || "", source: upNext.source }, today);
   // 0015: name Nasdaq's day when it lists the next report elsewhere (the date itself stays the feed's).
   let nqNext: { date: string; session: Session } | undefined = skipContested ?? undefined;
-  if (nqWin && upNext && upNext === nextE && !duePending && !pending && !reported && !upNext.source && !closed) {
-    const c = crossOne(symbol, upNext.date, (upNext.hour || "") as Session, nqWin);
-    if (c?.x === "differs" && c.xd) nqNext = { date: c.xd, session: c.xh ?? "" };
+  if (upNext && upNext === nextE && !duePending && !pending && !reported && !upNext.source && !closed) {
+    const c = nqWin ? crossOne(symbol, upNext.date, (upNext.hour || "") as Session, nqWin) : null;
+    if (c) seen.push({ s: symbol, d: upNext.date, c });
+    // 0083: a cold window keeps the day contest an earlier read saw (from any colo).
+    const use = c ?? memoCross(await memosOf(), symbol, upNext.date, today);
+    if (use?.x === "differs" && use.xd) nqNext = { date: use.xd, session: use.xh ?? "" };
   }
+  if (seen.length) rememberContests(env, ctx, await memosOf(), seen, today);
   if (reported) read.push(reportedLine(name, { date: reported.date, session: reported.hour, quarter: reported.quarter, epsE: reported.eE, epsA: reported.eA, nE: usd ? reported.nE : undefined, nA: usd ? reported.nA : undefined, reit }, today, (v) => epsIn(v, currency)));
-  if (duePending) {
+  if (checking) {
+    read.push(`${name}'s Q${checking.quarter} report: our data feed dated it ${longDay(checking.date)}${checking.hour ? ` ${WHEN_LONG[checking.hour as Session] ?? ""}` : ""}, and no results are in our data yet. We're still comparing that date with Nasdaq's calendar, so it may not have been the report day.`);
+  } else if (duePending) {
     read.push(pendingLine(name, { date: duePending.date, session: duePending.hour, quarter: duePending.quarter }, today));
     if (duePending.eE != null && !ffo) read.push(`The estimate going in was ${epsIn(duePending.eE, currency)} a share.`);
   } else if (pending) {
@@ -939,7 +993,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)}, time unconfirmed: our data feed says ${WHEN_LONG[upNext.hour as Session]}, Nasdaq's calendar ${WHEN_LONG[nqNext.session]}.`);
     else read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${when}${nqNext ? `, but that's unconfirmed: Nasdaq's calendar lists ${nqWhen}` : ""}.`.replace(" .", ".").replace(" ,", ","));
   }
-  const estLine = duePending ? null
+  const estLine = duePending || checking ? null
     : ffo ? ((pending ? pending.eE : upNext?.epsEstimate) != null ? `${name} is a REIT whose recent results came in on a different measure from the feed's estimate (usually funds from operations against net income a share), so we don't quote the estimate as the bar.` : null)
     // 0058: last quarter's actual on the upcoming estimate's basis (Finnhub's), never Nasdaq's ($2.95 vs $1.84 for AMD).
     : readEstimate(name, pending ? pending.eE : upNext?.epsEstimate, currency, history[0] ? fhActual.get(history[0]) ?? null : null);
@@ -958,7 +1012,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     symbol,
     profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, ...profileCap(U[symbol], profile), exchange: profile.exchange, ipo: profile.ipo } : null,
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
-    next: duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
+    next: checking ? { date: checking.date, session: checking.hour as Session, quarter: checking.quarter, year: checking.year, epsE: checking.eE, revE: checking.rE, currency, status: "checking" }
+      : duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
       : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(upNext.hs === "n" && upNext.hour && !upNext.source ? { hs: "n" as const } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),

@@ -44,6 +44,8 @@ export function reportedCard(d: Pick<TickerResponse, "next" | "justReported">, t
   const j = d.justReported;
   if (j) return { headline: `Reported Q${j.quarter} ${j.date === today ? "today" : shortDay(j.date)}`, stat: { label: "EPS ACTUAL", value: j.epsA != null ? epsIn(j.epsA, j.currency) : "—" } };
   if (d.next?.status === "results-pending") return { headline: `Q${d.next.quarter} results expected, none in yet`, stat: { label: "EPS EST GOING IN", value: d.next.epsE != null && !d.next.epsBasis ? epsIn(d.next.epsE, d.next.currency) : "—" } };
+  // 0083: neither a report day nor an upcoming one: say only what's known.
+  if (d.next?.status === "checking") return { headline: `Q${d.next.quarter}: no figures yet, date being checked`, stat: { label: "EPS ESTIMATE", value: d.next.epsE != null && !d.next.epsBasis ? epsIn(d.next.epsE, d.next.currency) : "—" } };
   return null;
 }
 
@@ -97,6 +99,7 @@ export function tickerShareDesc(name: string, d: Pick<TickerResponse, "next" | "
   const lead = j
     ? ` — Reported Q${j.quarter} on ${shortDay(j.date)}${j.epsA != null ? `: ${epsIn(j.epsA, j.currency)} EPS${(() => { const v = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, nA: j.nA, reit: j.reit }); return v.v === "not-comparable" ? "" : vsExpected(j, (x) => epsIn(x, j.currency)); })()}` : ""}`
     : d.next?.status === "results-pending" ? ` — Q${d.next.quarter} results expected, none in our data yet${d.next.epsE != null && !d.next.epsBasis ? ` (estimate going in ${epsIn(d.next.epsE, d.next.currency)} EPS)` : ""}`
+    : d.next?.status === "checking" ? ` — no Q${d.next.quarter} figures in our data yet; the report date is still being compared with Nasdaq's calendar`
     : d.next?.epsE != null && !d.next.epsBasis ? ` — Street expects ${epsIn(d.next.epsE, d.next.currency)} EPS` : "";
   // 0059: a date the two calendars disagree on is said to be unconfirmed (overdue / closed rows never carry one).
   const nq = !j && d.next?.nasdaq && !d.next.status && !d.next.overdue && !d.next.closed ? d.next.nasdaq : null;
