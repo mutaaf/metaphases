@@ -1,7 +1,7 @@
 ---
 id: 0084
 title: Bath & Body Works and Helmerich & Payne have announced dates the feed gets wrong (HP's sheet says "Thu Nov 19 · After close"; its call is 10 a.m. that morning)
-status: ready
+status: in-progress
 priority: P0
 size: S
 lens: data-quality
