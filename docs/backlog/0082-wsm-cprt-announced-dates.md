@@ -31,7 +31,7 @@ Also: since this morning the feed itself moved **INTU** to Thu Nov 19 (`x: agree
 - [x] `/api/ticker/WSM` → next `{2026-11-19, bmo, confirmed}`; the Nov 17 drawer no longer lists WSM; og:title has no "results expected"
 - [x] `/api/ticker/CPRT` → next `{2026-12-01, bmo, confirmed}`; the Nov 18 and Nov 19 cells don't list CPRT; the Dec 1 cell does
 - [x] Unit: the override validator accepts both rows (https source, `checked` in New York time)
-- [ ] Works at 390×844 touch and 1440×900
+- [x] Works at 390×844 touch and 1440×900 (Critic 2026-11-18: sheet checked at both sizes, no overflow)
 
 ## Test plan
 Override-table unit tests; e2e unchanged (live data).
