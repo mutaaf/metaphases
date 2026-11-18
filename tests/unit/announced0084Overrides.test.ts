@@ -113,4 +113,15 @@ describe("0084 the companies' dates through the worker", () => {
     expect(hp).toMatch(/^HP reports Thu, Nov 19/);
     expect(hp).not.toMatch(/unconfirmed|results expected|after/i);
   });
+
+  it("HP on the evening of Nov 19 never takes the feed's \"after close\" back from the raw day row", async () => {
+    // 7:30 pm ET Nov 19: the company named no session, so the feed's amc on its untouched day cache can't return.
+    vi.setSystemTime(new Date("2026-11-20T00:30:00Z"));
+    await get("/api/calendar?from=2026-11-16&to=2026-11-20"); // warms the raw day caches, as production's are
+    const r = await get("/api/ticker/HP");
+    expect(r.next).toMatchObject({ date: "2026-11-19" });
+    expect(r.next.session).not.toBe("amc");
+    expect(tickerShareTitle("HP", "HP", r.next, r.justReported)).not.toMatch(/after/i);
+    expect(JSON.stringify(r)).not.toMatch(/after the close/i);
+  });
 });
