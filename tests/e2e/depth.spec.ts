@@ -169,6 +169,31 @@ test("a report whose session passed without figures says results are due, never 
   await page.screenshot({ path: `test-results/0039-pending-${test.info().project.name}.png` });
 });
 
+// 0083: the feed's day passed with no figures while Nasdaq's calendar couldn't be compared (a cold window): the sheet
+// says only what's known (unit-tested in coldContest.test.ts); here the sheet gets its output shape.
+test("a passed feed day the cross-check couldn't compare yet reads 'date being checked', never 'results expected' (0083)", async ({ page }) => {
+  await page.route("**/api/ticker/PDD", async (r) => {
+    const body = nvdaAs("PDD");
+    body.profile = { ...body.profile, name: "PDD Holdings Inc" };
+    body.next = { date: "2026-10-30", session: "bmo", quarter: 3, year: 2026, epsE: 19.21, revE: 117133197205, currency: "CNY", status: "checking" };
+    body.read = ["PDD Holdings Inc's Q3 report: our data feed dated it Friday, Oct 30 before the opening bell, and no results are in our data yet. We're still comparing that date with Nasdaq's calendar, so it may not have been the report day."];
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/PDD");
+  const card = page.locator(".next-card");
+  await expect(card.locator(".eyebrow").first()).toContainText("This report · Q3 2026");
+  await expect(card.locator("h3")).toHaveText("Date being checked");
+  await expect(card.getByTestId("nc-checking")).toContainText("Our data feed put it on Friday, October 30, before open, and no results are in our data yet.");
+  await expect(card.getByTestId("nc-checking")).toContainText("still comparing that date with Nasdaq's calendar");
+  await expect(card).not.toContainText(/were expected|expects/);
+  await expect(card.getByTestId("nc-session")).toHaveCount(0);
+  await expect(page.locator(".sheet-actions")).not.toContainText(/calendar/i); // the ICS button's text is "Calendar"
+  await expect(page.getByRole("button", { name: /Write the preview/ })).toHaveCount(0);
+  const w = await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth), document.documentElement.scrollWidth - document.documentElement.clientWidth));
+  expect(w).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `test-results/0083-checking-${test.info().project.name}.png` });
+});
+
 // 0046: the worker scales Berkshire's Class A figures to the B share and labels Finnhub-only quarters by quarter
 // (unit-tested in shareClass.test.ts); here the sheet gets its output shape.
 test("BRK.B: B-share EPS, and quarters with no known report day read as quarters, not dates (0046)", async ({ page }) => {

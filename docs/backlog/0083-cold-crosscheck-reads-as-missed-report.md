@@ -1,12 +1,12 @@
 ---
 id: 0083
 title: When the Nasdaq cross-check is cold, a contested date turns back into "results expected, none in yet" (WSM, PDD flip between reads)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-17
-pr:
+pr: 142
 by: critic
 ---
 

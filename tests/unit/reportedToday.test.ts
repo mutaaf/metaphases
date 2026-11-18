@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../../worker/index";
+import { windowDays } from "../../shared/crossCheck";
 import { isDated, tickerShareTitle } from "../../shared/pending";
 import { pendingLine, reportedCard, reportedLine, reportOutcome, sessionPassed, tickerShareDesc } from "../../shared/reported";
 import { storyTickerSvg } from "../../shared/story";
@@ -59,6 +60,11 @@ const nasdaqRows = [
 ];
 let symbolRows: any[] = [];
 let cache: MemCache;
+/** 0083: Nasdaq's window as the calendar caches it (every day loaded), listing ZZZR on `on` only. "Results expected"
+ * needs this evidence: a cold window can't rule out that Nasdaq lists the report on another day. */
+const nasdaqLists = (on: string | null, today: string) => {
+  for (const d of windowDays(today)) cache.store.set(CAL(`nq:x:v1:${d}`), JSON.stringify(d === on ? { ZZZR: "bmo" } : { FILLER: "" }));
+};
 
 beforeEach(() => {
   waits = [];
@@ -110,6 +116,7 @@ describe("/api/ticker on report day (PFE shape, Nov 3, 1 pm ET)", () => {
   });
 
   it("no actual after the open: results pending, never 'expects'", async () => {
+    nasdaqLists("2026-11-03", "2026-11-03");
     const r = await get("/api/ticker/ZZZR");
     expect(r.next).toMatchObject({ quarter: 3, date: "2026-11-03", status: "results-pending", epsE: 0.73 });
     expect(r.justReported).toBeUndefined();
@@ -144,6 +151,7 @@ describe("/api/ticker the day after (ADM shape, Nov 4): the report never vanishe
 
   it("no figures yet: Q3 stays next as results pending, not Q4 with last quarter's numbers", async () => {
     cache.store.set(CAL("cal:v3:2026-11-03"), JSON.stringify([q3Day]));
+    nasdaqLists(null, "2026-11-04");
     const r = await get("/api/ticker/ZZZR");
     expect(r.next).toMatchObject({ quarter: 3, date: "2026-11-03", status: "results-pending" });
     expect(r.next.overdue).toBeUndefined();

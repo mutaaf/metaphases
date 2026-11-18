@@ -57,7 +57,8 @@ function get<T>(path: string): Promise<T> {
     const p = (path.startsWith(`${BASE}/api/calendar?`) ? fetchCalendar(path) : fetchJson(path)) as Promise<unknown>;
     p.catch(() => mem.delete(path));
     // 0061: a partial or not-yet-checked answer isn't kept for the tab's life, or a revisit would replay it.
-    p.then((d) => { const v = d as { warnings?: unknown[]; uncheckedDays?: unknown[] } | null; if (v?.warnings?.length || v?.uncheckedDays?.length) mem.delete(path); }, () => {});
+    // 0083: nor is a sheet still comparing its date with Nasdaq's calendar (`next.status: "checking"`).
+    p.then((d) => { const v = d as { warnings?: unknown[]; uncheckedDays?: unknown[]; next?: { status?: string } | null } | null; if (v?.warnings?.length || v?.uncheckedDays?.length || v?.next?.status === "checking") mem.delete(path); }, () => {});
     mem.set(path, p);
   }
   return mem.get(path) as Promise<T>;
