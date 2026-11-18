@@ -42,4 +42,5 @@ Why a contested row reads "results expected" when the cross-check is cold (0083)
 ## Shipped notes
 - Both releases re-read 2026-11-18 UTC: WSM "on Thursday, November 19th, 2026 before the market opens" (call 10:00 AM ET); CPRT "before the market opens" on Tuesday, December 1, 2026 (call 8:00 a.m. ET, Q1 fiscal 2027).
 - `tests/unit/announced0082Overrides.test.ts`: the gate accepts both rows; through the worker at Nov 17 8 pm ET, WSM leaves Nov 17 (no figure-less leftover, no "results pending"), CPRT leaves Nov 18/19 and sits on Dec 1, both `next` confirmed with the company link.
+- Layout criterion left open: data-only change, no UI touched; checked on production after deploy.
 - The optional Nov 18–Dec 4 contested-date sweep was not done in this PR (one concern per PR); the Critic's next pass should list any remaining contested rows.

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import overridesFile from "../../data/date-overrides.json" with { type: "json" };
 import { applyToEvents, validateOverrides, type DateOverrides } from "../../shared/dateOverrides";
+import { tickerShareTitle } from "../../shared/pending";
 import worker from "../../worker/index";
 
 // 0082: Williams-Sonoma (Nov 12: "on Thursday, November 19th, 2026 before the market opens") and Copart (Nov 17:
@@ -99,4 +100,10 @@ describe("0082 the companies' dates through the worker", () => {
       expect(r.next.status).toBeUndefined();
     });
   }
+
+  it("the /t/ share titles state the company's day and session, never \"results expected\"", async () => {
+    const title = async (s: string) => { const r = await get(`/api/ticker/${s}`); return tickerShareTitle(s, s, r.next, r.justReported); };
+    expect(await title("WSM")).toBe("WSM reports Thu, Nov 19 before the open · Metaphases");
+    expect(await title("CPRT")).toBe("CPRT reports Tue, Dec 1 before the open · Metaphases");
+  });
 });
