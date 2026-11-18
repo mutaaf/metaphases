@@ -1,12 +1,12 @@
 ---
 id: 0084
 title: Bath & Body Works and Helmerich & Payne have announced dates the feed gets wrong (HP's sheet says "Thu Nov 19 · After close"; its call is 10 a.m. that morning)
-status: in-progress
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-18
-pr:
+pr: 145
 by: critic
 ---
 
@@ -26,10 +26,10 @@ HP's "after close on Thursday" is impossible, because the company is on the phon
 - Check that BBWI leaves Nov 18 (no figure-less leftover on the 18th once it passes) and that HP no longer reads "After close" on the 19th.
 
 ## Acceptance criteria
-- [ ] `/api/ticker/BBWI` → next `{2026-11-19, bmo, confirmed: <company URL>}`; the Nov 18 cell doesn't list BBWI; the Nov 19 drawer does
-- [ ] `/api/ticker/HP` → next has no `amc` on 2026-11-19 (date-only Nov 19 confirmed, or a company-stated release time); the sheet never says "After close" for Thursday
-- [ ] og:title for both has no "unconfirmed" and no "results expected"
-- [ ] Unit: the override validator accepts both rows (https source, `checked` in New York time)
+- [x] `/api/ticker/BBWI` → next `{2026-11-19, bmo, confirmed: <company URL>}`; the Nov 18 cell doesn't list BBWI; the Nov 19 drawer does
+- [x] `/api/ticker/HP` → next has no `amc` on 2026-11-19 (date-only Nov 19 confirmed, or a company-stated release time); the sheet never says "After close" for Thursday
+- [x] og:title for both has no "unconfirmed" and no "results expected"
+- [x] Unit: the override validator accepts both rows (https source, `checked` in New York time)
 - [ ] Works at 390×844 touch and 1440×900
 
 ## Test plan
