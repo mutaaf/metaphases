@@ -877,7 +877,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const snapRaw = (await readSnap(today))[symbol]?.eE;
     const snapE = sameEpsUnit(symbol, snapRaw, nextE.epsEstimate ?? row?.eE) ? snapRaw : undefined;
     const day: DayRow = {
-      date: today, hour: nextE.hour || row?.h || "", quarter: nextE.quarter, year: nextE.year,
+      // 0084: a company-dated day keeps the company's session, even none (a call time alone isn't one): the raw
+      // day row still carries the feed's old session (HP: "after close" on a day the call is at 10 a.m.).
+      date: today, hour: (nextE.source ? nextE.hour : nextE.hour || row?.h) || "", quarter: nextE.quarter, year: nextE.year,
       eE: row?.eE ?? snapE ?? nextE.epsEstimate ?? null, eA: nextE.epsActual ?? row?.eA ?? null,
       rE: row?.rE ?? nextE.revenueEstimate ?? null, rA: nextE.revenueActual ?? row?.rA ?? null,
       ...(row?.nE != null ? { nE: row.nE } : {}),
