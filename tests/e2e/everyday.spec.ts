@@ -1,5 +1,6 @@
 // The social-first everyday investor (phone first): lens picker, tab bar, Today stories, Hype Check.
 import { test, expect } from "./fixtures";
+import { readFileSync } from "node:fs";
 
 test.describe("first visit", () => {
   test.use({ lens: "unset" });
@@ -86,6 +87,33 @@ test.describe("everyday", () => {
     await expect(cards.first().locator(".hc-q li")).toHaveCount(3);
     await expect(cards.nth(1).getByRole("heading", { level: 3 })).toBeVisible();
     await expect(page.locator(".hc-foot")).toContainText("isn't research");
+  });
+
+  // 0022: the badge counts exactly the warning cards under it, and a D-grade company never reads "No red flags".
+  test("Hype Check's badge matches its cards, and 'the next Tesla' isn't a Tesla card", async ({ page }) => {
+    const nvda = readFileSync(new URL("../fixtures/ticker-NVDA.json", import.meta.url), "utf8");
+    await page.route("**/api/ticker/TSLA", (r) => {
+      const t = JSON.parse(nvda.replaceAll('"NVDA"', '"TSLA"')); t.profile.name = "Tesla Inc"; t.compass.grade = "D";
+      return r.fulfill({ contentType: "application/json", body: JSON.stringify(t) });
+    });
+    await page.goto("./check?text=" + encodeURIComponent("$NIO is going to the MOON 🚀🚀 next Tesla, earnings next week, load up before it 10x!!"));
+    await expect(page.locator(".hc-card")).toHaveCount(1);
+    await expect(page.locator(".hc-card").first()).toContainText("NIO");
+
+    await page.goto("./check?text=" + encodeURIComponent("$NIO and $TSLA"));
+    const cards = page.locator(".hc-card");
+    await expect(cards).toHaveCount(2);
+    for (const card of await cards.all()) {
+      const badge = (await card.locator(".hc-verdict").innerText()).trim();
+      const warnings = await card.locator("ul.hc-flags:not(.hc-info) > li").count();
+      const n = /^(\d+) red flags?$/i.exec(badge);
+      if (warnings) expect(Number(n?.[1])).toBe(warnings);
+      else expect(n).toBeNull();
+    }
+    const tsla = page.getByRole("article", { name: /Tesla/ });
+    await expect(tsla).not.toContainText(/no red flags/i);
+    await expect(tsla.locator(".hc-verdict")).toHaveText(/quality grade d/i);
+    await expect(tsla.locator(".hc-know")).toContainText("Expensive compared with its profits");
   });
 
   test("Hype Check's AI take streams the hype task, grounded", async ({ page }) => {

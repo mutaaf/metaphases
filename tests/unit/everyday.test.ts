@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import type { EarningsEvent, MacroResponse, TickerResponse } from "../../shared/types";
-import { coreName, extractTickers, questionsFor, redFlags } from "../../src/lib/hype";
+import { coreName, extractTickers, questionsFor, redFlags, verdict } from "../../src/lib/hype";
 import { pickStories } from "../../src/lib/stories";
 import { moodPlain, movePlain, whatTheyDo, whenPlain } from "../../shared/plain";
 import { storyMacroSvg, storyMoodSvg, storyTickerSvg } from "../../shared/story";
@@ -9,6 +9,7 @@ import { UNIVERSE } from "../../src/lib/data";
 
 const NVDA = JSON.parse(readFileSync(new URL("../fixtures/ticker-NVDA.json", import.meta.url), "utf8")) as TickerResponse;
 const clone = (patch: (t: TickerResponse) => void) => { const t = structuredClone(NVDA); patch(t); return t; };
+const NIO = JSON.parse(readFileSync(new URL("../fixtures/ticker-NIO.json", import.meta.url), "utf8")) as TickerResponse;
 
 describe("extractTickers", () => {
   it("reads cashtags and company names from a TikTok caption, in order", () => {
@@ -30,6 +31,27 @@ describe("extractTickers", () => {
   });
   it("reads tickers from quote URLs", () => {
     expect(extractTickers("https://finance.yahoo.com/quote/NFLX/ wow", UNIVERSE)).toContain("NFLX");
+  });
+  it("a comparison isn't a mention: 'the next Tesla', 'like Apple', 'bigger than Nvidia' (0022)", () => {
+    expect(extractTickers("$NIO is going to the MOON 🚀🚀 next Tesla, earnings next week, load up before it 10x!!", UNIVERSE)).toEqual(["NIO"]);
+    expect(extractTickers("$SOUN is the new Nvidia, bigger than Palantir, like Apple in 2005", UNIVERSE)).toEqual(["SOUN"]);
+    expect(extractTickers("Is Rivian the next Tesla? Tesla bulls say no", UNIVERSE)).toContain("TSLA");
+  });
+  it("ordinary 'like', 'next' and 'new' are still real mentions", () => {
+    expect(extractTickers("I like Apple", UNIVERSE)).toEqual(["AAPL"]);
+    expect(extractTickers("Feels like Nvidia will 10x", UNIVERSE)).toEqual(["NVDA"]);
+    expect(extractTickers("Looks like Apple is crushing it", UNIVERSE)).toEqual(["AAPL"]);
+    expect(extractTickers("Stocks like Apple and Microsoft", UNIVERSE)).toEqual(["AAPL", "MSFT"]);
+    expect(extractTickers("Up next Tesla earnings", UNIVERSE)).toEqual(["TSLA"]);
+    expect(extractTickers("my brand new Tesla", UNIVERSE)).toEqual(["TSLA"]);
+  });
+  it("a bare ticker after a comparison is a comparison too", () => {
+    expect(extractTickers("$SOUN is the next NVDA", UNIVERSE)).toEqual(["SOUN"]);
+    expect(extractTickers("$SOUN is like AMD", UNIVERSE)).toEqual(["SOUN"]);
+  });
+  it("a cashtag always counts, even after a comparison word", () => {
+    expect(extractTickers("$NIO and $TSLA", UNIVERSE)).toEqual(["NIO", "TSLA"]);
+    expect(extractTickers("$NIO is the next $TSLA", UNIVERSE)).toEqual(["NIO", "TSLA"]);
   });
   it("dedupes a stock mentioned by ticker and name", () => {
     expect(extractTickers("$TSLA Tesla TSLA", UNIVERSE)).toEqual(["TSLA"]);
@@ -72,6 +94,47 @@ describe("redFlags", () => {
     expect(qs).toHaveLength(3);
     expect(qs[0]).toMatch(/make money/);
     expect(questionsFor([], "Acme")).toHaveLength(3);
+  });
+});
+
+// 0022: the badge never contradicts the cards under it.
+describe("Hype Check verdict", () => {
+  const today = "2026-10-31";
+  // NIO as recorded; TSLA, PLTR and SOUN as the 2026-11-01 critique saw them, built on the NVDA recording.
+  const cases: Record<string, TickerResponse> = {
+    NIO,
+    TSLA: clone((x) => { x.symbol = "TSLA"; x.compass.grade = "D"; }),
+    PLTR: clone((x) => { x.symbol = "PLTR"; x.expectedMove = 9.1; x.next = { ...x.next!, date: "2026-11-03" }; }),
+    SOUN: clone((x) => {
+      x.symbol = "SOUN"; x.compass.grade = "F"; x.expectedMove = 12; x.next = { ...x.next!, date: "2026-11-05" };
+      x.quarters = [{ period: "2026-06-30", eps: -0.03, rev: 4e7, gm: 40, om: -60 }];
+      x.compass.factors.find((f) => f.key === "health")!.inputs = [{ label: "Debt / equity", value: "2.60×" }];
+    }),
+  };
+  for (const [sym, t] of Object.entries(cases)) {
+    it(`${sym}: the badge number equals the red and amber cards, and info cards are grouped apart`, () => {
+      const flags = redFlags(t, { tracked: true, today });
+      const v = verdict(flags, t.compass.grade);
+      expect(v.warn.every((f) => f.tone !== "info")).toBe(true);
+      expect(v.info.every((f) => f.tone === "info")).toBe(true);
+      expect(v.warn.length + v.info.length).toBe(flags.length);
+      const n = /^(\d+) red flags?$/.exec(v.label);
+      if (v.warn.length) expect(Number(n?.[1])).toBe(v.warn.length);
+      else expect(n).toBeNull();
+    });
+  }
+  it("never says 'No red flags' for a D or F grade, or when a warning shows", () => {
+    for (const t of Object.values(cases)) {
+      const v = verdict(redFlags(t, { tracked: true, today }), t.compass.grade);
+      expect(v.label).not.toMatch(/no red flags/i);
+    }
+    expect(verdict(redFlags(cases.TSLA, { tracked: true, today }), "D")).toMatchObject({ label: "Quality grade D", tone: "warm" });
+    expect(verdict([{ key: "debt", tone: "amber", label: "", why: "" }], "A").label).toBe("1 red flag");
+    expect(verdict([{ key: "debt", tone: "amber", label: "", why: "" }], "F")).toMatchObject({ label: "1 red flag", weak: true });
+  });
+  it("is neutral, not green, and says 'Nothing alarming' only when there is truly nothing", () => {
+    expect(verdict([], "A")).toMatchObject({ label: "Nothing alarming in the numbers", tone: "neutral", weak: false });
+    expect(verdict([{ key: "pricey", tone: "info", label: "", why: "" }], "B+")).toMatchObject({ label: "1 worth knowing", tone: "neutral" });
   });
 });
 
