@@ -1,12 +1,12 @@
 ---
 id: 0086
 title: A projected next report never shows a session the company's own history contradicts (Target, TJX "after close" when every report is before the open)
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-18
-pr:
+pr: 148
 by: critic
 ---
 
@@ -33,3 +33,14 @@ Vitest on a small pure helper (e.g. `habitSession(next, history)`) plus a worker
 
 ## Out of scope
 Changing confirmed or override sessions. Inferring a session when history is empty.
+
+## Shipped notes (builder 2026-11-19)
+- The sheet's history sessions came from `sessionHabit(nextE.hour, …)`, so the day after the print the feed's projected
+  `amc` would also have measured every past TGT/TJX move on the wrong day. The criterion "history bmo×4" was circular
+  (the history's session was the habit). The independent evidence is the last dated report on the calendar
+  (`lastE.hour`, with figures), checked against the stock's own past moves by `contestedSession` (0060's 3-of-4 rule).
+  `projectedSession` gives the last report's session when the moves back it (`hs: "h"`, "Before open (usual time)"),
+  keeps the feed's when the moves back that, and otherwise gives "" (no session).
+- The same rule applies to the following quarter on the report day itself, and in `/api/kids/why`.
+- Not done: the calendar row's `h` for projected rows. The calendar routes don't hold a per-symbol last session
+  without new reads, and the ticket says to leave it in that case.

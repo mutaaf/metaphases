@@ -47,3 +47,17 @@ export function contestedSession(a: Session, b: Session, dates: string[], closeO
   if (measured < 3) return "";
   return winsA >= 3 ? a : winsB >= 3 ? b : "";
 }
+
+/**
+ * 0086: the session on a report the feed projects (no company date, `isProjected`). The feed's first projection
+ * after a print often defaults to "after close" (TGT and TJX on 2026-11-18, both before-the-open reporters every
+ * quarter on record). When the company's last dated report on the same calendar had the other timed session, the
+ * stock's own past moves decide, as for a contested session (0060): the last report's session when they back it
+ * (shown as the company's usual time), the feed's when they back that, else "" (unknown, never the feed's guess).
+ * null = no contradiction, keep the feed's session.
+ */
+export function projectedSession(feed: string | undefined, last: string | undefined, dates: string[], closeOn: (day: string, offset: number) => number | null): Session | null {
+  if (!isContested(feed, last)) return null;
+  const v = contestedSession(feed, last as Session, dates, closeOn);
+  return v === feed ? null : v;
+}
