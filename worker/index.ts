@@ -801,17 +801,20 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // close" in March, every report before the open) shows the session the stock's own past moves back, marked as the
   // usual time, or none. Never the feed's guess, and that guess never decides the day past moves are measured on.
   const pastDates = rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null);
-  const settleProjected = (row: any, lastHour: string | undefined) => {
-    if (!row || row.source || closedDay(row.date) || !isProjected({ date: row.date, session: row.hour || "", source: row.source }, today)) return;
+  const settleProjected = (row: any, lastHour: string | undefined): Session | null => {
+    if (!projectedTimed(row, today)) return null;
     const fix = projectedSession(row.hour, lastHour, pastDates, closeOn);
-    if (fix == null) return;
+    if (fix == null) return null;
+    // In place, like 0050's fill: from here on the row's session is the one shown (the feed's is in `fhNextHour`).
     row.hour = fix;
     if (fix) row.hs = "h"; else delete row.hs;
+    return fix;
   };
-  if (!contest && lastE && (lastE.epsActual != null || lastE.revenueActual != null)) settleProjected(nextE, lastE.hour);
+  // An unsettled projection ("") measures no past move on a guessed day either: every move reads "—", as under 0060.
+  const nextFix = !contest && projectedTimed(nextE, today) ? settleProjected(nextE, await lastReportedHour(symbol, lastE, today, pastDates)) : null;
   const habit: Session = contest
     ? contestedSession(contest.feed, contest.nasdaq, rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null), closeOn)
-    : sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
+    : nextFix === "" ? "" : sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
   const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
   const lastSnap = sameEpsUnit(symbol, lastSnapRaw, lastE?.epsEstimate) ? lastSnapRaw : null;
@@ -1085,6 +1088,28 @@ async function newestRow(symbol: string, days: string[]): Promise<EarningsEvent 
   return found.find((e) => e != null) ?? null;
 }
 
+/** 0086: a report the feed projects (no company date, not on a closed day) with a timed session the last report could contradict. */
+function projectedTimed(row: any, today: string): boolean {
+  return !!row && !row.source && (row.hour === "bmo" || row.hour === "amc") && !closedDay(row.date) && isProjected({ date: row.date, session: row.hour, source: row.source }, today);
+}
+
+/**
+ * 0086: the session of the company's last dated report: the feed's row while `symbol=` still lists it, else the
+ * calendar route's cached days. `symbol=` returns future dates only, so it drops the row the day after the print.
+ * The cached days are the last two weeks plus Nasdaq's newest report date: cache only, about a dozen reads.
+ */
+async function lastReportedHour(symbol: string, lastE: any, today: string, pastDates: string[]): Promise<string | undefined> {
+  if (lastE && (lastE.epsActual != null || lastE.revenueActual != null)) return lastE.hour;
+  const days = Array.from(new Set([...lookbackDays(today, addDays(today, -14), 14), ...pastDates.slice(0, 1).filter((d) => d < today)])).sort().reverse();
+  const found = await Promise.all(days.map(async (d) => {
+    try {
+      const hit = (await caches.default.match(CAL_DAY(d))) ?? (await caches.default.match(CAL(`cal:stale:v3:${d}`)));
+      return hit ? ((await hit.json()) as EarningsEvent[]).find((x) => x.s === symbol && (x.eA != null || x.rA != null)) ?? null : null;
+    } catch { return null; }
+  }));
+  return found.find((e) => e != null)?.h || undefined;
+}
+
 /** The pending quarter's row in the cached calendar days (fresh, else the last good copy), newest day first. */
 async function passedRow(symbol: string, q: { quarter: number; year: number }, days: string[]): Promise<EarningsEvent | null> {
   const found = await Promise.all(days.map(async (d) => {
@@ -1352,11 +1377,10 @@ async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Respo
   const closeOn = (day: string, off: number) => { const d = stock?.d ?? [], i = d.indexOf(day); return i < 0 ? null : stock?.c[i + off] ?? null; };
   const nqDates = nqRows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null);
   // 0086: a projected session the last dated report contradicts is settled the same way as on the sheet.
-  const upFix = !contested && up && !up.source && !closedDay(up.date) && last && (last.epsActual != null || last.revenueActual != null) && isProjected({ date: up.date, session: up.hour || "", source: up.source }, today)
-    ? projectedSession(up.hour, last.hour, nqDates, closeOn) : null;
+  const upFix = !contested && projectedTimed(up, today) ? projectedSession(up.hour, await lastReportedHour(s, last, today, nqDates), nqDates, closeOn) : null;
   const habit = contested
     ? contestedSession(up.hour as Session, nqUp as Session, nqDates, closeOn)
-    : sessionHabit(upFix ?? up?.hour, nqUp, last?.hour);
+    : upFix === "" ? "" : sessionHabit(upFix ?? up?.hour, nqUp, last?.hour);
   const num = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[$,]/g, "")); return Number.isFinite(n) ? n : null; };
   const reports = nqRows.map((r) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");

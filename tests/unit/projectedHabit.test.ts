@@ -70,6 +70,8 @@ const env = { FINNHUB_API_KEY: "k", FRED_API_KEY: "k", ASSETS: { fetch: async ()
 let waits: Promise<unknown>[] = [];
 const ctx = { waitUntil: (p: Promise<unknown>) => { waits.push(p); }, passThroughOnException() {} } as any;
 const SYM = "ZZPH";
+let cache: MemCache;
+const CAL = (k: string) => `https://cache.metaphases.internal/${encodeURIComponent(k)}`;
 const nqRows = REPORTS.map((d) => { const [y, m, dd] = d.split("-"); return { fiscalQtrEnd: "Jul 2026", dateReported: `${+m}/${+dd}/${y}`, eps: 1.0, consensusForecast: "0.95", percentageSurprise: "5.26" }; });
 
 function stub(rows: { date: string; hour: string; source?: string }[], chart: { timestamp: number[]; close: number[] }) {
@@ -88,7 +90,8 @@ beforeEach(() => {
   waits = [];
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-11-19T16:00:00Z"));
-  (globalThis as any).caches = { default: new MemCache() };
+  cache = new MemCache();
+  (globalThis as any).caches = { default: cache };
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 const sheet = async () => {
@@ -112,6 +115,23 @@ describe("/api/ticker: a projected next report after a print (TGT/TJX, 0086)", (
     stub([{ date: LAST, hour: "bmo" }, { date: NEXT, hour: "amc" }], closes([5, 5, 1, 1], [1, 1, 5, 5]));
     const r = await sheet();
     expect(r.next).toMatchObject({ date: NEXT, session: "", projected: true });
+    expect(r.next.hs).toBeUndefined();
+    // No past move is measured on a day nothing settled (0060's rule): "—", never the feed's or the last report's guess.
+    expect(r.history.filter((h: any) => REPORTS.includes(h.date)).map((h: any) => h.move)).toEqual([null, null, null, null]);
+  });
+
+  it("the day after, symbol= has dropped the reported row: the calendar's cached day still says how the company reported", async () => {
+    stub([{ date: NEXT, hour: "amc" }], closes(BMO_DAY, BMO_NEXT));
+    cache.store.set(CAL(`cal:v3:${LAST}`), JSON.stringify([{ s: SYM, d: LAST, h: "bmo", q: 3, y: 2026, eE: 2.05, eA: 2.65, rE: 25e9, rA: 25.2e9 }]));
+    const r = await sheet();
+    expect(r.next).toMatchObject({ date: NEXT, session: "bmo", hs: "h", projected: true });
+    r.history.filter((h: any) => REPORTS.includes(h.date)).forEach((h: any) => expect(h.session).toBe("bmo"));
+  });
+
+  it("no last report anywhere in the cache: nothing contradicts the feed, which stands (no inference from nothing)", async () => {
+    stub([{ date: NEXT, hour: "amc" }], closes(BMO_DAY, BMO_NEXT));
+    const r = await sheet();
+    expect(r.next).toMatchObject({ date: NEXT, session: "amc", projected: true });
     expect(r.next.hs).toBeUndefined();
   });
 
