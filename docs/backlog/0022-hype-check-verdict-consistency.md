@@ -1,12 +1,12 @@
 ---
 id: 0022
 title: Hype Check's red-flag badge contradicts the cards under it, and "the next Tesla" pulls in a TSLA card
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: clarity
 created: 2026-11-01
-pr:
+pr: 151
 by: critic
 ---
 
