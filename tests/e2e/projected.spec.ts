@@ -55,3 +55,22 @@ test("the sheet says a projected date isn't confirmed by the company; a firm one
   await expect(page.locator(".next-card h3")).toBeVisible();
   await expect(page.getByTestId("nc-projected")).toHaveCount(0);
 });
+
+// 0086: a projected report shown at the company's usual time (TGT: the feed said "after close", every report was
+// before the open) says so, and isn't called the feed's projected time. Phone and desktop.
+test("the sheet names a projected report's usual time, not the feed's", async ({ page }) => {
+  await page.route("**/api/ticker/TGT", async (r) => {
+    const body = JSON.parse(fx("ticker-NVDA.json").replaceAll('"NVDA"', '"TGT"'));
+    body.next = { ...body.next, date: "2027-03-03", session: "bmo", hs: "h", quarter: 4, year: 2026, projected: true };
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/TGT");
+  const card = page.locator(".next-card");
+  await expect(card.locator("h3")).toHaveText("Around Wednesday, March 3");
+  await expect(card.getByTestId("nc-session")).toContainText("Before open (usual time)");
+  await expect(card.getByTestId("nc-session")).not.toContainText("projected");
+  await expect(card).not.toContainText("After close");
+  await expect(card.getByTestId("nc-projected")).toHaveText("Date not yet confirmed by the company. The date shown is our data feed's projection; the time is when the company has usually reported. Both can move when the company announces its own.");
+  await noSideScroll(page);
+  await page.screenshot({ path: test.info().outputPath("projected-habit.png") });
+});

@@ -107,7 +107,7 @@ export const figuresPending = (e: { d: string; h: string; eA: number | null; rA:
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
 /** The `/t/:sym` share title: never a date beyond an unreported quarter (0038) or on a closed day (0045). */
-export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; hs?: "n"; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string }; projected?: true } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
+export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; hs?: "n" | "h"; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string }; projected?: true } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
   // 0039: a report that's out leads the title, whatever comes next.
   if (just) return just.epsA == null ? `${sym} reported Q${just.quarter} · Metaphases`
     : `${sym} reported Q${just.quarter}: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? vsExpected(just, (v) => epsIn(v, just.currency)) : ""} · Metaphases`;

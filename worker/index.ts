@@ -21,7 +21,7 @@ import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
-import { contestedSession, isContested, reactionMove, sessionHabit } from "../shared/reaction";
+import { contestedSession, isContested, projectedSession, reactionMove, sessionHabit } from "../shared/reaction";
 import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
@@ -797,6 +797,18 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     if (memo && !settled && !(ov && ov.date === memo.date) && memo.date >= addDays(today, -MS_DAYS) && (memo.date < today || memo.date === nextE?.date)) contest = memo;
   }
   const contested = !!contest;
+  // 0086: a projected next report whose feed session the company's last dated report contradicts (TGT, TJX: "after
+  // close" in March, every report before the open) shows the session the stock's own past moves back, marked as the
+  // usual time, or none. Never the feed's guess, and that guess never decides the day past moves are measured on.
+  const pastDates = rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null);
+  const settleProjected = (row: any, lastHour: string | undefined) => {
+    if (!row || row.source || closedDay(row.date) || !isProjected({ date: row.date, session: row.hour || "", source: row.source }, today)) return;
+    const fix = projectedSession(row.hour, lastHour, pastDates, closeOn);
+    if (fix == null) return;
+    row.hour = fix;
+    if (fix) row.hs = "h"; else delete row.hs;
+  };
+  if (!contest && lastE && (lastE.epsActual != null || lastE.revenueActual != null)) settleProjected(nextE, lastE.hour);
   const habit: Session = contest
     ? contestedSession(contest.feed, contest.nasdaq, rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null), closeOn)
     : sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
@@ -905,6 +917,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // 0078: the skipped quarter's contested feed day stays the "next" report, with Nasdaq's day named.
     : skipContested && skipRow ? { date: skipRow.d, hour: skipRow.h ?? "", quarter: skip!.quarter, year: skip!.year, epsEstimate: skipRow.eE ?? null, revenueEstimate: skipRow.rE ?? null }
     : nextE;
+  // 0086: after a same-day report, the following quarter's projection is checked against the report just out.
+  if (reported && upNext && upNext !== nextE) settleProjected(upNext, reported.hour);
 
   // 0057: a dated row's own session, else the habit. A company-dated row (override) without a session is unknown:
   // never filled from a feed's guess.
@@ -1047,7 +1061,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     next: checking ? { date: checking.date, session: checking.hour as Session, quarter: checking.quarter, year: checking.year, epsE: checking.eE, revE: checking.rE, currency, status: "checking" }
       : duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
-      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...(upNext.hs === "n" && upNext.hour && !upNext.source ? { hs: "n" as const } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
+      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...((upNext.hs === "n" || upNext.hs === "h") && upNext.hour && !upNext.source ? { hs: upNext.hs as "n" | "h" } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     ...(contest && chart ? { moveSession: { feed: contest.feed, nasdaq: contest.nasdaq, session: habit } } : {}),
@@ -1336,9 +1350,13 @@ async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Respo
   // 0060: a session the two calendars disagree on is settled by the stock's own past moves, as on the sheet, or left unknown.
   const contested = !!up && !up.source && isContested(up.hour, nqUp);
   const closeOn = (day: string, off: number) => { const d = stock?.d ?? [], i = d.indexOf(day); return i < 0 ? null : stock?.c[i + off] ?? null; };
+  const nqDates = nqRows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null);
+  // 0086: a projected session the last dated report contradicts is settled the same way as on the sheet.
+  const upFix = !contested && up && !up.source && !closedDay(up.date) && last && (last.epsActual != null || last.revenueActual != null) && isProjected({ date: up.date, session: up.hour || "", source: up.source }, today)
+    ? projectedSession(up.hour, last.hour, nqDates, closeOn) : null;
   const habit = contested
-    ? contestedSession(up.hour as Session, nqUp as Session, nqRows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null), closeOn)
-    : sessionHabit(up?.hour, nqUp, last?.hour);
+    ? contestedSession(up.hour as Session, nqUp as Session, nqDates, closeOn)
+    : sessionHabit(upFix ?? up?.hour, nqUp, last?.hour);
   const num = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[$,]/g, "")); return Number.isFinite(n) ? n : null; };
   const reports = nqRows.map((r) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");
