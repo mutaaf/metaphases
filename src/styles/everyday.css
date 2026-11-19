@@ -106,9 +106,9 @@
 .hc-head h3 { font: 800 24px/1.1 var(--display); letter-spacing: -.02em; margin: 0; }
 .hc-head .tile { border-radius: 14px; }
 .hc-verdict { font: 500 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 6px 9px; white-space: nowrap; }
-.hc-verdict.calm { color: var(--beat); background: var(--beat-bg); }
 .hc-verdict.warm { color: var(--mixed); background: var(--mixed-bg); }
 .hc-verdict.hot { color: var(--miss); background: var(--miss-bg); }
+.hc-verdict.neutral { color: var(--ink-2); background: var(--bg); border: 1px solid var(--line-2); }
 .hc-does { margin: 0; font-size: 16px; }
 .hc-facts { display: grid; gap: var(--s2); margin: 0; }
 .hc-facts div { display: grid; grid-template-columns: 150px 1fr; gap: var(--s3); padding: var(--s2) 0; border-top: 1px dashed var(--line); align-items: center; }
@@ -122,7 +122,13 @@
 .hc-flags .flag-red { border-left-color: var(--miss); }
 .hc-flags .flag-amber { border-left-color: var(--mixed); }
 .hc-flags .flag-info { border-left-color: var(--accent); }
-.hc-clean { margin: 0; padding: var(--s3); border-left: 4px solid var(--beat); background: var(--bg); }
+.hc-clean { margin: 0; padding: var(--s3); border-left: 4px solid var(--line-2); background: var(--bg); }
+.hc-clean.weak { border-left-color: var(--mixed); }
+/* 0022: "Worth knowing" is context, not a warning: lighter, uncounted, set apart from the red flags. */
+.hc-know { display: grid; gap: var(--s2); }
+.hc-know .eyebrow { margin: 0; }
+.hc-flags.hc-info li { background: transparent; border-left-width: 2px; padding: var(--s2) var(--s3); }
+.hc-flags.hc-info li b { font-weight: 600; font-size: 14.5px; }
 .hc-q ol { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 15.5px; }
 .hc-ai { display: grid; gap: var(--s2); padding: var(--s3) var(--s4); border: 1px dashed var(--line-2); }
 .hc-ai .cta { justify-self: start; }

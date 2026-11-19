@@ -39,6 +39,16 @@ export function coreName(name: string): { full: string; first: string | null } {
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** 0022: "the next Tesla", "the new Nvidia", "like Apple", "bigger than Nvidia" compare against a company; they don't push it. */
+const COMPARISON_BEFORE = /(?:^|[^\w-])(?:next|new|like|than)\s+$/;
+
+/** Where `phrase` is first named as a stock in `lower`, skipping comparisons; -1 when it never is. */
+function mentionAt(lower: string, phrase: string): number {
+  const re = new RegExp(`(?<![\\w-])${escapeRe(phrase)}(?:'s)?(?![\\w-])`, "g");
+  for (const m of lower.matchAll(re)) if (!COMPARISON_BEFORE.test(lower.slice(0, m.index))) return m.index ?? 0;
+  return -1;
+}
+
 /**
  * Find the stocks a caption, URL or query is talking about, in the order they appear. Max 3.
  * Cashtags ($NVDA) always count, even for unknown symbols (those get an "unknown" flag later).
@@ -58,9 +68,11 @@ export function extractTickers(text: string, universe: Record<string, Co>, max =
   if (/^[A-Za-z]{1,5}(\.[A-Za-z])?$/.test(trimmed) && universe[trimmed.toUpperCase()] && !NOISE.has(trimmed.toUpperCase())) add(trimmed.toUpperCase(), 0);
 
   const lower = text.toLowerCase();
+  // Names count unless they're a comparison ("the next Tesla"); a cashtag above always counts.
   for (const [alias, s] of Object.entries(ALIASES)) {
-    const m = new RegExp(`(?<![\\w-])${escapeRe(alias)}(?:'s)?(?![\\w-])`).exec(lower);
-    if (m && universe[s]) add(s, m.index);
+    if (!universe[s]) continue;
+    const at = mentionAt(lower, alias);
+    if (at >= 0) add(s, at);
   }
   // Legal-name matching, biggest companies first so "Apple" beats a smaller namesake.
   const byCap = Object.entries(universe).sort((a, b) => b[1].mc - a[1].mc);
@@ -68,8 +80,8 @@ export function extractTickers(text: string, universe: Record<string, Co>, max =
     const { full, first } = coreName(c.n);
     for (const phrase of [full, first]) {
       if (!phrase || phrase.length < 4) continue;
-      const m = new RegExp(`(?<![\\w-])${escapeRe(phrase)}(?![\\w-])`).exec(lower);
-      if (m) { add(s, m.index); break; }
+      const at = mentionAt(lower, phrase);
+      if (at >= 0) { add(s, at); break; }
     }
   }
   return hits.sort((a, b) => a.at - b.at).slice(0, max).map((h) => h.s);
@@ -112,6 +124,29 @@ export function redFlags(t: TickerResponse | null, opts: { tracked: boolean; tod
     if (n >= 0 && n <= 7) F.push({ key: "soon", tone: "info", label: n === 0 ? "Reports today" : `Reports in ${n} day${n === 1 ? "" : "s"}`, why: "Buying right before a report means betting on how it lands." });
   }
   return F;
+}
+
+export interface Verdict {
+  /** Red and amber cards: the only ones the badge counts. */
+  warn: Flag[];
+  /** "Worth knowing" cards, shown in their own lighter group and never counted. */
+  info: Flag[];
+  label: string;
+  tone: "hot" | "warm" | "neutral";
+}
+
+/**
+ * 0022: the badge on a Hype Check card. Its number is exactly the number of warning cards under it,
+ * and it never reads as an all-clear when a warning shows or the quality grade is D or F.
+ */
+export function verdict(flags: Flag[], grade?: string | null): Verdict {
+  const warn = flags.filter((f) => f.tone !== "info");
+  const info = flags.filter((f) => f.tone === "info");
+  const weak = !!grade && /^[DF]/.test(grade);
+  if (warn.length) return { warn, info, label: `${warn.length} red flag${warn.length > 1 ? "s" : ""}`, tone: warn.length >= 2 ? "hot" : "warm" };
+  if (weak) return { warn, info, label: `Quality grade ${grade}`, tone: "warm" };
+  if (info.length) return { warn, info, label: `${info.length} worth knowing`, tone: "neutral" };
+  return { warn, info, label: "Nothing alarming", tone: "neutral" };
 }
 
 /** Three honest questions to ask before buying — shaped by the flags we found. */

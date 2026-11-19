@@ -15,7 +15,7 @@ import { track } from "../lib/insights";
 import { curOf, heldVia, nameOf, UNIVERSE } from "../lib/data";
 import { fmtShort, todayISO } from "../lib/dates";
 import { currencyName, epsIn, isUsd, money } from "../lib/format";
-import { extractTickers, questionsFor, redFlags, type Flag } from "../lib/hype";
+import { extractTickers, questionsFor, redFlags, verdict, type Flag } from "../lib/hype";
 import { movePlain, whatTheyDo, whenPlain } from "../lib/plain";
 import { BASE, param, setParam } from "../lib/router";
 import { actions, useStore } from "../lib/store";
@@ -80,13 +80,14 @@ function HypeCard({ sym, caption }: { sym: string; caption: string }) {
     );
   }
   if (!data) return null;
-  const reds = flags.filter((f) => f.tone !== "info").length;
+  const v = verdict(flags, data.compass.grade);
+  const weak = /^[DF]/.test(data.compass.grade ?? "");
   return (
     <article className="hc-card" aria-label={`Hype check: ${name}`}>
       <header className="hc-head">
         <Tile s={sym} size={56} force="logo" />
         <div><h3>{name}</h3><span className="eyebrow">{sym}{data.quote ? ` · $${data.quote.price.toFixed(2)}` : ""}</span></div>
-        <span className={`hc-verdict ${reds >= 2 ? "hot" : reds === 1 ? "warm" : "calm"}`}>{reds === 0 ? "No red flags" : `${reds} red flag${reds > 1 ? "s" : ""}`}</span>
+        <span className={`hc-verdict ${v.tone}`}>{v.label}</span>
       </header>
       <p className="hc-does"><b>What it is:</b> {whatTheyDo(name, data.profile?.industry ?? UNIVERSE[sym]?.ind)}</p>
       <dl className="hc-facts">
@@ -98,11 +99,22 @@ function HypeCard({ sym, caption }: { sym: string; caption: string }) {
       {owned > 0 && (
         <p className="hc-owned">You already own about <b>{money(owned)}</b> of it{via.length ? <> through {via.map((v) => v.etf).join(", ")}</> : null}{direct ? " (directly)" : ""}. Buying more adds to a bet you've already made.</p>
       )}
-      {flags.length > 0 ? (
-        <ul className="hc-flags">
-          {flags.map((f) => <li key={f.key} className={`flag-${f.tone}`}><b>{f.label}</b><span>{f.why}</span></li>)}
+      {v.warn.length > 0 && (
+        <ul className="hc-flags" aria-label="Red flags">
+          {v.warn.map((f) => <li key={f.key} className={`flag-${f.tone}`}><b>{f.label}</b><span>{f.why}</span></li>)}
         </ul>
-      ) : <p className="hc-clean">None of our checks fired: it's profitable, not unusually swingy, and not mid-run. That still isn't a reason to buy — only an absence of obvious warning signs.</p>}
+      )}
+      {v.warn.length === 0 && (weak
+        ? <p className="hc-clean weak">None of our red-flag checks fired, but its <Term k="compass">quality grade</Term> is {data.compass.grade}: the business itself scores weak on our rules. The full read shows why.</p>
+        : <p className="hc-clean">None of our red-flag checks fired: it's profitable, not unusually swingy, and not mid-run. That still isn't a reason to buy — only an absence of obvious warning signs.</p>)}
+      {v.info.length > 0 && (
+        <section className="hc-know">
+          <h4 className="eyebrow">Worth knowing</h4>
+          <ul className="hc-flags hc-info">
+            {v.info.map((f) => <li key={f.key} className="flag-info"><b>{f.label}</b><span>{f.why}</span></li>)}
+          </ul>
+        </section>
+      )}
       <section className="hc-q">
         <h4 className="eyebrow">Ask yourself before buying</h4>
         <ol>{questionsFor(flags, name.split(/[ ,]/)[0]).map((q) => <li key={q}>{q}</li>)}</ol>
@@ -110,7 +122,7 @@ function HypeCard({ sym, caption }: { sym: string; caption: string }) {
       <AiTake data={data} flags={flags} caption={caption} owned={owned} />
       <div className="cta-row">
         <button className={`cta ${starred ? "cta-secondary" : "cta-primary"}`} onClick={() => actions.toggleWatch(sym)} aria-pressed={starred}><Icon name="star" size={14} /> {starred ? "Watching" : "Watch it instead"}</button>
-        <button className="cta cta-secondary" onClick={() => shareStory(`t/${sym}`, `${sym} hype check`, `${name}: ${reds} red flag${reds === 1 ? "" : "s"} on Metaphases' Hype Check.`)}><Icon name="share" size={14} /> Share</button>
+        <button className="cta cta-secondary" onClick={() => shareStory(`t/${sym}`, `${sym} hype check`, `${name} on Metaphases' Hype Check: ${v.label}.`)}><Icon name="share" size={14} /> Share</button>
         <button className="cta cta-secondary" onClick={() => setParam("t", sym)}>The full read →</button>
       </div>
     </article>
