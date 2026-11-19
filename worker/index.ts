@@ -814,10 +814,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const lastHour = projectedNext ? await lastReportedHour(symbol, lastE, today, pastDates) : undefined;
   const nextFix = projectedNext ? settleProjected(nextE, lastHour) : null;
   // 0088: an unsettled projection ("") shows no session, but it is no evidence against the reports the company dated
-  // (TJX, JD, XPEV): past moves keep the last dated report's session, as when the feed's projection is blank.
+  // (TJX, JD, XPEV): past moves keep the last dated report's session first (Nasdaq's listing for a far-out projected
+  // day is a projection too, so it never outranks a dated report), then Nasdaq's, else unknown.
   const habit: Session = contest
     ? contestedSession(contest.feed, contest.nasdaq, rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null), closeOn)
-    : nextFix === "" ? sessionHabit(undefined, nqNextHour, lastHour ?? lastE?.hour) : sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
+    : nextFix === "" ? sessionHabit(lastHour ?? lastE?.hour, nqNextHour, undefined) : sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
   const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
   const lastSnap = sameEpsUnit(symbol, lastSnapRaw, lastE?.epsEstimate) ? lastSnapRaw : null;
@@ -1409,7 +1410,7 @@ async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Respo
   // 0088: an unsettled projection never blanks the sessions of past dated reports.
   const habit = contested
     ? contestedSession(up.hour as Session, nqUp as Session, nqDates, closeOn)
-    : upFix === "" ? sessionHabit(undefined, nqUp, upLast ?? last?.hour) : sessionHabit(upFix ?? up?.hour, nqUp, last?.hour);
+    : upFix === "" ? sessionHabit(upLast ?? last?.hour, nqUp, undefined) : sessionHabit(upFix ?? up?.hour, nqUp, last?.hour);
   const num = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[$,]/g, "")); return Number.isFinite(n) ? n : null; };
   const reports = nqRows.map((r) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");

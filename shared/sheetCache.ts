@@ -5,6 +5,7 @@
 import type { TickerResponse } from "./types";
 import { isDated } from "./pending";
 import { sessionPassed } from "./reported";
+import { TYPICAL_MOVE_MIN } from "./reaction";
 
 /** A full sheet: sheets, share pages and OG cards read it from the edge for 5 minutes. */
 export const SHEET_TTL = 300;
@@ -55,9 +56,13 @@ export const etTime = (at: number): string =>
 
 const whenOf = (s: StaleSheet, today: string) => (s.day === today ? etTime(s.at) : `${s.day}, ${etTime(s.at)}`);
 
+/** 0088: a typical move only stands beside at least TYPICAL_MOVE_MIN measured moves in the history it's shown with. */
+const earned = (history: TickerResponse["history"], move: number | null): number | null =>
+  move != null && history.filter((h) => h.move != null).length >= TYPICAL_MOVE_MIN ? move : null;
+
 /** The last good copy, marked as an earlier read so the sheet says so (and the client knows it's partial). */
 export function standIn(s: StaleSheet, today: string): TickerResponse {
-  return { ...s.data, warnings: [`${EARLIER} from ${whenOf(s, today)}; the market data service is busy right now.`, ...s.data.warnings] };
+  return { ...s.data, expectedMove: earned(s.data.history, s.data.expectedMove), warnings: [`${EARLIER} from ${whenOf(s, today)}; the market data service is busy right now.`, ...s.data.warnings] };
 }
 
 /**
@@ -71,7 +76,8 @@ export function borrowHistory(built: TickerResponse, s: StaleSheet, today: strin
     history: has ? built.history : s.data.history,
     beatRate: built.beatRate ?? s.data.beatRate,
     // 0060: a contested session with no answer is a deliberate null, never filled from an earlier read.
-    expectedMove: built.moveSession && !built.moveSession.session ? built.expectedMove : built.expectedMove ?? s.data.expectedMove,
+    // 0088: a copy saved before the 3-report rule never brings back a typical move from one or two reports.
+    expectedMove: built.moveSession && !built.moveSession.session ? built.expectedMove : built.expectedMove ?? earned(s.data.history, s.data.expectedMove),
     warnings: [`${EARLIER_PAST} from ${whenOf(s, today)}; the market data service is busy right now.`, ...built.warnings.filter((w) => w !== "Earnings history unavailable.")],
   };
 }

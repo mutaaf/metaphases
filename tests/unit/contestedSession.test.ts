@@ -3,7 +3,7 @@ import worker from "../../worker/index";
 import overridesFile from "../../data/date-overrides.json" with { type: "json" };
 import { applyToRows, validateOverrides, type DateOverrides } from "../../shared/dateOverrides";
 import { contestedSession, isContested } from "../../shared/reaction";
-import { borrowHistory } from "../../shared/sheetCache";
+import { borrowHistory, standIn } from "../../shared/sheetCache";
 import { factsFor } from "../../worker/ai/prompts";
 
 // 0060: Finnhub and Nasdaq list the same date in different sessions (ADI, DE, ROAD: Finnhub "amc", Nasdaq "bmo",
@@ -261,9 +261,18 @@ describe("a contest is remembered per company", () => {
 describe("downstream of a contested session", () => {
   it("an earlier good copy never fills a deliberate '—' typical move", () => {
     const built = { history: [{ move: null }], beatRate: null, expectedMove: null, moveSession: { feed: "amc", nasdaq: "bmo", session: "" }, warnings: [] } as any;
-    const old = { at: Date.now(), day: "2026-11-12", data: { history: [], beatRate: null, expectedMove: 1.6, warnings: [] } } as any;
+    const old = { at: Date.now(), day: "2026-11-12", data: { history: [{ move: 1 }, { move: -2 }, { move: 1.8 }], beatRate: null, expectedMove: 1.6, warnings: [] } } as any;
     expect(borrowHistory(built, old, "2026-11-12").expectedMove).toBeNull();
     expect(borrowHistory({ ...built, moveSession: undefined }, old, "2026-11-12").expectedMove).toBe(1.6);
+  });
+
+  it("0088: an earlier copy saved from one or two measured reports never brings that typical move back", () => {
+    const built = { history: [], beatRate: null, expectedMove: null, warnings: [] } as any;
+    const old = { at: Date.now(), day: "2026-11-18", data: { history: [{ move: 8.05 }, { move: null }, { move: null }], beatRate: null, expectedMove: 8.05, warnings: [] } } as any;
+    expect(borrowHistory(built, old, "2026-11-19").expectedMove).toBeNull();
+    expect(standIn(old, "2026-11-19").expectedMove).toBeNull();
+    const ok = { ...old, data: { ...old.data, history: [{ move: 8.05 }, { move: 0.16 }, { move: -1.17 }], expectedMove: 3.1 } };
+    expect(standIn(ok, "2026-11-19").expectedMove).toBe(3.1);
   });
 
   it("the AI is told the time is unconfirmed and how moves were measured", () => {

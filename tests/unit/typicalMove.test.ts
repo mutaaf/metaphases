@@ -15,3 +15,16 @@ describe("typicalMove", () => {
     expect(typicalMove([8.05, 0.16, -1.17, 5.66, -4.21])).toBeCloseTo(3.85, 2);
   });
 });
+
+describe("the AI facts without a typical move (0088)", () => {
+  it("say there is none rather than leave one or two moves to be averaged", async () => {
+    const { factsFor } = await import("../../worker/ai/prompts");
+    const base = { symbol: "ZZTM", next: null, history: [{ date: "2026-11-18", period: "Q3 2026", epsE: 1, epsA: 1.1, surprisePct: 10, move: 8.05 }] };
+    const none = factsFor("ticker", { ...base, expectedMove: null }).join("\n");
+    expect(none).toContain("No typical move: fewer than 3 measured reports");
+    expect(none).not.toMatch(/Typical stock move/);
+    const some = factsFor("ticker", { ...base, expectedMove: 3.9 }).join("\n");
+    expect(some).toContain("Typical stock move on a report: ±3.9%");
+    expect(some).not.toContain("No typical move");
+  });
+});
