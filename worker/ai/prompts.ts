@@ -90,6 +90,8 @@ function tickerFacts(t: Obj): string[] {
     : `The report time is unconfirmed: the data feed says ${S[ms.feed]}, Nasdaq's calendar says ${S[ms.nasdaq]}, and past moves don't settle it, so there is no typical move; don't state the time as fact.`);
   if (t.beatRate) L.push(`Beat the EPS estimate in ${t.beatRate.beats} of the last ${t.beatRate.total} reports.`);
   if (typeof t.expectedMove === "number") L.push(`Typical stock move on a report: ±${n(t.expectedMove, 1)}%.`);
+  // 0088: fewer than 3 measured moves is no typical move; the model must not average one or two itself.
+  else if ((t.history ?? []).some((h: Obj) => typeof h.move === "number")) L.push("No typical move: fewer than 3 measured reports, so don't average the past moves into one.");
   for (const h of (t.history ?? []).slice(0, 8)) {
     L.push(`Past report ${clip(h.date, 10)} (${clip(h.period, 12)}): EPS est $${n(h.epsE)} vs actual $${n(h.epsA)}, ${h.basis ? "actual on a different basis from the estimate (not a beat or a miss)" : `surprise ${n(h.surprisePct, 1)}%`}, stock moved ${h.move == null ? "—" : `${n(h.move, 1)}%`}.`);
   }

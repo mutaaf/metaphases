@@ -116,8 +116,23 @@ describe("/api/ticker: a projected next report after a print (TGT/TJX, 0086)", (
     const r = await sheet();
     expect(r.next).toMatchObject({ date: NEXT, session: "", projected: true });
     expect(r.next.hs).toBeUndefined();
-    // No past move is measured on a day nothing settled (0060's rule): "—", never the feed's or the last report's guess.
-    expect(r.history.filter((h: any) => REPORTS.includes(h.date)).map((h: any) => h.move)).toEqual([null, null, null, null]);
+    // 0088 (TJX, JD, XPEV): an unknown projection is no evidence against the reports the company dated. Past moves
+    // keep the last dated report's session (bmo), as before 0086, never blanked down to a one-report "typical move".
+    const past = r.history.filter((h: any) => REPORTS.includes(h.date));
+    expect(past).toHaveLength(4);
+    past.forEach((h: any, i: number) => { expect(h.session).toBe("bmo"); expect(h.move).toBeCloseTo([5, 5, 1, 1][i], 4); });
+    expect(r.expectedMove).not.toBeNull();
+    expect(r.expectedMove).toBeLessThan(5);
+  });
+
+  it("the day after, the moves don't settle it: past moves still use the cached last report's session (0088)", async () => {
+    stub([{ date: NEXT, hour: "amc" }], closes([5, 5, 1, 1], [1, 1, 5, 5]));
+    cache.store.set(CAL(`cal:v3:${LAST}`), JSON.stringify([{ s: SYM, d: LAST, h: "bmo", q: 3, y: 2026, eE: 2.05, eA: 2.65, rE: 25e9, rA: 25.2e9 }]));
+    const r = await sheet();
+    expect(r.next).toMatchObject({ date: NEXT, session: "", projected: true });
+    const past = r.history.filter((h: any) => REPORTS.includes(h.date));
+    expect(past.map((h: any) => h.session)).toEqual(["bmo", "bmo", "bmo", "bmo"]);
+    past.forEach((h: any) => expect(h.move).not.toBeNull());
   });
 
   it("the day after, symbol= has dropped the reported row: the calendar's cached day still says how the company reported", async () => {

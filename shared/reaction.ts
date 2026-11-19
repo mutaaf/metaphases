@@ -61,3 +61,11 @@ export function projectedSession(feed: string | undefined, last: string | undefi
   const v = contestedSession(feed, last as Session, dates, closeOn);
   return v === feed ? null : v;
 }
+
+/** 0088: the fewest measured reports a typical move is ever averaged from (TJX read ±8.0% from one; five gave ±3.9%). */
+export const TYPICAL_MOVE_MIN = 3;
+
+/** The mean absolute report-day move, or null ("—") with fewer than TYPICAL_MOVE_MIN measured reports. */
+export function typicalMove(moves: number[]): number | null {
+  return moves.length >= TYPICAL_MOVE_MIN ? moves.reduce((a, b) => a + Math.abs(b), 0) / moves.length : null;
+}
