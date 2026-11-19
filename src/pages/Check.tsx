@@ -81,7 +81,6 @@ function HypeCard({ sym, caption }: { sym: string; caption: string }) {
   }
   if (!data) return null;
   const v = verdict(flags, data.compass.grade);
-  const weak = /^[DF]/.test(data.compass.grade ?? "");
   return (
     <article className="hc-card" aria-label={`Hype check: ${name}`}>
       <header className="hc-head">
@@ -104,7 +103,7 @@ function HypeCard({ sym, caption }: { sym: string; caption: string }) {
           {v.warn.map((f) => <li key={f.key} className={`flag-${f.tone}`}><b>{f.label}</b><span>{f.why}</span></li>)}
         </ul>
       )}
-      {v.warn.length === 0 && (weak
+      {v.warn.length === 0 && (v.weak
         ? <p className="hc-clean weak">None of our red-flag checks fired, but its <Term k="compass">quality grade</Term> is {data.compass.grade}: the business itself scores weak on our rules. The full read shows why.</p>
         : <p className="hc-clean">None of our red-flag checks fired: it's profitable, not unusually swingy, and not mid-run. That still isn't a reason to buy — only an absence of obvious warning signs.</p>)}
       {v.info.length > 0 && (
@@ -122,7 +121,7 @@ function HypeCard({ sym, caption }: { sym: string; caption: string }) {
       <AiTake data={data} flags={flags} caption={caption} owned={owned} />
       <div className="cta-row">
         <button className={`cta ${starred ? "cta-secondary" : "cta-primary"}`} onClick={() => actions.toggleWatch(sym)} aria-pressed={starred}><Icon name="star" size={14} /> {starred ? "Watching" : "Watch it instead"}</button>
-        <button className="cta cta-secondary" onClick={() => shareStory(`t/${sym}`, `${sym} hype check`, `${name} on Metaphases' Hype Check: ${v.label}.`)}><Icon name="share" size={14} /> Share</button>
+        <button className="cta cta-secondary" onClick={() => shareStory(`t/${sym}`, `${sym} hype check`, v.warn.length ? `${name}: ${v.label} on Metaphases' Hype Check.` : `${name}, checked against the real numbers on Metaphases' Hype Check.`)}><Icon name="share" size={14} /> Share</button>
         <button className="cta cta-secondary" onClick={() => setParam("t", sym)}>The full read →</button>
       </div>
     </article>

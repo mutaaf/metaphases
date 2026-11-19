@@ -39,8 +39,12 @@ export function coreName(name: string): { full: string; first: string | null } {
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** 0022: "the next Tesla", "the new Nvidia", "like Apple", "bigger than Nvidia" compare against a company; they don't push it. */
-const COMPARISON_BEFORE = /(?:^|[^\w-])(?:next|new|like|than)\s+$/;
+/**
+ * 0022: "the next Tesla", "the new Nvidia", "is like Apple", "bigger than Nvidia" compare against a company; they
+ * don't push it. Kept narrow on purpose: "I like Apple", "feels like Nvidia will 10x", "up next Tesla" and
+ * "brand new Tesla" are real mentions.
+ */
+const COMPARISON_BEFORE = /(?:(?:^|[^\w-])(?:(?<!\bup )next|(?:the|a) new|(?:is|be|are|'s|’s|just|exactly) like|than)|[,;—–]\s*like)\s+$/i;
 
 /** Where `phrase` is first named as a stock in `lower`, skipping comparisons; -1 when it never is. */
 function mentionAt(lower: string, phrase: string): number {
@@ -62,7 +66,7 @@ export function extractTickers(text: string, universe: Record<string, Co>, max =
 
   for (const m of text.matchAll(/\$([A-Za-z]{1,5}(?:\.[A-Za-z])?)\b/g)) add(m[1].toUpperCase(), m.index ?? 0);
   for (const m of text.matchAll(/\/(?:quote|stocks?|symbol)\/([A-Za-z.]{1,6})\b/gi)) { const s = m[1].toUpperCase(); if (universe[s]) add(s, m.index ?? 0); }
-  for (const m of text.matchAll(/(?<![$\w])([A-Z]{2,5}(?:\.[A-Z])?)(?![\w])/g)) { const s = m[1]; if (universe[s] && !NOISE.has(s)) add(s, m.index ?? 0); }
+  for (const m of text.matchAll(/(?<![$\w])([A-Z]{2,5}(?:\.[A-Z])?)(?![\w])/g)) { const s = m[1]; if (universe[s] && !NOISE.has(s) && !COMPARISON_BEFORE.test(text.slice(0, m.index))) add(s, m.index ?? 0); }
   // A lone lowercase/mixed ticker query like "nvda" or "pltr".
   const trimmed = text.trim();
   if (/^[A-Za-z]{1,5}(\.[A-Za-z])?$/.test(trimmed) && universe[trimmed.toUpperCase()] && !NOISE.has(trimmed.toUpperCase())) add(trimmed.toUpperCase(), 0);
@@ -133,6 +137,8 @@ export interface Verdict {
   info: Flag[];
   label: string;
   tone: "hot" | "warm" | "neutral";
+  /** The quality grade is D or F. */
+  weak: boolean;
 }
 
 /**
@@ -143,10 +149,10 @@ export function verdict(flags: Flag[], grade?: string | null): Verdict {
   const warn = flags.filter((f) => f.tone !== "info");
   const info = flags.filter((f) => f.tone === "info");
   const weak = !!grade && /^[DF]/.test(grade);
-  if (warn.length) return { warn, info, label: `${warn.length} red flag${warn.length > 1 ? "s" : ""}`, tone: warn.length >= 2 ? "hot" : "warm" };
-  if (weak) return { warn, info, label: `Quality grade ${grade}`, tone: "warm" };
-  if (info.length) return { warn, info, label: `${info.length} worth knowing`, tone: "neutral" };
-  return { warn, info, label: "Nothing alarming", tone: "neutral" };
+  if (warn.length) return { warn, info, weak, label: `${warn.length} red flag${warn.length > 1 ? "s" : ""}`, tone: warn.length >= 2 ? "hot" : "warm" };
+  if (weak) return { warn, info, weak, label: `Quality grade ${grade}`, tone: "warm" };
+  if (info.length) return { warn, info, weak, label: `${info.length} worth knowing`, tone: "neutral" };
+  return { warn, info, weak, label: "Nothing alarming in the numbers", tone: "neutral" };
 }
 
 /** Three honest questions to ask before buying — shaped by the flags we found. */

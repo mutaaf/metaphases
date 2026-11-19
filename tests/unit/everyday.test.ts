@@ -37,6 +37,18 @@ describe("extractTickers", () => {
     expect(extractTickers("$SOUN is the new Nvidia, bigger than Palantir, like Apple in 2005", UNIVERSE)).toEqual(["SOUN"]);
     expect(extractTickers("Is Rivian the next Tesla? Tesla bulls say no", UNIVERSE)).toContain("TSLA");
   });
+  it("ordinary 'like', 'next' and 'new' are still real mentions", () => {
+    expect(extractTickers("I like Apple", UNIVERSE)).toEqual(["AAPL"]);
+    expect(extractTickers("Feels like Nvidia will 10x", UNIVERSE)).toEqual(["NVDA"]);
+    expect(extractTickers("Looks like Apple is crushing it", UNIVERSE)).toEqual(["AAPL"]);
+    expect(extractTickers("Stocks like Apple and Microsoft", UNIVERSE)).toEqual(["AAPL", "MSFT"]);
+    expect(extractTickers("Up next Tesla earnings", UNIVERSE)).toEqual(["TSLA"]);
+    expect(extractTickers("my brand new Tesla", UNIVERSE)).toEqual(["TSLA"]);
+  });
+  it("a bare ticker after a comparison is a comparison too", () => {
+    expect(extractTickers("$SOUN is the next NVDA", UNIVERSE)).toEqual(["SOUN"]);
+    expect(extractTickers("$SOUN is like AMD", UNIVERSE)).toEqual(["SOUN"]);
+  });
   it("a cashtag always counts, even after a comparison word", () => {
     expect(extractTickers("$NIO and $TSLA", UNIVERSE)).toEqual(["NIO", "TSLA"]);
     expect(extractTickers("$NIO is the next $TSLA", UNIVERSE)).toEqual(["NIO", "TSLA"]);
@@ -118,9 +130,10 @@ describe("Hype Check verdict", () => {
     }
     expect(verdict(redFlags(cases.TSLA, { tracked: true, today }), "D")).toMatchObject({ label: "Quality grade D", tone: "warm" });
     expect(verdict([{ key: "debt", tone: "amber", label: "", why: "" }], "A").label).toBe("1 red flag");
+    expect(verdict([{ key: "debt", tone: "amber", label: "", why: "" }], "F")).toMatchObject({ label: "1 red flag", weak: true });
   });
   it("is neutral, not green, and says 'Nothing alarming' only when there is truly nothing", () => {
-    expect(verdict([], "A")).toMatchObject({ label: "Nothing alarming", tone: "neutral" });
+    expect(verdict([], "A")).toMatchObject({ label: "Nothing alarming in the numbers", tone: "neutral", weak: false });
     expect(verdict([{ key: "pricey", tone: "info", label: "", why: "" }], "B+")).toMatchObject({ label: "1 worth knowing", tone: "neutral" });
   });
 });
