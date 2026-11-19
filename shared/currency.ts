@@ -72,20 +72,23 @@ export function estimateCurrency(i: CurrencyInputs): Currency {
   return "USD";
 }
 
+/** A minus sign only when the figure as printed isn't zero: -0.0017 is "$0.00", never "-$0.00" (0089). */
+const minus = (v: number, body: string) => (v < 0 && /[1-9]/.test(body) ? "-" : "");
+
 /** Per-share figure: "$2.02", "¥64.50", "-CN¥0.96", or "64.50 (local currency)". */
 export function epsIn(v: number | null | undefined, c?: Currency | null): string {
   if (v == null || !Number.isFinite(v)) return "—";
-  return `${v < 0 ? "-" : ""}${prefix(c)}${Math.abs(v).toFixed(2)}${suffix(c)}`;
+  const body = Math.abs(v).toFixed(2);
+  return `${minus(v, body)}${prefix(c)}${body}${suffix(c)}`;
 }
 
 /** Large amount: "$13.5B", "¥13.48T", "CN¥33.7B". */
 export function moneyIn(v: number | null | undefined, c?: Currency | null): string {
   if (v == null || !Number.isFinite(v)) return "—";
   const a = Math.abs(v);
-  const s = v < 0 ? "-" : "";
   const p = prefix(c);
   const body = a >= 1e12 ? `${(a / 1e12).toFixed(2)}T` : a >= 1e9 ? `${(a / 1e9).toFixed(a >= 1e11 ? 0 : 1)}B` : a >= 1e6 ? `${(a / 1e6).toFixed(0)}M` : a >= 1e3 ? `${(a / 1e3).toFixed(0)}K` : a.toFixed(0);
-  return `${s}${p}${body}${suffix(c)}`;
+  return `${minus(v, body)}${p}${body}${suffix(c)}`;
 }
 
 /**

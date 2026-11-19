@@ -93,7 +93,7 @@ function tickerFacts(t: Obj): string[] {
   // 0088: fewer than 3 measured moves is no typical move; the model must not average one or two itself.
   else if ((t.history ?? []).some((h: Obj) => typeof h.move === "number")) L.push("No typical move: fewer than 3 measured reports, so don't average the past moves into one.");
   for (const h of (t.history ?? []).slice(0, 8)) {
-    L.push(`Past report ${clip(h.date, 10)} (${clip(h.period, 12)}): EPS est $${n(h.epsE)} vs actual $${n(h.epsA)}, ${h.basis ? "actual on a different basis from the estimate (not a beat or a miss)" : `surprise ${n(h.surprisePct, 1)}%`}, stock moved ${h.move == null ? "—" : `${n(h.move, 1)}%`}.`);
+    L.push(`Past report ${clip(h.date, 10)} (${clip(h.period, 12)}): EPS est ${epsIn(h.epsE, "USD")} vs actual ${epsIn(h.epsA, "USD")},${h.basis ? "actual on a different basis from the estimate (not a beat or a miss)" : `surprise ${n(h.surprisePct, 1)}%`}, stock moved ${h.move == null ? "—" : `${n(h.move, 1)}%`}.`);
   }
   for (const [label, g] of [["Setup grade", t.setup], ["Compass quality grade", t.compass]] as const) {
     if (!g) continue;

@@ -1,3 +1,4 @@
+import { epsIn } from "../../shared/currency";
 export { epsIn, moneyIn, currencyName, isUsd } from "../../shared/currency";
 export const money = (v: number | null | undefined) => {
   if (v == null) return "—";
@@ -8,7 +9,8 @@ export const money = (v: number | null | undefined) => {
   if (a >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
   return `$${v.toFixed(0)}`;
 };
-export const eps = (v: number | null | undefined) => (v == null ? "—" : `${v < 0 ? "-" : ""}$${Math.abs(v).toFixed(2)}`);
+/** Dollars a share, with `epsIn`'s sign rule: never "-$0.00" (0089). */
+export const eps = (v: number | null | undefined) => epsIn(v, "USD");
 export const pct = (v: number | null | undefined, d = 1, sign = true) => (v == null ? "—" : `${sign && v > 0 ? "+" : ""}${v.toFixed(d)}%`);
 /** Market value in USD millions (data/universe.json `mc`, converted from the listing's currency, 0042).
  *  0 means unknown (no FX rate), shown as a dash rather than "$0". */
