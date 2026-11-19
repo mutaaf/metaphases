@@ -1,12 +1,12 @@
 ---
 id: 0066
 title: A company date in another week keeps the feed's estimates on the calendar (MRVL shows "—" on Dec 1)
-status: ready
+status: dropped
 priority: P1
 size: M
 lens: data-quality
 created: 2026-11-13
-pr:
+pr: 147
 by: builder
 ---
 
@@ -27,3 +27,6 @@ Worker-level vitest with a mocked feed row on 2026-11-26 and a request for Nov 3
 
 ## Out of scope
 Changing which date wins (0045/0063).
+
+## Dropped
+2026-11-19: fixed by 0085 (#147), same cause. Live check: /api/calendar?from=2026-11-30&to=2026-12-04 has MRVL on Dec 1 with eE 1.1133 and rE 3.2B.
