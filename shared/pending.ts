@@ -1,6 +1,6 @@
 import { HOLIDAYS } from "./market";
 import { epsIn } from "./currency";
-import { vsExpected } from "./compare";
+import { epsVerdict, vsExpected } from "./compare";
 import { sessionPassed } from "./reported";
 const HOLIDAY_SET: ReadonlySet<string> = new Set(HOLIDAYS.map((h) => h.date));
 
@@ -110,7 +110,8 @@ const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "af
 export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; hs?: "n" | "h"; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string }; projected?: true } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
   // 0039: a report that's out leads the title, whatever comes next.
   if (just) return just.epsA == null ? `${sym} reported Q${just.quarter} · Metaphases`
-    : `${sym} reported Q${just.quarter}: ${epsIn(just.epsA, just.currency)} a share${just.epsE != null ? vsExpected(just, (v) => epsIn(v, just.currency)) : ""} · Metaphases`;
+    // 0087: a pair whose same-source actual isn't posted yet is said to be ungraded, with no estimate quoted beside it.
+    : `${sym} reported Q${just.quarter}: ${epsIn(just.epsA, just.currency)} a share${epsVerdict({ eA: just.epsA, eE: just.epsE, nE: just.nE, nA: just.nA, reit: just.reit }).pending ? ", not graded yet" : just.epsE != null ? vsExpected(just, (v) => epsIn(v, just.currency)) : ""} · Metaphases`;
   if (next?.status === "results-pending") return `${sym}'s Q${next.quarter} results expected: none in yet · Metaphases`;
   // 0083: the feed's day passed with no figures, and Nasdaq's calendar couldn't be compared yet: no claim either way.
   if (next?.status === "checking") return `${sym}'s Q${next.quarter} report: no figures yet, date being checked · Metaphases`;

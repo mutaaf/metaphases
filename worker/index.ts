@@ -903,11 +903,16 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       rE: row?.rE ?? nextE.revenueEstimate ?? null, rA: nextE.revenueActual ?? row?.rA ?? null,
       ...(row?.nE != null ? { nE: row.nE } : {}),
       ...(row && row.nA !== undefined ? { nA: row.nA } : {}),
+      ...(row?.pr ? { pr: row.pr } : {}),
     };
     outcome = reportOutcome(day, today, nowMin);
   } else if (skip && skipRow && !pending && !companyDated && !skipContested) {
-    outcome = reportOutcome({ date: skipRow.d, hour: skipRow.h ?? "", quarter: skip.quarter, year: skip.year, eE: skipRow.eE ?? null, eA: skipRow.eA ?? null, rE: skipRow.rE ?? null, rA: skipRow.rA ?? null, ...(skipRow.nE != null ? { nE: skipRow.nE } : {}), ...(skipRow.nA !== undefined ? { nA: skipRow.nA } : {}) }, today, nowMin);
+    outcome = reportOutcome({ date: skipRow.d, hour: skipRow.h ?? "", quarter: skip.quarter, year: skip.year, eE: skipRow.eE ?? null, eA: skipRow.eA ?? null, rE: skipRow.rE ?? null, rA: skipRow.rA ?? null, ...(skipRow.nE != null ? { nE: skipRow.nE } : {}), ...(skipRow.nA !== undefined ? { nA: skipRow.nA } : {}), ...(skipRow.pr ? { pr: skipRow.pr } : {}) }, today, nowMin);
   }
+  // 0087: a reported row this colo hasn't judged against the pre-report bar (a cold day cache, so Finnhub's estimate as
+  // revised after the print, or a day cached while Nasdaq was down) goes through the calendar's own step, so the sheet,
+  // its history row and the unfurl quote the estimate the calendar judges with (TGT $2.05, not $2.09).
+  if (outcome?.kind === "reported" && !outcome.row.pr) outcome = { kind: "reported", row: await preReportRow(symbol, outcome.row, today, ctx) };
   // 0083: fail closed. A figure-less feed day whose Nasdaq contest can't be ruled out isn't stated as a missed report.
   let checking: DayRow | null = null;
   if (outcome?.kind === "results-pending" && (outcome.row.date === today ? todayStanding?.k === "checking" : skipChecking)) { checking = outcome.row; outcome = null; }
@@ -959,7 +964,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     }
   }
   // A print reported in the last ~40 days might be on Finnhub's calendar before Nasdaq's table catches up.
-  if (usd && lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date)) {
+  // 0087: not the report that's just out: its judged row (below) heads the history instead of the feed's revised estimate.
+  if (usd && lastE && lastE.epsActual != null && !history.some((h) => h.date === lastE.date) && !(reported && Math.abs(daysApart(reported.date, lastE.date)) <= 3)) {
     const session: Session = ownSession(lastE);
     const est = lastSnap ?? lastE.epsEstimate;
     history.unshift(keep(judgeReaction({ date: lastE.date, session, period: `Q${lastE.quarter} ${lastE.year}`, epsE: est, epsA: lastE.epsActual, surprisePct: est ? ((lastE.epsActual - est) / Math.abs(est)) * 100 : null, move: reactionMove(session, lastE.date, closeOn) } as Reaction, null, reit), lastE.epsActual));
@@ -1108,6 +1114,24 @@ async function lastReportedHour(symbol: string, lastE: any, today: string, pastD
     } catch { return null; }
   }));
   return found.find((e) => e != null)?.h || undefined;
+}
+
+/**
+ * 0087: one reported row through the calendar's pre-report step (`preReportDay`'s `applyPreReport`): the snapshot, else
+ * Nasdaq's same-basis consensus and actual, from the same cached day read the calendar makes. Only rows that step could
+ * change (an estimate to swap, in dollars or with a snapshot): non-USD and estimate-less rows never wait on Nasdaq. A
+ * failed Nasdaq read leaves the row as the calendar would (Finnhub's figures).
+ */
+async function preReportRow(symbol: string, row: DayRow, today: string, ctx: ExecutionContext): Promise<DayRow> {
+  const snap = await readSnap(row.date);
+  if (row.eE == null && row.rE == null) return row;
+  if (!snap[symbol] && (!usdEstimates(symbol) || row.eE == null)) return row;
+  const nq = await nasdaqDay(row.date, today, ctx).catch(() => null);
+  const ev: EarningsEvent = { s: symbol, d: row.date, h: row.hour as Session, q: row.quarter, y: row.year, eE: row.eE, eA: row.eA, rE: row.rE, rA: row.rA, t: 1 } as EarningsEvent;
+  const [e] = applyPreReport([ev], snap, nq?.e ?? {}, usdEstimates, false, nq?.a).events;
+  // Nasdaq's fields come from this pass only, never left over from the row's earlier one.
+  const { nE: _nE, nA: _nA, pr: _pr, ...base } = row;
+  return { ...base, eE: e.eE, rE: e.rE, ...(e.nE != null ? { nE: e.nE } : {}), ...(e.nA !== undefined ? { nA: e.nA } : {}), ...(e.pr ? { pr: e.pr } : {}) };
 }
 
 /** The pending quarter's row in the cached calendar days (fresh, else the last good copy), newest day first. */

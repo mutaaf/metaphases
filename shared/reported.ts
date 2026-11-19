@@ -11,7 +11,7 @@ import type { TickerResponse } from "./types";
  */
 
 /** A report day's row, from Finnhub's `symbol=` calendar or the calendar route's cached day. */
-export interface DayRow { date: string; hour: string; quarter: number; year: number; eE: number | null; eA: number | null; rE: number | null; rA: number | null; /** 0049: the calendar row's Nasdaq figure on the actual's basis. */ nE?: number; /** 0058: Nasdaq's actual on the estimate's basis (EarningsEvent.nA). */ nA?: number | null }
+export interface DayRow { date: string; hour: string; quarter: number; year: number; eE: number | null; eA: number | null; rE: number | null; rA: number | null; /** 0049: the calendar row's Nasdaq figure on the actual's basis. */ nE?: number; /** 0058: Nasdaq's actual on the estimate's basis (EarningsEvent.nA). */ nA?: number | null; /** 0087: the estimate is the pre-report bar (snapshot or Nasdaq's), as on the calendar. */ pr?: "s" | "n" }
 
 export type Outcome = { kind: "reported"; row: DayRow } | { kind: "results-pending"; row: DayRow } | null;
 
@@ -38,6 +38,24 @@ export function reportOutcome(row: DayRow | null | undefined, today: string, now
 
 /** "Just reported" stays up this many trading days after the print; after that the history row says it. */
 export const JUST_DAYS = 3;
+
+/** 0087: why a reported EPS isn't graded yet (Nasdaq posts its same-basis actual about a day after the print). */
+export const NOT_GRADED_WHY = "Not graded yet: we're waiting for a second source to confirm the figures on the estimate's basis (usually by the next morning). Until then we don't call it a beat or a miss.";
+
+/**
+ * 0087: the sheet's "Just reported" Result cell. Never a bare "—": an actual that isn't judged yet, or has no estimate,
+ * says so. `tone` is "pos"/"neg" for a beat/miss by a clear margin.
+ */
+export function justResult(j: { epsA: number | null; epsE: number | null; nE?: number; nA?: number | null; reit?: boolean }): { text: string; tone: "" | "pos" | "neg"; why?: string } {
+  const jv = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, nA: j.nA, reit: j.reit });
+  const s = jv.pct;
+  const tone = s == null || Math.abs(s) < 0.5 ? "" : s > 0 ? "pos" : "neg";
+  if (jv.v === "not-comparable") return { text: "Different basis", tone: "" };
+  if (jv.v) return { text: s == null ? (jv.v === "beat" ? "Above the estimate" : "Below the estimate") : Math.abs(s) < 0.5 ? "In line with the estimate" : s > 0 ? `Beat by ${s.toFixed(0)}%` : `Missed by ${Math.abs(s).toFixed(0)}%`, tone };
+  if (j.epsA == null) return { text: "Figures not in yet", tone: "" };
+  if (jv.pending) return { text: "Not graded yet", tone: "", why: NOT_GRADED_WHY };
+  return { text: "No estimate to compare", tone: "" };
+}
 
 /** Card headline and stat for a reported or due report (share card and story card), or null for a normal one. */
 export function reportedCard(d: Pick<TickerResponse, "next" | "justReported">, today: string): { headline: string; stat: { label: string; value: string } } | null {
@@ -72,6 +90,8 @@ export function reportedLine(name: string, r: { date: string; session: string; q
     return `${head}: ${fmt(r.epsA)} a share in our data feed. On the same basis as the ${fmt(r.epsE)} estimate it was ${fmt(j.act)} (Nasdaq's figures), ${verdict}.`;
   }
   const s = j.pct;
+  // 0087: the pair isn't graded yet, and The Read says why, as the card beside it does.
+  if (j.pending) return `${head}: ${fmt(r.epsA)} a share against ${fmt(r.epsE as number)} expected. It isn't graded yet: we're waiting for a second source to confirm the figures on the estimate's basis, usually by the next morning.`;
   if (r.epsE == null || j.v == null) return `${head}: ${fmt(r.epsA)} a share.`;
   const est = j.est ?? r.epsE;
   if (s == null) return `${head}: ${fmt(r.epsA)} a share against ${fmt(est)} expected, ${j.v === "beat" ? "above" : "below"} the estimate.`;
@@ -97,7 +117,7 @@ export function tickerShareDesc(name: string, d: Pick<TickerResponse, "next" | "
   ].filter(Boolean);
   const j = d.justReported;
   const lead = j
-    ? ` — Reported Q${j.quarter} on ${shortDay(j.date)}${j.epsA != null ? `: ${epsIn(j.epsA, j.currency)} EPS${(() => { const v = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, nA: j.nA, reit: j.reit }); return v.v === "not-comparable" ? "" : vsExpected(j, (x) => epsIn(x, j.currency)); })()}` : ""}`
+    ? ` — Reported Q${j.quarter} on ${shortDay(j.date)}${j.epsA != null ? `: ${epsIn(j.epsA, j.currency)} EPS${(() => { const v = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, nA: j.nA, reit: j.reit }); return v.v === "not-comparable" ? "" : v.pending ? ", not graded yet" : vsExpected(j, (x) => epsIn(x, j.currency)); })()}` : ""}`
     : d.next?.status === "results-pending" ? ` — Q${d.next.quarter} results expected, none in our data yet${d.next.epsE != null && !d.next.epsBasis ? ` (estimate going in ${epsIn(d.next.epsE, d.next.currency)} EPS)` : ""}`
     : d.next?.status === "checking" ? ` — no Q${d.next.quarter} figures in our data yet; the report date is still being compared with Nasdaq's calendar`
     : d.next?.epsE != null && !d.next.epsBasis ? ` — Street expects ${epsIn(d.next.epsE, d.next.currency)} EPS` : "";
