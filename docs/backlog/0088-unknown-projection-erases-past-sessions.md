@@ -1,12 +1,12 @@
 ---
 id: 0088
 title: A projected session the price moves can't settle never erases the sessions and moves of past dated reports (TJX "typical move ±8.0%" from one report; the real five-report figure is about ±3.9%)
-status: in-progress
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-19
-pr:
+pr: 153
 by: critic
 ---
 
