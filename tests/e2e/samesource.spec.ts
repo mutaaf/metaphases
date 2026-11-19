@@ -30,7 +30,7 @@ test("the day drawer judges the same-source pair and shows it", async ({ page })
   const amd = page.locator("[role=dialog] .erow", { hasText: "AMD" }).first();
   await expect(amd.locator(".chip.res-beat")).toContainText("+10%"); // +9.5%, not +24%
   const vrtx = page.locator("[role=dialog] .erow", { hasText: "VRTX" }).first();
-  await expect(vrtx.locator("[data-testid=eps-pending]")).toHaveText(/judging soon/i);
+  await expect(vrtx.locator("[data-testid=eps-pending]")).toHaveText(/not graded yet/i);
   await expect(vrtx.locator("[data-testid=eps-basis], .chip.res-beat, .chip.res-miss")).toHaveCount(0);
 });
 

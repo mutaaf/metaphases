@@ -152,6 +152,26 @@ test("a report that's out today shows the actual and beat, with no preview butto
   await page.screenshot({ path: `test-results/0039-reported-${test.info().project.name}.png` });
 });
 
+test("a just-reported result waiting on its same-source pair says why it isn't graded, never a bare dash (0087)", async ({ page }) => {
+  await page.route("**/api/ticker/TGT", async (r) => {
+    const body = nvdaAs("TGT");
+    body.justReported = { date: "2026-10-31", session: "bmo", quarter: 3, year: 2026, epsE: 2.05, epsA: 2.65, currency: "USD", nA: null };
+    body.history = [{ date: "2026-10-31", session: "bmo", period: "Q3 2026", epsE: null, epsA: 2.65, surprisePct: null, move: null }, ...body.history];
+    body.next = { ...body.next, date: "2027-03-03", session: "bmo", quarter: 4, year: 2026 };
+    body.read = ["Target reported Q3 today (Saturday, Oct 31) before the opening bell: $2.65 a share."];
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/TGT");
+  const just = page.locator(".just-reported");
+  await expect(just).toContainText("$2.65");
+  await expect(just).toContainText("$2.05");
+  await expect(page.getByTestId("jr-result")).toHaveText("Not graded yet");
+  await expect(page.getByTestId("jr-waiting")).toContainText("waiting for a second source");
+  const w = await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth), document.documentElement.scrollWidth - document.documentElement.clientWidth));
+  expect(w).toBeLessThanOrEqual(0);
+  await just.screenshot({ path: `test-results/0087-not-graded-${test.info().project.name}.png` });
+});
+
 test("a report whose session passed without figures says results are due, never 'expects' (0039)", async ({ page }) => {
   await page.route("**/api/ticker/CVS", async (r) => {
     const body = nvdaAs("CVS");

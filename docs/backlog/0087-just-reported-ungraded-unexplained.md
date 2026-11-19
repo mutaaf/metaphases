@@ -1,7 +1,7 @@
 ---
 id: 0087
 title: A just-reported company waiting on a second source says so, and the sheet, calendar and unfurl quote one estimate (Target $2.65 vs "$2.05" / "$2.09", Result "—")
-status: ready
+status: in-progress
 priority: P1
 size: S
 lens: clarity

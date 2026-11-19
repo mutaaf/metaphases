@@ -15,6 +15,7 @@ import { isEveryday, LensNote } from "./Everyday";
 import { navigate } from "../lib/router";
 import { track } from "../lib/insights";
 import { isDated } from "../../shared/pending";
+import { justResult } from "../../shared/reported";
 import { nextTimeContested, shownSession } from "../../shared/contestedTime";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
 import { sessionText } from "../lib/sessionText";
@@ -24,8 +25,8 @@ const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "af
 function JustReported({ j, today }: { j: NonNullable<TickerResponse["justReported"]>; today: string }) {
   // 0049: one EPS judgment everywhere; an actual on another basis from its estimate isn't a beat or a miss.
   const jv = epsVerdict({ eA: j.epsA, eE: j.epsE, nE: j.nE, nA: j.nA, reit: j.reit });
-  const s = jv.pct;
-  const verdict = jv.v === "not-comparable" ? "Different basis" : jv.v && s == null ? (jv.v === "beat" ? "Above the estimate" : "Below the estimate") : s == null ? null : Math.abs(s) < 0.5 ? "In line with the estimate" : s > 0 ? `Beat by ${s.toFixed(0)}%` : `Missed by ${Math.abs(s).toFixed(0)}%`;
+  // 0087: never a bare "—": an ungraded result says why.
+  const res = justResult(j);
   return (
     <section className="just-reported" aria-label={`Reported Q${j.quarter} ${j.year}`}>
       <span className="eyebrow">Just reported · Q{j.quarter} {j.year}</span>
@@ -33,9 +34,10 @@ function JustReported({ j, today }: { j: NonNullable<TickerResponse["justReporte
       <dl className="nc-stats">
         <div><dt>EPS</dt><dd>{epsIn(j.epsA, j.currency)}</dd></div>
         <div><dt><Term k="consensus">{jv.via ? "Expected (Nasdaq)" : "Expected"}</Term></dt><dd>{epsIn(jv.via ? jv.est : j.epsE, j.currency)}</dd></div>
-        <div><dt><Term k="surprise">Result</Term></dt><dd className={s == null || Math.abs(s) < 0.5 ? "" : s > 0 ? "pos" : "neg"}>{verdict ?? (j.epsA == null ? "Figures not in yet" : "—")}</dd></div>
+        <div><dt><Term k="surprise">Result</Term></dt><dd className={`${res.tone}${/\d/.test(res.text) ? "" : " jr-word"}`} data-testid="jr-result">{res.why ? <Term k="notgraded">{res.text}</Term> : res.text}</dd></div>
       </dl>
       {jv.act != null && <p className="muted small rx-basis" data-testid="jr-pair">{epsIn(j.epsA, j.currency)} is our data feed's figure. On the estimate's basis (Nasdaq's figures) it was {epsIn(jv.act, j.currency)} against {epsIn(jv.est, j.currency)}, and that's the result shown.</p>}
+      {res.why && <p className="muted small rx-basis" data-testid="jr-waiting">{res.why}</p>}
       {jv.v === "not-comparable" && <p className="muted small rx-basis" data-testid="jr-basis"><Term k="epsbasis">EPS basis differs from the estimate</Term> (for example FFO or adjusted earnings against net income), so we don't call it a beat or a miss.</p>}
     </section>
   );

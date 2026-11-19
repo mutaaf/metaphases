@@ -104,7 +104,7 @@ describe("the sheet's lines say which pair was judged (0058)", () => {
     const line = reportedLine("Lumentum", { date: "2026-11-02", session: "amc", quarter: 1, epsE: 3.82, epsA: 4.57, nA: 3.76 }, "2026-11-03", fmt);
     expect(line).toBe("Lumentum reported Q1 on Monday, Nov 2 after the close: $4.57 a share in our data feed. On the same basis as the $3.82 estimate it was $3.76 (Nasdaq's figures), a miss of 2%.");
     // Nasdaq's figure not posted yet: the result alone, no verdict, no basis claim.
-    expect(reportedLine("X", { date: "2026-11-02", session: "amc", quarter: 1, epsE: 3.82, epsA: 4.57, nA: null }, "2026-11-03", fmt)).toBe("X reported Q1 on Monday, Nov 2 after the close: $4.57 a share.");
+    expect(reportedLine("X", { date: "2026-11-02", session: "amc", quarter: 1, epsE: 3.82, epsA: 4.57, nA: null }, "2026-11-03", fmt)).toBe("X reported Q1 on Monday, Nov 2 after the close: $4.57 a share against $3.82 expected. It isn't graded yet: we're waiting for a second source to confirm the figures on the estimate's basis, usually by the next morning."); // 0087
   });
   it("judgeReaction shows the same-source pair in the history table", () => {
     expect(judgeReaction({ epsE: 3.82, epsA: 4.57, surprisePct: 19.6 }, null, false, 3.76)).toMatchObject({ epsE: 3.82, epsA: 3.76 });
@@ -113,7 +113,7 @@ describe("the sheet's lines say which pair was judged (0058)", () => {
   it("the share title quotes the judged pair, and no pair while Nasdaq's figure is pending", () => {
     const just = { quarter: 1, epsE: 3.82, epsA: 4.57 };
     expect(tickerShareTitle("LITE", "LITE", null, { ...just, nA: 3.76 })).toBe("LITE reported Q1: $4.57 a share ($3.76 on the estimate's basis) vs $3.82 expected · Metaphases");
-    expect(tickerShareTitle("LITE", "LITE", null, { ...just, nA: null })).toBe("LITE reported Q1: $4.57 a share · Metaphases");
+    expect(tickerShareTitle("LITE", "LITE", null, { ...just, nA: null })).toBe("LITE reported Q1: $4.57 a share, not graded yet · Metaphases"); // 0087
     expect(tickerShareTitle("ZZZR", "ZZZR", null, { quarter: 3, epsE: 0.73, epsA: 0.87 })).toBe("ZZZR reported Q3: $0.87 a share vs $0.73 expected · Metaphases");
   });
   it("a pending pair leaves the history row unjudged without a basis flag (a REIT's estimate isn't hidden for it)", () => {
