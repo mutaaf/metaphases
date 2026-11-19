@@ -87,8 +87,9 @@ describe("/api/ticker past moves (WMT shape: Finnhub session blank)", () => {
     const r = await sheet();
     expect(r.history[0]).toMatchObject({ date: "2026-08-20", session: "bmo" });
     expect(r.history[0].move).toBeCloseTo(6, 4);
-    expect(r.expectedMove).toBeCloseTo(6, 4);
-    expect(r.read.join(" ")).toContain("±6.0%");
+    // 0088: one measured report is no typical move ("—"), never ±6.0% from a single print.
+    expect(r.expectedMove).toBeNull();
+    expect(r.read.join(" ")).not.toMatch(/typical report/);
   });
 
   it("no session from any source: move is '—' and the quarter isn't in the typical move", async () => {
@@ -131,7 +132,7 @@ describe("/api/ticker habit from Nasdaq's day for the next report, read on deman
     const r = await sheet();
     expect(r.history[0]).toMatchObject({ date: "2026-08-20", session: "bmo" });
     expect(r.history[0].move).toBeCloseTo(6, 4);
-    expect(r.expectedMove).toBeCloseTo(6, 4);
+    expect(r.expectedMove).toBeNull(); // 0088: one report is no typical move
     expect(dayCalls()).toEqual(["https://api.nasdaq.com/api/calendar/earnings?date=2026-11-19"]);
     expect(JSON.parse(cache.store.get(CAL("nq:x:v1:2026-11-19"))!)).toEqual({ [SYM]: "bmo" });
     dropSheets();

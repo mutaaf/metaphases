@@ -21,7 +21,7 @@ import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
-import { contestedSession, isContested, projectedSession, reactionMove, sessionHabit } from "../shared/reaction";
+import { contestedSession, isContested, projectedSession, reactionMove, sessionHabit, typicalMove } from "../shared/reaction";
 import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
@@ -810,11 +810,14 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     if (fix) row.hs = "h"; else delete row.hs;
     return fix;
   };
-  // An unsettled projection ("") measures no past move on a guessed day either: every move reads "—", as under 0060.
-  const nextFix = !contest && projectedTimed(nextE, today) ? settleProjected(nextE, await lastReportedHour(symbol, lastE, today, pastDates)) : null;
+  const projectedNext = !contest && projectedTimed(nextE, today);
+  const lastHour = projectedNext ? await lastReportedHour(symbol, lastE, today, pastDates) : undefined;
+  const nextFix = projectedNext ? settleProjected(nextE, lastHour) : null;
+  // 0088: an unsettled projection ("") shows no session, but it is no evidence against the reports the company dated
+  // (TJX, JD, XPEV): past moves keep the last dated report's session, as when the feed's projection is blank.
   const habit: Session = contest
     ? contestedSession(contest.feed, contest.nasdaq, rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null), closeOn)
-    : nextFix === "" ? "" : sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
+    : nextFix === "" ? sessionHabit(undefined, nqNextHour, lastHour ?? lastE?.hour) : sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
   const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
   const lastSnap = sameEpsUnit(symbol, lastSnapRaw, lastE?.epsEstimate) ? lastSnapRaw : null;
@@ -988,7 +991,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const beats = judged.filter((h) => (h.epsA as number) >= (h.epsE as number)).length;
   const beatRate = judged.length ? { beats, total: judged.length } : null;
   const moves = history.map((h) => h.move).filter((m): m is number => m != null);
-  const expectedMove = moves.length ? moves.reduce((a, b) => a + Math.abs(b), 0) / moves.length : null;
+  const expectedMove = typicalMove(moves); // 0088: never an average of one or two reports
 
   const compass = metric?.metric ? compassGrade(metric.metric) : { score: null, grade: null, factors: [] };
   const setup = chart && chart.c.length > 60
@@ -1401,10 +1404,12 @@ async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Respo
   const closeOn = (day: string, off: number) => { const d = stock?.d ?? [], i = d.indexOf(day); return i < 0 ? null : stock?.c[i + off] ?? null; };
   const nqDates = nqRows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null);
   // 0086: a projected session the last dated report contradicts is settled the same way as on the sheet.
-  const upFix = !contested && projectedTimed(up, today) ? projectedSession(up.hour, await lastReportedHour(s, last, today, nqDates), nqDates, closeOn) : null;
+  const upLast = !contested && projectedTimed(up, today) ? await lastReportedHour(s, last, today, nqDates) : undefined;
+  const upFix = !contested && projectedTimed(up, today) ? projectedSession(up.hour, upLast, nqDates, closeOn) : null;
+  // 0088: an unsettled projection never blanks the sessions of past dated reports.
   const habit = contested
     ? contestedSession(up.hour as Session, nqUp as Session, nqDates, closeOn)
-    : upFix === "" ? "" : sessionHabit(upFix ?? up?.hour, nqUp, last?.hour);
+    : upFix === "" ? sessionHabit(undefined, nqUp, upLast ?? last?.hour) : sessionHabit(upFix ?? up?.hour, nqUp, last?.hour);
   const num = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[$,]/g, "")); return Number.isFinite(n) ? n : null; };
   const reports = nqRows.map((r) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");
