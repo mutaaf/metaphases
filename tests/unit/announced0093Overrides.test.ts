@@ -93,4 +93,24 @@ describe("0093 Macy's date through the worker", () => {
     expect(title).toMatch(/^M reports Wed, Dec 2/);
     expect(title).not.toMatch(/unconfirmed|Dec 3|after/i);
   });
+
+  it("the /t/M page's injected title says Wed, Dec 2 and nothing about two calendars", async () => {
+    // A tiny HTMLRewriter (Workers-only) that records what the share page sets, as in tickerCache.test.ts.
+    vi.stubGlobal("HTMLRewriter", class {
+      hs: [string, any][] = [];
+      on(sel: string, h: any) { this.hs.push([sel, h]); return this; }
+      transform(res: Response) {
+        const out: Record<string, string> = {};
+        for (const [sel, h] of this.hs) h.element?.({ setInnerContent: (v: string) => { out[sel] = v; }, setAttribute: (_a: string, v: string) => { out[sel] = v; }, getAttribute: (a: string) => (sel.includes("og:title") && a === "property" ? "og:title" : null), append: (v: string) => { out[sel] = v; } });
+        return new Response(JSON.stringify(out), { status: res.status, headers: res.headers });
+      }
+    });
+    const r = await worker.fetch(new Request("https://mutaafaziz.com/metaphases/t/M"), env, ctx);
+    await Promise.all(pending); pending = [];
+    const out = (await r.json()) as Record<string, string>;
+    const og = out['meta[property="og:title"], meta[name="twitter:title"]'];
+    expect(out.title).toMatch(/^M reports Wed, Dec 2/);
+    expect(og).toBe(out.title);
+    expect(JSON.stringify(out)).not.toMatch(/unconfirmed|Thu, Dec 3|disagree/i);
+  });
 });
