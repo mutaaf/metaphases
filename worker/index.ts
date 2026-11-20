@@ -1044,10 +1044,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   }
   // Only when there's something a memo could change: a contest, or current evidence against one.
   if (seen.some((x) => x.clear || x.c?.x === "differs" || x.c?.x === "agree")) rememberContests(env, ctx, await memosOf(), seen, today);
-  // 0091: an upcoming report with no session (DELL's date-only notice, a blank feed time) says when the company has
+  // 0091: a company-dated upcoming report with no session (DELL's date-only notice) says when the company has
   // usually reported, only when the stock's own moves settle it (3 of 4) and agree with the habit past moves use. Not
   // for a projection, a closed day, a Nasdaq disagreement or a contest: those already say why the time is open.
-  const usual = upNext && !upNext.hour && !pending && !duePending && !checking && !closed && !projected && !nqNext && !contest ? usualSession(habit, pastDates, closeOn) : null;
+  const usual = upNext?.source && !upNext.hour && !pending && !duePending && !checking && !closed && !projected && !nqNext && !contest ? usualSession(habit, pastDates, closeOn) : null;
   // 0091: the company's call time, from its notice, under a company date (never turned into a session).
   const ovNext = upNext?.source ? activeOverrides(OVERRIDES, today)[symbol] : undefined;
   const call = ovNext && ovNext.date === upNext!.date ? ovNext.call : undefined;

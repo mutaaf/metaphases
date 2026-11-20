@@ -10,6 +10,7 @@ import { usualSession } from "../../shared/reaction";
 import { tickerShareTitle } from "../../shared/pending";
 import { tickerShareDesc } from "../../shared/reported";
 import { validateOverrides } from "../../shared/dateOverrides";
+import { factsFor } from "../../worker/ai/prompts";
 
 // 0090: whenever the next report's session is unknown (a date-only company notice like Dell's, a blank feed time),
 // and `symbol=` has already dropped the last dated report (the day after every print), the past reports' sessions
@@ -118,6 +119,20 @@ describe("/api/ticker: a company date with no session (0091)", () => {
     // The unfurl is built from this same response (shareMeta → tickerShareTitle / tickerShareDesc).
     expect(tickerShareTitle("DELL", "Dell Technologies", r.next, r.justReported)).toBe("DELL reports Tue, Nov 24, time not announced (usually after the close) · Metaphases");
     expect(tickerShareDesc("Dell Technologies", r)).toMatch(/^Dell Technologies — Tue, Nov 24, time not announced \(usually after the close/);
+  });
+
+  it("the AI facts carry the habit as a habit, and the call time", async () => {
+    stub("DELL", { date: "2026-11-24", hour: "" }, closes(AMC_DAY, AMC_NEXT));
+    const facts = factsFor("ticker" as any, await sheet("DELL")).join("\n");
+    expect(facts).toMatch(/time not announced; going by its last reports it usually reports after the close: a habit, not the company's word/);
+    expect(facts).toMatch(/earnings call 3:30 p\.m\. CT per the company's notice/);
+  });
+
+  it("a feed row with no session and no company date (dated today): no habit label", async () => {
+    vi.setSystemTime(new Date("2026-11-25T14:00:00Z"));
+    stub("ZZFD", { date: "2026-11-25", hour: "" }, closes(AMC_DAY, AMC_NEXT));
+    const r = await sheet("ZZFD");
+    expect(r.next?.usual).toBeUndefined();
   });
 
   it("ADSK, moves split 2–2: no habit (Time TBD), the call time still shown", async () => {
