@@ -1,5 +1,6 @@
 // Data-depth surfaces for the ticker sheet, Retrace and the macro strip:
 // price chart with earnings markers, peers reporting nearby, quarterly trend, .ics buttons, season scoreboard.
+import { surpriseWords } from "../../shared/basisWords";
 import { useMemo, useState } from "react";
 import type { Quarter, Reaction, TickerResponse } from "../../shared/types";
 import { nyDate, peersFor, placeMarkers, seasonScore } from "../../shared/depth";
@@ -81,7 +82,7 @@ function MarkerDetail({ r }: { r: Reaction }) {
       <Phase h={r.session} size={14} />
       <b>{r.period}</b>
       <span>reported {new Date(r.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-      <span>EPS {eps(r.epsE)} → <b>{eps(r.epsA)}</b> ({r.basis ? "basis differs" : pct(r.surprisePct)})</span>
+      <span>EPS {eps(r.epsE)} → <b>{eps(r.epsA)}</b> ({r.basis ? "basis differs" : surpriseWords(r) ?? pct(r.surprisePct)})</span>
       <span>Stock {r.move == null ? "—" : <b className={r.move >= 0 ? "pos" : "neg"}>{pct(r.move)}</b>} across the report</span>
     </div>
   );

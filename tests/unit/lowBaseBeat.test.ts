@@ -32,6 +32,18 @@ describe("epsVerdict: Nasdaq's own pair with a small or negative base (0094)", (
     expect(epsVerdict({ eE: 1.26, eA: 2.58, ...same }).v).toBe("not-comparable");
     expect(EPS_SAME_SOURCE_GAP).toBeLessThanOrEqual(1);
   });
+  it("a near-zero GAAP print against an adjusted estimate stays 'basis differs' even from one source ($0.80 → −$0.10)", () => {
+    expect(epsVerdict({ eE: 0.8, eA: -0.1, ...same }).v).toBe("not-comparable");
+    expect(epsVerdict({ eE: 0.6, eA: -0.35, ...same }).v).toBe("not-comparable"); // gap $0.95: under $1 but over |actual| and 50¢
+  });
+  it("a fresh report on the calendar judged on Nasdaq's estimate and actual (pr n / nA) is one source too", () => {
+    // M-shaped: Finnhub's actual 0.11, Nasdaq's estimate −0.13 and actual 0.09.
+    expect(epsVerdict({ eA: 0.11, eE: -0.13, nA: 0.09 })).toMatchObject({ v: "beat", pct: null, act: 0.09 });
+    // Nasdaq's actual matched Finnhub's, so no nA, but the row is pr "n".
+    expect(epsVerdict({ eA: 0.1, eE: -0.19, pr: "n" })).toMatchObject({ v: "beat", pct: null });
+    // A Finnhub-only row with the same figures keeps the band.
+    expect(epsVerdict({ eA: 0.1, eE: -0.19 }).v).toBe("not-comparable");
+  });
   it("cross-feed pairs keep the band: UBER, CPT, TM, and the RIOT/LYFT sign flips", () => {
     expect(epsVerdict({ eE: 0.9838, eA: 0.25, nE: 0.94 }).v).toBe("not-comparable");
     expect(epsVerdict({ eE: 0.5319, eA: 1.71 }).v).toBe("not-comparable");
