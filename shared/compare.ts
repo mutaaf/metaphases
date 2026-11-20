@@ -195,6 +195,16 @@ export const nasdaqDayActuals = (body: any): Record<string, number> => dayColumn
 export const EPS_BAND: readonly [number, number] = [0.5, 2];
 /** Both figures within this of zero: the direction is meaningful, a percentage of the base isn't. */
 export const EPS_NEAR_ZERO = 0.1;
+/**
+ * 0094: an estimate and an actual from the same table (Nasdaq's own `earnings-surprise` row) are one basis, so outside
+ * EPS_BAND they're still judged when the dollar gap is under this. It catches turnarounds and low bases (KSS −$0.19 →
+ * $0.10, $0.55 → $1.28; ASAN −$0.14 → −$0.06) and keeps the GAAP-vs-adjusted mixes Nasdaq's own table also holds
+ * (CRM $2.35 → $4.95, WDAY $1.26 → $2.58). Tuned on Nov 20 – Dec 3 2026: the largest real gap was $0.73, the
+ * smallest mix $1.32.
+ */
+export const EPS_SAME_SOURCE_GAP = 1;
+/** 0094: below this base, or across a sign change, a same-source surprise isn't a percentage. */
+const EPS_SMALL_BASE = EPS_NEAR_ZERO * 3;
 
 export interface EpsJudgment {
   /** null = nothing to judge yet. */
@@ -229,7 +239,7 @@ const judge = (a: number, e: number, pct = true): EpsJudgment => ({ v: a >= e ? 
  * `reit`: a REIT, whose actual is often FFO against a GAAP estimate even inside EPS_BAND (PSA $2.42 → $4.34
  * Core FFO, "+80%"), so it only counts as the same basis within EPS_BASIS_MAX.
  */
-export function epsVerdict(e: { eA: number | null | undefined; eE: number | null | undefined; nE?: number | null; nA?: number | null; reit?: boolean }): EpsJudgment {
+export function epsVerdict(e: { eA: number | null | undefined; eE: number | null | undefined; nE?: number | null; nA?: number | null; reit?: boolean; /** 0094: both figures come from Nasdaq's own row for the quarter. */ same?: "nasdaq" }): EpsJudgment {
   const { eA, eE, nE } = e;
   if (!fin(eA) || !fin(eE)) return { v: null, est: fin(eE) ? eE : null, pct: null };
   // 0058: an estimate from Nasdaq is judged with Nasdaq's actual, never against the other feed's figure.
@@ -244,14 +254,17 @@ export function epsVerdict(e: { eA: number | null | undefined; eE: number | null
   const tiny = Math.abs(eE) < EPS_NEAR_ZERO;
   if (e.reit ? sameEpsBasis(eA, eE) : epsInBand(eA, eE)) return judge(eA, eE, !tiny);
   if (tiny && Math.abs(eA) < EPS_NEAR_ZERO) return judge(eA, eE, false);
+  // 0094: one source's own pair, a small dollar gap: a turnaround or a low base, not a basis mix.
+  if (e.same === "nasdaq" && !e.reit && Math.abs(eA - eE) < EPS_SAME_SOURCE_GAP) return judge(eA, eE, Math.abs(eE) >= EPS_SMALL_BASE && Math.sign(eA) === Math.sign(eE));
   return { v: "not-comparable", est: eE, pct: null };
 }
 
 export const epsJudged = (j: EpsJudgment) => j.v === "beat" || j.v === "miss";
 
 /** A sheet history row through epsVerdict: a basis mix loses its surprise and says so; a Nasdaq-judged row takes Nasdaq's estimate. */
-export function judgeReaction<T extends { epsE: number | null; epsA: number | null; surprisePct: number | null }>(h: T, nE?: number | null, reit?: boolean, nA?: number | null): T & { basis?: "differs" } {
-  const j = epsVerdict({ eA: h.epsA, eE: h.epsE, nE, nA, reit });
+/** `same`: the row's estimate and actual are both Nasdaq's own (0094). */
+export function judgeReaction<T extends { epsE: number | null; epsA: number | null; surprisePct: number | null }>(h: T, nE?: number | null, reit?: boolean, nA?: number | null, same?: boolean): T & { basis?: "differs" } {
+  const j = epsVerdict({ eA: h.epsA, eE: h.epsE, nE, nA, reit, ...(same ? { same: "nasdaq" as const } : {}) });
   if (j.v === "not-comparable") return { ...h, surprisePct: null, basis: "differs" as const };
   // 0058: the history table shows a same-source pair (as Nasdaq's own rows do), so the beat count can't mix feeds.
   // Not judged yet: no estimate on the actual's basis to show.

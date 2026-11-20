@@ -972,7 +972,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const pick = pickConsensus({ estimate: r.consensusForecast, actual: r.eps, surprisePct: r.percentageSurprise }, f, lastE && lastE.date === date ? lastSnap : null);
     // 0049: an actual on another basis from its estimate gets no surprise; Nasdaq's consensus stands in when it matches.
     const nE = typeof r.consensusForecast === "number" ? r.consensusForecast : parseFloat(r.consensusForecast);
-    history.push(keep(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit), f?.actual));
+    // 0094: Nasdaq's estimate with Nasdaq's own actual is one table's pair: a turnaround is judged, not "basis differs".
+    const sameSource = pick.source === "nasdaq" && pick.epsA != null && pick.epsA === parseFloat(String(r.eps));
+    history.push(keep(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit, undefined, sameSource), f?.actual));
   });
   // Fall back to Finnhub's four quarters if Nasdaq was unreachable.
   if (!history.length && surprises?.length && usd) {

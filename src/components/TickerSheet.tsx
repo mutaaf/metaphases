@@ -2,7 +2,7 @@ import { epsVerdict, vsExpected } from "../../shared/compare";
 import { useEffect, useRef, useState } from "react";
 import type { Factor, Reaction, TickerResponse } from "../../shared/types";
 import { useTicker } from "../lib/api";
-import { co, curOf, heldVia, nameOf, ETF_ASOF } from "../lib/data";
+import { co, curOf, heldVia, nameOf, reitOf, ETF_ASOF } from "../lib/data";
 import { daysBetween, fmtDay, fmtLong, todayISO } from "../lib/dates";
 import { currencyName, eps, epsIn, isUsd, mcap, money, moneyIn, pct } from "../lib/format";
 import { actions, useStore } from "../lib/store";
@@ -19,6 +19,7 @@ import { justResult } from "../../shared/reported";
 import { nextTimeContested, shownSession } from "../../shared/contestedTime";
 import { Bar, GradeBadge, Icon, Notice, Phase, PHASE_LABEL, share, Skeleton, Spark, Term, Tile } from "./bits";
 import { sessionText } from "../lib/sessionText";
+import { basisFootnote, surpriseWords } from "../lib/basisWords";
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "at another time" };
 
 /** 0039: a report that's out, said plainly before the next one. */
@@ -68,7 +69,7 @@ function FactorList({ factors }: { factors: Factor[] }) {
   );
 }
 
-function Reactions({ history, expected, usd }: { history: Reaction[]; expected: number | null; usd: boolean }) {
+function Reactions({ history, expected, usd, reit = false, foreign = false }: { history: Reaction[]; expected: number | null; usd: boolean; reit?: boolean; foreign?: boolean }) {
   const rows = [...history].reverse();
   const max = Math.max(4, ...rows.map((r) => Math.abs(r.move ?? 0)));
   return (
@@ -95,13 +96,13 @@ function Reactions({ history, expected, usd }: { history: Reaction[]; expected: 
             <tr key={r.date}>
               <td><Phase h={r.session} size={10} /> {r.date.length === 10 ? `${new Date(r.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} ’${r.date.slice(2, 4)}` : r.period}</td>
               <td>{eps(r.epsE)} → <b>{eps(r.epsA)}</b></td>
-              <td className={r.surprisePct == null ? "" : r.surprisePct >= 0 ? "pos" : "neg"}>{r.basis ? <span className="muted" title="The actual isn't on the same basis as the estimate">basis differs</span> : pct(r.surprisePct)}</td>
+              <td className={r.surprisePct != null ? (r.surprisePct >= 0 ? "pos" : "neg") : surpriseWords(r) ? ((r.epsA as number) >= (r.epsE as number) ? "pos" : "neg") : ""}>{r.basis ? <span className="muted" title="The actual isn't on the same basis as the estimate">basis differs</span> : surpriseWords(r) ?? pct(r.surprisePct)}</td>
               <td className={r.move == null ? "" : r.move >= 0 ? "pos" : "neg"}>{pct(r.move)}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      {history.some((r) => r.basis) && <p className="muted small rx-basis" data-testid="rx-epsbasis">"basis differs": <Term k="epsbasis">EPS basis differs from the estimate</Term> (for example FFO against net income, or a per-ADR figure against a per-share one), so that quarter isn't a beat or a miss and isn't in the beat record.</p>}
+      {history.some((r) => r.basis) && <p className="muted small rx-basis" data-testid="rx-epsbasis">"basis differs": <Term k="epsbasis">EPS basis differs from the estimate</Term> ({basisFootnote(reit, foreign)}), so that quarter isn't a beat or a miss and isn't in the beat record.</p>}
       {history.some((r) => r.move == null && !r.session && r.date.length === 10) && <p className="muted small rx-basis">"—" means no feed says whether that report came before the open or after the close, so we don't guess which day it moved.</p>}
       <p className="muted small rx-basis">{usd && "Estimates use the calendar's consensus wherever we have it for that quarter. "}Actuals are usually <Term k="adjustedeps">adjusted EPS</Term>, the figure analysts forecast, so they can differ from the profit in the company's filings.</p>
     </div>
@@ -307,7 +308,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
             {data.history.length > 0 && (
               <section className="card">
                 <h4 className="eyebrow">How it's reacted · {data.beatRate ? `${data.beatRate.beats}/${data.beatRate.total} beats` : "recent reports"}</h4>
-                <Reactions history={data.history} expected={data.expectedMove} usd={isUsd(estCur)} />
+                <Reactions history={data.history} expected={data.expectedMove} usd={isUsd(estCur)} reit={reitOf(data.symbol) || data.next?.epsBasis === "ffo"} foreign={!!data.profile?.country && data.profile.country !== "US"} />
               </section>
             )}
 
