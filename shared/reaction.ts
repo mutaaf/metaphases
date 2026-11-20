@@ -69,3 +69,13 @@ export const TYPICAL_MOVE_MIN = 3;
 export function typicalMove(moves: number[]): number | null {
   return moves.length >= TYPICAL_MOVE_MIN ? moves.reduce((a, b) => a + Math.abs(b), 0) / moves.length : null;
 }
+
+/**
+ * 0090: the session past reports are measured with when the next report's own session says nothing (a date-only
+ * company notice, a blank feed time, an unsettled projection). An unknown next session is no evidence about when the
+ * last four reports came out: the last dated report's session first, then Nasdaq's listing, then the stock's own
+ * reaction test (the before-open vs after-close day wins in at least 3 of the last 4 reports), else "" (no guess).
+ */
+export function pastSession(lastHour: string | undefined, nasdaq: string | undefined, dates: string[], closeOn: (day: string, offset: number) => number | null): Session {
+  return sessionHabit(lastHour, nasdaq, undefined) || contestedSession("bmo", "amc", dates, closeOn);
+}
