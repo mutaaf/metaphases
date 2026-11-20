@@ -1,12 +1,12 @@
 ---
 id: 0091
 title: A company-dated report with no announced session says when the company usually reports, marked as habit (Dell, Autodesk, Marvell read only "Time TBD")
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: clarity
 created: 2026-11-19
-pr:
+pr: 158
 by: critic
 ---
 
