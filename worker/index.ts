@@ -21,7 +21,7 @@ import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
-import { contestedSession, isContested, projectedSession, reactionMove, sessionHabit, typicalMove } from "../shared/reaction";
+import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove } from "../shared/reaction";
 import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
@@ -816,9 +816,13 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // 0088: an unsettled projection ("") shows no session, but it is no evidence against the reports the company dated
   // (TJX, JD, XPEV): past moves keep the last dated report's session first (Nasdaq's listing for a far-out projected
   // day is a projection too, so it never outranks a dated report), then Nasdaq's, else unknown.
-  const habit: Session = contest
+  let habit: Session = contest
     ? contestedSession(contest.feed, contest.nasdaq, rows.map((r) => nqDate(r.dateReported)).filter((d): d is string => d != null), closeOn)
     : nextFix === "" ? sessionHabit(lastHour ?? lastE?.hour, nqNextHour, undefined) : sessionHabit(nextE?.hour, nqNextHour, lastE?.hour);
+  // 0090: any other unknown next session (DELL's date-only notice, a blank feed time) once `symbol=` has dropped the
+  // last print: the cached last report (cache only), Nasdaq's, then the stock's own moves (3 of 4), else unknown. A
+  // contested session stays as 0060 settled it.
+  if (!habit && !contest) habit = pastSession(lastHour ?? (await lastReportedHour(symbol, lastE, today, pastDates)), nqNextHour, pastDates, closeOn);
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
   const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
   const lastSnap = sameEpsUnit(symbol, lastSnapRaw, lastE?.epsEstimate) ? lastSnapRaw : null;
@@ -1408,9 +1412,11 @@ async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Respo
   const upLast = !contested && projectedTimed(up, today) ? await lastReportedHour(s, last, today, nqDates) : undefined;
   const upFix = !contested && projectedTimed(up, today) ? projectedSession(up.hour, upLast, nqDates, closeOn) : null;
   // 0088: an unsettled projection never blanks the sessions of past dated reports.
-  const habit = contested
+  let habit: Session = contested
     ? contestedSession(up.hour as Session, nqUp as Session, nqDates, closeOn)
     : upFix === "" ? sessionHabit(upLast ?? last?.hour, nqUp, undefined) : sessionHabit(upFix ?? up?.hour, nqUp, last?.hour);
+  // 0090: the same fallback as the sheet when the next session is unknown for any other reason.
+  if (!habit && !contested) habit = pastSession(upLast ?? (await lastReportedHour(s, last, today, nqDates)), nqUp, nqDates, closeOn);
   const num = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[$,]/g, "")); return Number.isFinite(n) ? n : null; };
   const reports = nqRows.map((r) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");
