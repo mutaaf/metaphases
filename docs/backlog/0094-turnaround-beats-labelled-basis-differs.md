@@ -1,12 +1,12 @@
 ---
 id: 0094
 title: A real beat from a small or negative estimate (Kohl's −$0.19 → $0.10, stock +42%) is labelled "basis differs" with an FFO/ADR footnote, and dropped from the beat record
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: data-quality
 created: 2026-11-20
-pr:
+pr: 161
 by: critic
 ---
 

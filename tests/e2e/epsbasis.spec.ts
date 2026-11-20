@@ -51,3 +51,25 @@ test("a REIT's sheet: no GAAP EPS estimate as the bar, and a basis-mix quarter h
   await expect(page.locator("[data-testid=rx-epsbasis]")).toBeVisible();
   await expect(page.locator(".rx-table tbody tr").first()).toContainText("basis differs");
 });
+
+// 0094: a same-source turnaround is a judged beat in words; a non-REIT's "basis differs" note never names FFO or ADRs.
+test("a US retailer's sheet: a turnaround reads 'turned a profit', and its basis note is plain", async ({ page }) => {
+  await page.route("**/api/ticker/KSS", async (r) => {
+    const body = JSON.parse(readFileSync(new URL("../fixtures/ticker-NVDA.json", import.meta.url), "utf8").replaceAll('"NVDA"', '"KSS"'));
+    body.profile = { ...body.profile, name: "Kohl's Corporation", country: "US" };
+    body.history = [
+      { ...body.history[0], epsE: 2.35, epsA: 4.95, surprisePct: null, basis: "differs" },
+      { ...body.history[1], epsE: -0.19, epsA: 0.1, surprisePct: null },
+      ...body.history.slice(2),
+    ];
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/KSS");
+  const rows = page.locator(".rx-table tbody tr");
+  await expect(rows.nth(1)).toContainText("turned a profit");
+  await expect(rows.nth(1).locator("td.pos")).toHaveCount(1);
+  const note = page.locator("[data-testid=rx-epsbasis]");
+  await expect(note).toContainText("different measures");
+  await expect(note).not.toContainText("FFO");
+  await expect(note).not.toContainText("ADR");
+});
