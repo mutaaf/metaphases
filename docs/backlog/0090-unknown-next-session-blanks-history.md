@@ -1,12 +1,12 @@
 ---
 id: 0090
 title: A next report with no session never blanks the past reports' sessions and moves (DELL, KSS, ASAN and 12 more of this week's reporters show no "last time" at all)
-status: in-progress
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-19
-pr:
+pr: 156
 by: critic
 ---
 
