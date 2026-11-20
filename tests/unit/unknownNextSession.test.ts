@@ -100,3 +100,14 @@ describe("/api/ticker: an unknown next session never blanks the past (0090)", ()
     past(r).forEach((h: any) => expect(h.session).toBe("bmo"));
   });
 });
+
+describe("0090: a date-only company date's raw feed session is no evidence", () => {
+  it("HP the day after its Nov 19 call: the cached feed row's amc is ignored, the stock's own moves (bmo) decide", async () => {
+    vi.setSystemTime(new Date("2026-11-20T16:00:00Z"));
+    stub("HP", { date: "2027-02-04", hour: "" }, closes(AMC_NEXT, AMC_DAY));
+    (globalThis as any).caches.default.store.set(`https://cache.metaphases.internal/${encodeURIComponent("cal:v3:2026-11-19")}`,
+      JSON.stringify([{ s: "HP", d: "2026-11-19", h: "amc", q: 4, y: 2026, eE: 0.27, eA: 0.3, rE: 1.1e9, rA: 1.1e9 }]));
+    const r = await sheet("HP");
+    past(r).forEach((h: any, i: number) => { expect(h.session).toBe("bmo"); expect(h.move).toBeCloseTo(AMC_NEXT[i], 4); });
+  });
+});

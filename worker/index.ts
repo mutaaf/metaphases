@@ -822,7 +822,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // 0090: any other unknown next session (DELL's date-only notice, a blank feed time) once `symbol=` has dropped the
   // last print: the cached last report (cache only), Nasdaq's, then the stock's own moves (3 of 4), else unknown. A
   // contested session stays as 0060 settled it.
-  if (!habit && !contest) habit = pastSession(lastHour ?? (await lastReportedHour(symbol, lastE, today, pastDates)), nqNextHour, pastDates, closeOn);
+  if (!habit && !contest) habit = pastSession(sessionlessDated(symbol, today) ? undefined : lastHour ?? (await lastReportedHour(symbol, lastE, today, pastDates)), nqNextHour, pastDates, closeOn);
   // The last print's estimate as it stood before the report (0035), when the calendar recorded it.
   const lastSnapRaw = lastE ? (await readSnap(lastE.date))[symbol]?.eE ?? null : null;
   const lastSnap = sameEpsUnit(symbol, lastSnapRaw, lastE?.epsEstimate) ? lastSnapRaw : null;
@@ -1105,6 +1105,16 @@ async function newestRow(symbol: string, days: string[]): Promise<EarningsEvent 
 /** 0086: a report the feed projects (no company date, not on a closed day) with a timed session the last report could contradict. */
 function projectedTimed(row: any, today: string): boolean {
   return !!row && !row.source && (row.hour === "bmo" || row.hour === "amc") && !closedDay(row.date) && isProjected({ date: row.date, session: row.hour, source: row.source }, today);
+}
+
+/**
+ * 0090: the company dated its latest report without a session (HP, ROAD: a call time isn't a session). The calendar's
+ * cached day rows are the raw feed's, so their session for that report is the feed's guess, never evidence for the
+ * day past moves are measured on.
+ */
+function sessionlessDated(symbol: string, today: string): boolean {
+  const o = activeOverrides(OVERRIDES, today)[symbol];
+  return !!o && !o.hour && o.date < today;
 }
 
 /**
@@ -1416,7 +1426,7 @@ async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Respo
     ? contestedSession(up.hour as Session, nqUp as Session, nqDates, closeOn)
     : upFix === "" ? sessionHabit(upLast ?? last?.hour, nqUp, undefined) : sessionHabit(upFix ?? up?.hour, nqUp, last?.hour);
   // 0090: the same fallback as the sheet when the next session is unknown for any other reason.
-  if (!habit && !contested) habit = pastSession(upLast ?? (await lastReportedHour(s, last, today, nqDates)), nqUp, nqDates, closeOn);
+  if (!habit && !contested) habit = pastSession(sessionlessDated(s, today) ? undefined : upLast ?? (await lastReportedHour(s, last, today, nqDates)), nqUp, nqDates, closeOn);
   const num = (v: unknown) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[$,]/g, "")); return Number.isFinite(n) ? n : null; };
   const reports = nqRows.map((r) => {
     const [mm, dd, yy] = String(r.dateReported).split("/");
