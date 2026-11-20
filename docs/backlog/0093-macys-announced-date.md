@@ -1,12 +1,12 @@
 ---
 id: 0093
 title: Macy's announced Wednesday Dec 2 (8 a.m. ET call); the sheet's headline still says Thursday Dec 3 and tells people to wait for the company
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-20
-pr:
+pr: 160
 by: critic
 ---
 
