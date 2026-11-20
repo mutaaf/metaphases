@@ -96,3 +96,39 @@ describe("/api/ticker: a rate-limited `symbol=` read takes the date the calendar
     expect(r.warnings).not.toContain(CALENDAR_NEXT);
   });
 });
+
+describe("0092 review: the fallback never mislabels what it didn't borrow", () => {
+  it("only the date failed: a fresh history never reads as an earlier read", async () => {
+    // Finnhub's history answers, only symbol= fails.
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      const url = new URL(u);
+      if (url.hostname === "api.nasdaq.com" && url.pathname === "/api/calendar/earnings") return new Response(JSON.stringify({ data: { rows: [] } }));
+      if (url.hostname === "api.nasdaq.com") return new Response(JSON.stringify({ data: { earningsSurpriseTable: { rows: nqRows } } }));
+      if (url.hostname.endsWith("finance.yahoo.com")) return new Response(JSON.stringify({ chart: { result: [{ timestamp: [1763650800], indicators: { quote: [{ open: [100], high: [100], low: [100], close: [100] }] } }] } }));
+      if (url.pathname.endsWith("/stock/earnings")) return new Response(JSON.stringify([]));
+      return new Response("{}", { status: 503 });
+    }));
+    store().set(key("cal:v3:2026-11-23"), JSON.stringify([zmRow]));
+    // Yesterday's good copy: its report day is today, so it can't stand in for the whole sheet, only for history.
+    const old = { at: Date.parse("2026-11-19T14:00:00Z"), day: "2026-11-19", data: { next: { date: "2026-11-20", session: "bmo", quarter: 3, year: 2027 }, history: [{ date: "2026-08-25", move: 9 }], warnings: [], justReported: null, expectedMove: 9, beatRate: 1 } };
+    store().set(key("tk:stale:v7:ZM"), JSON.stringify(old));
+    const { body: r } = await sheet("ZM");
+    expect(r.next).toMatchObject({ date: "2026-11-23", session: "amc" });
+    expect(r.warnings.some((w: string) => w.startsWith("Past reports are an earlier read"))).toBe(false);
+  });
+
+  it("a row with today's figures isn't an upcoming date: the sheet keeps saying the next date is unavailable", async () => {
+    stub(503);
+    store().set(key("cal:v3:2026-11-20"), JSON.stringify([{ s: "NTES", d: "2026-11-20", h: "bmo", q: 3, y: 2026, eE: 1.9, eA: 2.1, rE: 4e9, rA: 4.1e9, t: 1 }]));
+    const { body: r } = await sheet("NTES");
+    expect(r.warnings).toContain("Upcoming date unavailable.");
+    expect(r.warnings).not.toContain(CALENDAR_NEXT);
+  });
+
+  it("a far day's cold fresh cache doesn't fall back to an old copy (read budget)", async () => {
+    stub(503);
+    store().set(key("cal:stale:v3:2026-12-02"), JSON.stringify([{ ...zmRow, s: "ZZFAR", d: "2026-12-02" }]));
+    const { body: r } = await sheet("ZZFAR");
+    expect(r.warnings).toContain("Upcoming date unavailable.");
+  });
+});

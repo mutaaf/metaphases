@@ -696,7 +696,7 @@ async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Pro
     if ((calDate || built.warnings.includes("Upcoming date unavailable.")) && staleUsable(old, today, nowMin)) data = standIn(old, today);
     // Only the past reports failed (or the date came from the calendar): keep the fresh date and report-day state,
     // borrow the history.
-    else if (!built.warnings.includes("Upcoming date unavailable.")) { if (staleUsable(old, today, nowMin, "history")) data = borrowHistory(built, old, today); }
+    else if (!built.warnings.includes("Upcoming date unavailable.") && built.warnings.includes("Earnings history unavailable.")) { if (staleUsable(old, today, nowMin, "history")) data = borrowHistory(built, old, today); }
   } else {
     const s: StaleSheet = { at: Date.now(), day: today, data: built };
     ctx.waitUntil(caches.default.put(staleKey, new Response(JSON.stringify(s), { headers: { "Cache-Control": `public, max-age=${SHEET_STALE_TTL}`, "Content-Type": "application/json" } })).catch(() => {}));
@@ -742,10 +742,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   let upcoming = feedUpcoming;
   if (!upcoming) {
     const fromCal = await calendarNext(symbol, today);
-    if (fromCal.length) {
-      upcoming = { earningsCalendar: fromCal };
-      warnings.splice(warnings.indexOf("Upcoming date unavailable."), 1, CALENDAR_NEXT);
-    }
+    if (fromCal.length) upcoming = { earningsCalendar: fromCal };
+    // Only a report still to come is an upcoming date; a row that already has today's figures (NTES) is not.
+    const at = warnings.indexOf("Upcoming date unavailable.");
+    if (at >= 0 && fromCal.some((e) => e.epsActual == null && e.revenueActual == null)) warnings.splice(at, 1, CALENDAR_NEXT);
   }
   for (const f of listOf(surprises)) { f.estimate = shareEps(symbol, f.estimate); f.actual = shareEps(symbol, f.actual); }
   const epsSeries: unknown = metric?.series?.quarterly?.eps;
@@ -1115,12 +1115,16 @@ async function newestRow(symbol: string, days: string[]): Promise<EarningsEvent 
   return found.find((e) => e != null) ?? null;
 }
 
-/** 0092: how many weekdays ahead (today first) the calendar's cached days are read for a sheet whose `symbol=` failed. */
+/** 0092: how many weekdays ahead (today first) the calendar's cached days are read for a sheet whose `symbol=` failed,
+ *  and for how many of them a cold day falls back to the last good copy (the nearest days, where peak week is). */
 const CAL_NEXT_DAYS = 10;
+const CAL_NEXT_STALE_DAYS = 5;
 /**
- * 0092: the next report as the calendar's cached days list it (fresh, else the last good copy), in `symbol=`'s shape.
- * Cache only, read in order and stopping at the first day that lists the company, so a reporter this week costs a
- * few reads and a company with nothing cached at most 2 × CAL_NEXT_DAYS (inside the 0085 budget).
+ * 0092: the next report as the calendar's cached days list it (fresh, else the last good copy for the nearest days), in
+ * `symbol=`'s shape. Cache only, read in order and stopping at the first upcoming row: a reporter this week costs a few
+ * reads, a company nothing lists at most CAL_NEXT_DAYS + CAL_NEXT_STALE_DAYS. The sheet was already near the 0085
+ * per-request cache-read budget, so don't widen this. A row with today's figures is kept and the scan goes on for the
+ * report after it.
  */
 async function calendarNext(symbol: string, today: string): Promise<any[]> {
   const days: string[] = [];
@@ -1129,14 +1133,17 @@ async function calendarNext(symbol: string, today: string): Promise<any[]> {
     const wd = new Date(d + "T12:00:00Z").getUTCDay();
     if (wd !== 0 && wd !== 6) days.push(d);
   }
-  for (const d of days) {
+  const out: any[] = [];
+  for (const [i, d] of days.entries()) {
     try {
-      const hit = (await caches.default.match(CAL_DAY(d))) ?? (await caches.default.match(CAL(`cal:stale:v3:${d}`)));
+      const hit = (await caches.default.match(CAL_DAY(d))) ?? (i < CAL_NEXT_STALE_DAYS ? await caches.default.match(CAL(`cal:stale:v3:${d}`)) : undefined);
       const e = hit ? ((await hit.json()) as EarningsEvent[]).find((x) => x.s === symbol && x.d >= today) : undefined;
-      if (e) return [{ symbol, date: e.d, hour: e.h ?? "", quarter: e.q, year: e.y, epsEstimate: e.eE ?? null, epsActual: e.eA ?? null, revenueEstimate: e.rE ?? null, revenueActual: e.rA ?? null }];
+      if (!e) continue;
+      out.push({ symbol, date: e.d, hour: e.h ?? "", quarter: e.q, year: e.y, epsEstimate: e.eE ?? null, epsActual: e.eA ?? null, revenueEstimate: e.rE ?? null, revenueActual: e.rA ?? null });
+      if (e.eA == null && e.rA == null) break;
     } catch { /* an unreadable day says nothing */ }
   }
-  return [];
+  return out;
 }
 
 /** 0086: a report the feed projects (no company date, not on a closed day) with a timed session the last report could contradict. */
