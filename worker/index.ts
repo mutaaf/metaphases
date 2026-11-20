@@ -21,7 +21,7 @@ import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
-import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove } from "../shared/reaction";
+import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove, usualSession } from "../shared/reaction";
 import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
@@ -1044,6 +1044,13 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   }
   // Only when there's something a memo could change: a contest, or current evidence against one.
   if (seen.some((x) => x.clear || x.c?.x === "differs" || x.c?.x === "agree")) rememberContests(env, ctx, await memosOf(), seen, today);
+  // 0091: an upcoming report with no session (DELL's date-only notice, a blank feed time) says when the company has
+  // usually reported, only when the stock's own moves settle it (3 of 4) and agree with the habit past moves use. Not
+  // for a projection, a closed day, a Nasdaq disagreement or a contest: those already say why the time is open.
+  const usual = upNext && !upNext.hour && !pending && !duePending && !checking && !closed && !projected && !nqNext && !contest ? usualSession(habit, pastDates, closeOn) : null;
+  // 0091: the company's call time, from its notice, under a company date (never turned into a session).
+  const ovNext = upNext?.source ? activeOverrides(OVERRIDES, today)[symbol] : undefined;
+  const call = ovNext && ovNext.date === upNext!.date ? ovNext.call : undefined;
   if (reported) read.push(reportedLine(name, { date: reported.date, session: reported.hour, quarter: reported.quarter, epsE: reported.eE, epsA: reported.eA, nE: usd ? reported.nE : undefined, nA: usd ? reported.nA : undefined, reit }, today, (v) => epsIn(v, currency)));
   if (checking) {
     read.push(`${name}'s Q${checking.quarter} report: our data feed dated it ${longDay(checking.date)}${checking.hour ? ` ${WHEN_LONG[checking.hour as Session] ?? ""}` : ""}, and no results are in our data yet. We're still comparing that date with Nasdaq's calendar, so it may not have been the report day.`);
@@ -1061,7 +1068,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // 0078: the feed's day has come, Nasdaq lists another, the company hasn't said: no "reports today", no "expected".
     read.push(`${name}'s Q${upNext.quarter} report date isn't confirmed: our data feed put it on ${longDay(upNext.date)}, but Nasdaq's calendar lists ${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}, and no results are in our data yet.`);
   } else if (upNext) {
-    const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; the company hasn't said)" : ""}` : nqNext ? "" : "(time not yet confirmed)";
+    const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; the company hasn't said)" : ""}` : nqNext ? "" : usual ? `(time not announced; going by its last reports, it usually reports ${WHEN_LONG[usual]})` : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
     const nqWhen = nqNext ? (nqNext.date === upNext.date ? (nqNext.session ? `it ${WHEN_LONG[nqNext.session]} that day` : "it at another time that day") : `${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}`) : "";
     // 0062: same day, other session: lead with the day and call the time unconfirmed, as the sheet's headline does.
@@ -1091,7 +1098,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     next: checking ? { date: checking.date, session: checking.hour as Session, quarter: checking.quarter, year: checking.year, epsE: checking.eE, revE: checking.rE, currency, status: "checking" }
       : duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
-      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...((upNext.hs === "n" || upNext.hs === "h") && upNext.hour && !upNext.source ? { hs: upNext.hs as "n" | "h" } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}) } : null,
+      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...((upNext.hs === "n" || upNext.hs === "h") && upNext.hour && !upNext.source ? { hs: upNext.hs as "n" | "h" } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}), ...(usual ? { usual } : {}), ...(call ? { call } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     ...(contest && chart ? { moveSession: { feed: contest.feed, nasdaq: contest.nasdaq, session: habit } } : {}),

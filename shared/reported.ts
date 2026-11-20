@@ -126,6 +126,10 @@ export function tickerShareDesc(name: string, d: Pick<TickerResponse, "next" | "
   const unconfirmed = nq ? ` — ${nq.date === d.next!.date ? `report time unconfirmed (the feed and Nasdaq list ${shortDay(nq.date)} in different sessions)` : `report date unconfirmed (the feed says ${shortDay(d.next!.date)}; Nasdaq lists ${shortDay(nq.date)})`}` : "";
   // 0007: a projected date is said to be unconfirmed too.
   const projected = !j && !nq && d.next?.projected && !d.next.status && !d.next.overdue && !d.next.closed ? ` — report expected around ${shortDay(d.next.date)}, date not yet confirmed by the company` : "";
+  // 0091: a date with no announced time, where the stock's past moves settle when the company usually reports.
+  const n = d.next;
+  const usual = !j && !nq && !projected && n?.usual && !n.session && !n.status && !n.overdue && !n.closed ? ` — ${shortDay(n.date)}, time not announced (usually ${n.usual === "bmo" ? "before the open" : "after the close"}, going by its last reports)` : "";
+  if (usual) return `${name}${usual}${lead ? `;${lead.replace(/^ —/, "")}` : ""}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
   if (projected) return `${name}${projected}${lead ? `;${lead.replace(/^ —/, "")}` : ""}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
   return `${name}${unconfirmed}${unconfirmed && lead ? `;${lead.replace(/^ —/, "")}` : lead}. ${bits.join(" · ")}${bits.length ? "." : ""} The full read, phase by phase.`;
 }

@@ -12,6 +12,8 @@ export interface DateOverride {
   year: number;
   source: string; // https URL of the company's announcement (or a wire copy of it)
   checked: string; // YYYY-MM-DD the source was last read
+  /** 0091: the conference-call time as the notice gives it ("3:30 p.m. CT"). Shown under the date; never a session. */
+  call?: string;
   note?: string;
 }
 export type DateOverrides = Record<string, DateOverride>;
@@ -26,6 +28,8 @@ export const MAX_CHECK_AGE = 30;
 const dayNum = (d: string) => Date.parse(d + "T12:00:00Z") / 86400000;
 const gap = (a: string, b: string) => Math.abs(dayNum(a) - dayNum(b));
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
+/** 0091: a call time as a notice gives it: "4:30 p.m. ET", "9 a.m. CT". */
+export const CALL = /^(1[0-2]|[1-9])(:[0-5]\d)? (a\.m\.|p\.m\.) (ET|CT|MT|PT)$/;
 
 export function activeOverrides(all: DateOverrides, today: string): DateOverrides {
   const out: DateOverrides = {};
@@ -134,6 +138,7 @@ export function validateOverrides(raw: unknown, today: string): string[] {
     if (typeof v.date !== "string" || !ISO.test(v.date)) bad("date must be YYYY-MM-DD");
     else if ([0, 6].includes(new Date(v.date + "T12:00:00Z").getUTCDay())) bad("date falls on a weekend; check the release");
     if (v.hour !== undefined && !["bmo", "amc", "dmh"].includes(v.hour)) bad("hour must be bmo, amc or dmh, or left out when the company names no session");
+    if (v.call !== undefined && (typeof v.call !== "string" || !CALL.test(v.call))) bad('call must read like "3:30 p.m. CT" (the notice\'s time and zone: ET, CT, MT or PT)');
     if (!Number.isInteger(v.quarter) || v.quarter < 1 || v.quarter > 4) bad("quarter must be 1–4");
     if (!Number.isInteger(v.year)) bad("year must be a number");
     if (typeof v.source !== "string" || !/^https:\/\/[^\s]+\.[^\s]+/.test(v.source)) bad("source must be an https URL of the company's announcement");
