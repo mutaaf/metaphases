@@ -79,3 +79,15 @@ export function typicalMove(moves: number[]): number | null {
 export function pastSession(lastHour: string | undefined, nasdaq: string | undefined, dates: string[], closeOn: (day: string, offset: number) => number | null): Session {
   return sessionHabit(lastHour, nasdaq, undefined) || contestedSession("bmo", "amc", dates, closeOn);
 }
+
+/**
+ * 0091: the session shown as the company's habit ("usually after the close") on a next report whose own session is
+ * unknown. Only the stock's own moves settle it: the before-open vs after-close day wins in at least 3 of the last 4
+ * reports, and it must agree with `habit` (the session past moves are measured on) when that's known. A split (2–2),
+ * fewer than 3 measured reports, or a disagreement gives null ("Time TBD", as before). Never a session: a habit only.
+ */
+export function usualSession(habit: Session, dates: string[], closeOn: (day: string, offset: number) => number | null): "bmo" | "amc" | null {
+  const moves = contestedSession("bmo", "amc", dates, closeOn);
+  if (moves !== "bmo" && moves !== "amc") return null;
+  return !habit || habit === moves ? moves : null;
+}

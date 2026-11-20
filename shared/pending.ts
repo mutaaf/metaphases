@@ -107,7 +107,7 @@ export const figuresPending = (e: { d: string; h: string; eA: number | null; rA:
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
 /** The `/t/:sym` share title: never a date beyond an unreported quarter (0038) or on a closed day (0045). */
-export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; hs?: "n" | "h"; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string }; projected?: true } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
+export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; hs?: "n" | "h"; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string }; projected?: true; usual?: "bmo" | "amc" } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
   // 0039: a report that's out leads the title, whatever comes next.
   if (just) return just.epsA == null ? `${sym} reported Q${just.quarter} · Metaphases`
     // 0087: a pair whose same-source actual isn't posted yet is said to be ungraded, with no estimate quoted beside it.
@@ -124,6 +124,9 @@ export function tickerShareTitle(sym: string, name: string, next: { date: string
     // 0007: the feed's projection is "expected around", never "reports" with a session.
     if ((next as { projected?: true }).projected) return `${sym} earnings expected around ${when} (not yet confirmed) · Metaphases`;
     const s = (next as { session: string }).session;
+    // 0091: no session, but the stock's past moves settle the company's habit: said as a habit, never as its word.
+    const usual = (next as { usual?: "bmo" | "amc" }).usual;
+    if (!s && usual) return `${sym} reports ${when}, time not announced (usually ${SESSION_WORDS[usual]}) · Metaphases`;
     // 0050: a session only Nasdaq's calendar gives is expected, not the company's word.
     return `${sym} reports ${when} ${SESSION_WORDS[s] ?? ""}${s && (next as { hs?: "n" }).hs === "n" ? " (expected)" : ""} · Metaphases`.replace("  ", " ");
   }
