@@ -203,6 +203,8 @@ export const EPS_NEAR_ZERO = 0.1;
  * smallest mix $1.32.
  */
 export const EPS_SAME_SOURCE_GAP = 1;
+/** 0094: …and the gap is at most the actual's size or this, so a near-zero GAAP print against an adjusted estimate ($0.80 → −$0.10) stays "basis differs". */
+const EPS_SAME_SOURCE_LOW = 0.5;
 /** 0094: below this base, or across a sign change, a same-source surprise isn't a percentage. */
 const EPS_SMALL_BASE = EPS_NEAR_ZERO * 3;
 
@@ -239,14 +241,15 @@ const judge = (a: number, e: number, pct = true): EpsJudgment => ({ v: a >= e ? 
  * `reit`: a REIT, whose actual is often FFO against a GAAP estimate even inside EPS_BAND (PSA $2.42 → $4.34
  * Core FFO, "+80%"), so it only counts as the same basis within EPS_BASIS_MAX.
  */
-export function epsVerdict(e: { eA: number | null | undefined; eE: number | null | undefined; nE?: number | null; nA?: number | null; reit?: boolean; /** 0094: both figures come from Nasdaq's own row for the quarter. */ same?: "nasdaq" }): EpsJudgment {
+export function epsVerdict(e: { eA: number | null | undefined; eE: number | null | undefined; nE?: number | null; nA?: number | null; reit?: boolean; /** 0094: both figures come from Nasdaq's own row for the quarter. */ same?: "nasdaq"; /** 0094: "n" = a calendar row judged on Nasdaq's estimate and actual (0058), so one source too. */ pr?: string }): EpsJudgment {
   const { eA, eE, nE } = e;
   if (!fin(eA) || !fin(eE)) return { v: null, est: fin(eE) ? eE : null, pct: null };
   // 0058: an estimate from Nasdaq is judged with Nasdaq's actual, never against the other feed's figure.
   // No Nasdaq actual yet: nothing to judge yet (not "basis differs": Nasdaq posts it a day or two later).
   if (e.nA === null) return { v: null, est: eE, pct: null, pending: true };
   if (fin(e.nA)) {
-    const j = epsVerdict({ eA: e.nA, eE, reit: e.reit });
+    // 0094: `nA` exists only on a `pr: "n"` row, so Nasdaq's estimate meets Nasdaq's own actual: one source.
+    const j = epsVerdict({ eA: e.nA, eE, reit: e.reit, same: "nasdaq" });
     return j.v === "beat" || j.v === "miss" ? { ...j, act: e.nA } : j;
   }
   // Nasdaq's figure on the actual's basis wins over a Finnhub estimate that's well apart from both (UDR, PSA).
@@ -255,7 +258,8 @@ export function epsVerdict(e: { eA: number | null | undefined; eE: number | null
   if (e.reit ? sameEpsBasis(eA, eE) : epsInBand(eA, eE)) return judge(eA, eE, !tiny);
   if (tiny && Math.abs(eA) < EPS_NEAR_ZERO) return judge(eA, eE, false);
   // 0094: one source's own pair, a small dollar gap: a turnaround or a low base, not a basis mix.
-  if (e.same === "nasdaq" && !e.reit && Math.abs(eA - eE) < EPS_SAME_SOURCE_GAP) return judge(eA, eE, Math.abs(eE) >= EPS_SMALL_BASE && Math.sign(eA) === Math.sign(eE));
+  const gap = Math.abs(eA - eE);
+  if ((e.same === "nasdaq" || e.pr === "n") && !e.reit && gap < EPS_SAME_SOURCE_GAP && gap <= Math.max(EPS_SAME_SOURCE_LOW, Math.abs(eA))) return judge(eA, eE, Math.abs(eE) >= EPS_SMALL_BASE && Math.sign(eA) === Math.sign(eE));
   return { v: "not-comparable", est: eE, pct: null };
 }
 
