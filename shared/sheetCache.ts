@@ -15,8 +15,11 @@ export const SHEET_DEGRADED_TTL = 30;
 /** How long the last good copy is kept to stand in for a degraded build. */
 export const SHEET_STALE_TTL = 86400;
 
-/** The `buildTicker` warnings that mean the sheet can't say when the company reports or how it did before. */
-export const DEGRADING_WARNINGS = ["Upcoming date unavailable.", "Earnings history unavailable."] as const;
+/** 0092: `symbol=` failed, and the date and session came from the calendar's cached days instead (cache only). */
+export const CALENDAR_NEXT = "Upcoming date from the calendar; the market data service is busy right now.";
+/** The `buildTicker` warnings that mean the sheet can't say when the company reports or how it did before. A date taken
+ *  from the calendar counts too: the sheet is re-read soon and never saved as the last good copy. */
+export const DEGRADING_WARNINGS = ["Upcoming date unavailable.", "Earnings history unavailable.", CALENDAR_NEXT] as const;
 const EARLIER = "This is an earlier read";
 const EARLIER_PAST = "Past reports are an earlier read";
 
