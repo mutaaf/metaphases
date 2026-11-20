@@ -1,12 +1,12 @@
 ---
 id: 0092
 title: A sheet whose Finnhub reads are rate-limited still shows the date and session the calendar already has (ZM, HPE, HPQ, WDAY read "Upcoming date unavailable")
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: data-quality
 created: 2026-11-19
-pr:
+pr: 157
 by: critic
 ---
 
@@ -29,8 +29,8 @@ Two minutes later, read 4 s apart, all five were complete. So this is load, not 
 - Make no new upstream calls. Don't widen the per-request cache-read budget past what the 0085 lesson allows; cap the day reads.
 
 ## Acceptance criteria
-- [ ] Unit: Finnhub `symbol=` rejected (429), calendar day cache holds `ZM 2026-11-23 amc` → `next.date` 2026-11-23, `next.session` `amc`, and no "Upcoming date unavailable." warning (a softer "from the calendar" note instead)
-- [ ] Unit: nothing cached → unchanged behaviour ("Upcoming date unavailable.")
+- [x] Unit: Finnhub `symbol=` rejected (429), calendar day cache holds `ZM 2026-11-23 amc` → `next.date` 2026-11-23, `next.session` `amc`, and no "Upcoming date unavailable." warning (a softer "from the calendar" note instead)
+- [x] Unit: nothing cached → unchanged behaviour ("Upcoming date unavailable.")
 - [ ] Live: 40 sheets for this week's reporters read 0.3 s apart: none says "Upcoming date unavailable" for a company `/api/calendar` lists in the next 14 days
 - [ ] Works at 390×844 and 1440×900
 
