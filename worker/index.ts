@@ -22,7 +22,7 @@ import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove, usualSession } from "../shared/reaction";
-import { applyPreReport, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
+import { applyPreReport, isReit, judgeReaction, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
@@ -674,17 +674,14 @@ function slimMetric(raw: any) {
   return { metric: raw?.metric ?? {}, series: { quarterly } };
 }
 
-/** 0096: judged quarters the setup grade needs before it scores a track record. */
-const MIN_BEAT_RECORD = 2;
-
 /**
  * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
  * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
- * (`tk:stale:v8:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
+ * (`tk:stale:v7:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
  */
 async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
   const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v8:${symbol}`)}`);
-  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v8:${symbol}`)}`);
+  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v7:${symbol}`)}`);
   const hit = await caches.default.match(key);
   if (hit) { const data = (await hit.json()) as TickerResponse; return { data, ttl: sheetTtl(data) }; }
   const built = await buildTicker(symbol, env, ctx);
@@ -962,18 +959,13 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // 0058: each row's actual as Finnhub reports it (the company's measure, the basis of Finnhub's upcoming estimate).
   const fhActual = new Map<Reaction, number | null>();
   const keep = (h: Reaction, fa: unknown) => { fhActual.set(h, typeof fa === "number" && Number.isFinite(fa) ? fa : null); return h; };
-  const reportedOn = (r: any) => { const [mm, dd, yy] = String(r.dateReported).split("/"); return `${yy}-${(mm ?? "").padStart(2, "0")}-${(dd ?? "").padStart(2, "0")}`; };
-  const recent = rows.slice(0, 8);
-  // 0096: Finnhub's quarter for each row, on a calendar quarter-end label (CRWD "Jul 2026" ↔ "2026-06-30").
-  const fhQuarter = matchQuarters(recent.map((r: any) => ({ key: periodKey(r.fiscalQtrEnd), reported: reportedOn(r) })), surprises);
-  // 0096: rows whose pair is Nasdaq's alone (no Finnhub figure for the quarter), for the basis check below.
-  const nasdaqOnly = new Set<Reaction>();
-  recent.forEach((r, i) => {
-    const date = reportedOn(r);
+  rows.slice(0, 8).forEach((r, i) => {
+    const [mm, dd, yy] = String(r.dateReported).split("/");
+    const date = `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
     // One consensus per quarter: Finnhub's (the calendar's) when we have it for this quarter, else Nasdaq's.
     const f = !usd ? undefined
       : lastE && lastE.date === date && lastE.epsEstimate != null ? { estimate: lastE.epsEstimate, actual: lastE.epsActual }
-      : fhQuarter[i];
+      : surprises?.find((x) => periodKey(x.period) != null && periodKey(x.period) === periodKey(r.fiscalQtrEnd));
     // That date's own session when the calendar has it, else the habit; unknown stays unknown (move "—").
     const session: Session = lastE && lastE.date === date ? ownSession(lastE) : habit;
     const move = reactionMove(session, date, closeOn);
@@ -982,17 +974,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const nE = typeof r.consensusForecast === "number" ? r.consensusForecast : parseFloat(r.consensusForecast);
     // 0094: Nasdaq's estimate with Nasdaq's own actual is one table's pair: a turnaround is judged, not "basis differs".
     const sameSource = pick.source === "nasdaq" && pick.epsA != null && pick.epsA === parseFloat(String(r.eps));
-    const h = keep(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit, undefined, sameSource), f?.actual);
-    if (sameSource && f?.actual == null) nasdaqOnly.add(h);
-    history.push(h);
+    history.push(keep(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit, undefined, sameSource), f?.actual));
   });
-  // 0096: Nasdaq's own pairs on a GAAP-style basis (SNOW, ZS, CRWD, ASAN) beside an adjusted next estimate: not a
-  // beat record. The test reads every Nasdaq actual in the table, also the quarters Finnhub covers, and Finnhub's own actuals where it has them. Those
-  // rows read "basis differs" instead of turning real beats into misses.
-  const nextEst = duePending ? duePending.eE : checking ? checking.eE : pending ? pending.eE : upNext?.epsEstimate;
-  if (usd && !reit && nasdaqOnly.size && nasdaqHistoryOffBasis(recent.map((r: any) => parseFloat(String(r.eps))), nextEst, recent.map((r: any, i) => ({ nq: Number.isFinite(parseFloat(String(r.eps))) ? parseFloat(String(r.eps)) : null, fh: typeof fhQuarter[i]?.actual === "number" ? fhQuarter[i].actual : null })))) {
-    for (const h of nasdaqOnly) Object.assign(h, { surprisePct: null, basis: "differs" as const });
-  }
   // Fall back to Finnhub's four quarters if Nasdaq was unreachable.
   if (!history.length && surprises?.length && usd) {
     // Finnhub gives the quarter, not the day it was reported (0046): never show a quarter-end as a report date.
@@ -1027,14 +1010,12 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const judged = history.filter((h) => h.epsA != null && h.epsE != null && !h.basis);
   const beats = judged.filter((h) => (h.epsA as number) >= (h.epsE as number)).length;
   const beatRate = judged.length ? { beats, total: judged.length } : null;
-  // 0096: one judged quarter (CRWD once its GAAP-style rows are set aside) isn't a habit: the setup grade's track
-  // record factor waits for two.
   const moves = history.map((h) => h.move).filter((m): m is number => m != null);
   const expectedMove = typicalMove(moves); // 0088: never an average of one or two reports
 
   const compass = metric?.metric ? compassGrade(metric.metric) : { score: null, grade: null, factors: [] };
   const setup = chart && chart.c.length > 60
-    ? setupGrade({ close: chart.c, high: chart.h, low: chart.l, beatRate: beatRate && beatRate.total >= MIN_BEAT_RECORD ? beatRate.beats / beatRate.total : null })
+    ? setupGrade({ close: chart.c, high: chart.h, low: chart.l, beatRate: beatRate ? beatRate.beats / beatRate.total : null })
     : { score: null, grade: null, factors: [], trend: "—", rsi: null, atrPct: null, from52wHigh: null };
 
   let street: TickerResponse["street"] = null;
