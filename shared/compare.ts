@@ -238,6 +238,25 @@ export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasda
   return { events: out, updates };
 }
 
+/**
+ * 0097: a company-dated row (`o`) the override moved onto `day` from another feed day never met `day`'s pre-report step
+ * (`preReportDay` runs per feed day, before `applyToEvents`), so it stayed "Figures pending" after the company reported.
+ * Such a row with no figures takes Nasdaq's pair for `day` (pre-report consensus and the actual, one source, `pr: "n"`,
+ * as 0072's settlePastRow does), never Finnhub's estimate as revised after the print. Only dollar rows (`usd`), only
+ * with both of Nasdaq's figures; anything else is left as it was. `only` limits it to those symbols (the release-eve
+ * pass, where `nq` is the weekday before `day`: Helmerich & Payne released Nov 18 after the close, called Nov 19).
+ */
+export function fillMovedFigures(events: EarningsEvent[], day: string, nq: { e: Record<string, number>; a: Record<string, number> | null }, usd: (s: string) => boolean, only?: Set<string>): EarningsEvent[] {
+  if (!nq.a) return events;
+  return events.map((e) => {
+    if (!e.o || e.d !== day || (only && !only.has(e.s)) || e.eA != null || e.rA != null || e.c || !usd(e.s)) return e;
+    const a = nq.a?.[e.s], est = nq.e[e.s];
+    if (a == null || est == null) return e;
+    const { nA: _nA, nE: _nE, ...rest } = e;
+    return { ...rest, eA: a, eE: est, pr: "n" as const };
+  });
+}
+
 const dayFigure = (v: unknown) => parseFloat(String(v ?? "").replace(/[$,\s]/g, "").replace(/^\((.*)\)$/, "-$1"));
 function dayColumn(body: any, key: "epsForecast" | "eps"): Record<string, number> {
   const out: Record<string, number> = {};
@@ -249,8 +268,30 @@ function dayColumn(body: any, key: "epsForecast" | "eps"): Record<string, number
 }
 /** Nasdaq's day calendar (`/api/calendar/earnings?date=`) → symbol → pre-report EPS consensus. */
 export const nasdaqDayEps = (body: any): Record<string, number> => dayColumn(body, "epsForecast");
-/** 0058: the same call's reported EPS (`eps`), on the basis of its own consensus. */
-export const nasdaqDayActuals = (body: any): Record<string, number> => dayColumn(body, "eps");
+/**
+ * 0058: the same call's reported EPS (`eps`), on the basis of its own consensus.
+ * 0097: only an `eps` Nasdaq has judged. Before a name's actual posts, a day that already has an `eps` column can hold
+ * last year's EPS in it (ROST $1.58, GAP $0.62 on Nov 19, while the posted figures were $1.91 and $0.82), and the
+ * Worker cached that copy. A judged row carries `surprise` = (eps − epsForecast) / |epsForecast| in % (ROST 3.24),
+ * or "N/A" when the two are equal (HD $3.86 vs $3.86). Anything else (no forecast, N/A with a gap, a surprise that
+ * doesn't fit) is left out, so the row stays "Figures pending" rather than showing a figure we can't vouch for.
+ */
+export function nasdaqDayActuals(body: any): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of body?.data?.rows ?? []) {
+    const a = dayFigure(r?.eps), f = dayFigure(r?.epsForecast), s = parseFloat(String(r?.surprise ?? ""));
+    if (typeof r?.symbol !== "string" || !Number.isFinite(a) || !Number.isFinite(f)) continue;
+    if (judgedDayEps(a, f, Number.isFinite(s) ? s : null)) out[r.symbol] = a;
+  }
+  return out;
+}
+/** 0097: an `eps` that agrees with its own `surprise` (Nasdaq rounds it to 2 places; allow half a point or 2% of it). */
+export function judgedDayEps(a: number, f: number, surprisePct: number | null): boolean {
+  if (surprisePct == null) return Math.abs(a - f) < 0.005;
+  if (Math.abs(f) < 0.005) return false;
+  const pct = ((a - f) / Math.abs(f)) * 100;
+  return Math.abs(pct - surprisePct) <= Math.max(0.5, Math.abs(surprisePct) * 0.02);
+}
 
 // ── 0049: an EPS actual on the estimate's basis ─────────────────────────
 // Finnhub's EPS estimate and actual aren't always the same measure: a REIT's actual is FFO while the

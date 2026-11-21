@@ -1,12 +1,12 @@
 ---
 id: 0097
 title: Company-dated reports whose feed row sat on another day never get their results ("Figures pending" for Ross, Gap, PDD, Williams-Sonoma and Bath & Body Works two days after they reported)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-21
-pr:
+pr: 170
 by: critic
 ---
 
@@ -52,3 +52,10 @@ HP's release-versus-call day (Nasdaq says Nov 18 after hours, the override is th
 - (a) Capture what Nasdaq's day calendar returns for an after-close name between the close and the posting (`eps`, `surprise`, `lastYearEPS` or similar), and only trust `eps` when `surprise` is present and consistent (`(eps − epsForecast)/|epsForecast|` ≈ `surprise` %).
 - (b) Cross-check against `nq:surprise:<SYM>` (the sheet already shows ROST $1.85 → $1.91 correctly).
 - (c) Bump `NQ_CAL` to v3, or cut the TTL, so the poisoned week-long copy is not reused.
+
+## Build attempt 2
+Re-applies #167's `preReportMoved` / `fillMovedFigures`, plus:
+- (a) `nasdaqDayActuals` keeps an `eps` only when Nasdaq has judged it: `surprise` numeric and equal to `(eps − epsForecast)/|epsForecast|` within rounding, or `surprise` "N/A" with `eps` equal to the forecast (Nasdaq prints N/A for a 0% surprise: HD $3.86 vs $3.86 on Nov 17). Live Nov 17–20: no judged row failed the check; every unjudged `eps` (no forecast) is dropped. A pre-posting ROST $1.58 / GAP $0.62 with no surprise now stays "Figures pending", and the day's copy is kept an hour (the partial TTL), not a week. This also guards 0058's `nA` on every day.
+- (c) `NQ_CAL` → `nq:cal:v3`, so the poisoned v2 copies are never read.
+- HP: a company-dated row that Nasdaq's own day doesn't list at all takes the previous weekday's judged pair (release the evening before the call). A row Nasdaq lists on its day but hasn't judged waits for its day.
+- (b) was not needed once (a) holds: the cached day's `eps` is now self-consistent by construction. PDD stays pending (estimates in yuan per share; Nasdaq's pair is dollars per ADR).
