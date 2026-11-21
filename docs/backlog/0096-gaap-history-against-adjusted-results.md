@@ -1,12 +1,12 @@
 ---
 id: 0096
 title: Software sheets judge past reports on Nasdaq's GAAP-style figures, so CrowdStrike, Asana and Snowflake beats read as misses beside an adjusted estimate
-status: in-progress
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-20
-pr:
+pr: 164
 by: critic
 ---
 

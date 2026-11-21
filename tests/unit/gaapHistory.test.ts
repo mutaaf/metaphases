@@ -27,6 +27,9 @@ describe("matchQuarters: Finnhub's calendar quarter-end labels meet Nasdaq's fis
     const fh = [{ period: "2026-09-30", e: 1 }, { period: "2026-06-30", e: 2 }];
     expect(matchQuarters([nq("Aug 2026", "2026-09-10"), nq("May 2026", "2026-06-11")], fh).map((f) => f?.e)).toEqual([undefined, undefined]);
   });
+  it("a row with no readable report date never matches", () => {
+    expect(matchQuarters([{ key: "2026-07", reported: "undefined-0N-/A" }], [{ period: "2026-06-30" }])).toEqual([undefined]);
+  });
   it("no Finnhub quarters, or junk periods: nothing matches", () => {
     expect(matchQuarters(crwd, null)).toEqual([undefined, undefined, undefined, undefined]);
     expect(matchQuarters(crwd, [{ period: 7 }, {}] as any)).toEqual([undefined, undefined, undefined, undefined]);
@@ -44,6 +47,15 @@ describe("nasdaqHistoryOffBasis: an adjusted next estimate against a GAAP-style 
     expect(nasdaqHistoryOffBasis([1.28, -0.13, 1.07, 0.1], -0.2)).toBe(false);
     expect(nasdaqHistoryOffBasis([0.09, 0.13, 1.8, 0.2], 0.15)).toBe(false);
     expect(nasdaqHistoryOffBasis([0.5, 0.6, 0.55, 1.6], 0.6)).toBe(false);
+  });
+  it("Finnhub's own actual decides first: a mix settles it, agreement rules it out (a turnaround's adjusted losses)", () => {
+    expect(nasdaqHistoryOffBasis([0.01, 0.04], 0.3176, [{ nq: 0.01, fh: 0.31 }])).toBe(true);
+    // Cruise-line-shaped turnaround: Nasdaq's losses are the adjusted ones Finnhub also has, so the record stands.
+    expect(nasdaqHistoryOffBasis([-0.85, -0.55, -0.31], 0.74, [{ nq: -0.31, fh: -0.31 }, { nq: -0.55, fh: -0.5501 }])).toBe(false);
+  });
+  it("near-zero small caps and short tables aren't caught by the 3× test", () => {
+    expect(nasdaqHistoryOffBasis([0.01, 0.02, 0.03, 0.02], 0.1)).toBe(false); // under 20¢ next
+    expect(nasdaqHistoryOffBasis([0.05, 0.06], 0.4)).toBe(false); // two quarters can't show a year's seasons
   });
   it("a growing company inside 3× stays a record; a near-zero or missing estimate decides nothing", () => {
     expect(nasdaqHistoryOffBasis([2.22, 1.87, 1.57, 1.24], 2.8076)).toBe(false);
@@ -145,5 +157,15 @@ describe("worker /api/ticker: one judged quarter isn't a track record (0096)", (
     const r = await get("/api/ticker/CRWD");
     expect(r.beatRate).toEqual({ beats: 1, total: 1 });
     expect(JSON.stringify(r.setup)).not.toContain("Habitually beats");
+  });
+});
+
+describe("worker /api/ticker: REITs are left to 0049 (0096)", () => {
+  it("a REIT's FFO record isn't marked by the 3× test", async () => {
+    calRows = next("UDR", 2.5);
+    surprises = [];
+    nqSurprise = [row("Sep 2026", "10/28/2026", 0.65, "0.64"), row("Jun 2026", "7/30/2026", 0.64, "0.63"), row("Mar 2026", "4/29/2026", 0.63, "0.62")];
+    const r = await get("/api/ticker/UDR");
+    expect(r.history.filter((h: any) => h.basis)).toEqual([]);
   });
 });

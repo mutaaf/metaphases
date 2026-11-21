@@ -674,14 +674,14 @@ function slimMetric(raw: any) {
   return { metric: raw?.metric ?? {}, series: { quarterly } };
 }
 
+/** 0096: judged quarters the setup grade needs before it scores a track record. */
+const MIN_BEAT_RECORD = 2;
+
 /**
  * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
  * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
  * (`tk:stale:v8:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
  */
-/** 0096: judged quarters the setup grade needs before it scores a track record. */
-const MIN_BEAT_RECORD = 2;
-
 async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
   const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v8:${symbol}`)}`);
   const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v8:${symbol}`)}`);
@@ -987,9 +987,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     history.push(h);
   });
   // 0096: Nasdaq's own pairs on a GAAP-style basis (SNOW, ZS, CRWD, ASAN) beside an adjusted next estimate: not a
-  // beat record. The test reads every Nasdaq actual in the table, also the quarters Finnhub covers. Those rows read "basis differs" instead of turning real beats into misses.
+  // beat record. The test reads every Nasdaq actual in the table, also the quarters Finnhub covers, and Finnhub's own actuals where it has them. Those
+  // rows read "basis differs" instead of turning real beats into misses.
   const nextEst = duePending ? duePending.eE : checking ? checking.eE : pending ? pending.eE : upNext?.epsEstimate;
-  if (usd && !reit && nasdaqOnly.size && nasdaqHistoryOffBasis(recent.map((r: any) => parseFloat(String(r.eps))), nextEst)) {
+  if (usd && !reit && nasdaqOnly.size && nasdaqHistoryOffBasis(recent.map((r: any) => parseFloat(String(r.eps))), nextEst, recent.map((r: any, i) => ({ nq: Number.isFinite(parseFloat(String(r.eps))) ? parseFloat(String(r.eps)) : null, fh: typeof fhQuarter[i]?.actual === "number" ? fhQuarter[i].actual : null })))) {
     for (const h of nasdaqOnly) Object.assign(h, { surprisePct: null, basis: "differs" as const });
   }
   // Fall back to Finnhub's four quarters if Nasdaq was unreachable.
