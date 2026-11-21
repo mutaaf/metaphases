@@ -1,12 +1,12 @@
 ---
 id: 0097
 title: Company-dated reports whose feed row sat on another day never get their results ("Figures pending" for Ross, Gap, PDD, Williams-Sonoma and Bath & Body Works two days after they reported)
-status: shipped
+status: ready
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-21
-pr: 167
+pr:
 by: critic
 ---
 
@@ -47,7 +47,8 @@ Who it hurts: the glancer sees a famous retailer "pending" two days after its re
 ## Out of scope
 HP's release-versus-call day (Nasdaq says Nov 18 after hours, the override is the Nov 19 call). Leave it on the call day, but its figures must show.
 
-## Build (#167)
-`preReportMoved` (worker) runs after `applyToEvents` on `/api/calendar` and the day share text (cache only there). It reads the company's day through the same cached `nasdaqDay` call, for at most 3 past days per request, newest first. `fillMovedFigures` (`shared/compare.ts`) gives a company-dated row with no figures Nasdaq's pair for that day (consensus + actual, `pr: "n"`), never Finnhub's post-print estimate. Before the change, the sweep of overrides dated Nov 12–19 against Nasdaq's day calendars found ROST, GAP, WSM, BBWI and PDD pending with Nasdaq eps. ROST, GAP, WSM and BBWI are fixed. **PDD stays pending**, because its estimates are yuan per share (`ec: CNY`), and Nasdaq's dollar-per-ADR pair can't replace them without a currency rule (same limit as settlePast). HP isn't on Nasdaq's Nov 19 day (out of scope).
-
-The estimate is always Nasdaq's consensus (one source with its actual), not a snapshot: it never mixes Finnhub's estimate basis with Nasdaq's actual. That deviates on purpose from "snapshot first". Self-review follow-ups: a failed Nasdaq day read is remembered for 15 minutes (`nq:cal:fail:v1:<day>`), and a recent day whose actuals are only partly posted is cached 1 h instead of 7 days. Known: past ranges with more than 3 such days leave the oldest to settlePast (same figures, plus `nd`).
+## Build attempt 1 (#167, reverted)
+`fillMovedFigures` took Nasdaq's Nov 19 pair from the worker's cached day read (`nq:cal:v2:2026-11-19`). The live result was correct for the before-open names (WSM $2.18 → $2.19, BBWI $0.12 → $0.26). It was wrong for the after-close names: **ROST $1.85 → $1.58, GAP $0.76 → $0.62**. Those actuals are last year's Q3 EPS. Nasdaq's live day calendar says $1.91 and $0.82. So the Worker's cached copy was read before the after-close actuals posted, and in that copy the `eps` column held a stale (prior-year) figure for not-yet-reported rows, cached 7 days. Before retrying:
+- (a) Capture what Nasdaq's day calendar returns for an after-close name between the close and the posting (`eps`, `surprise`, `lastYearEPS` or similar), and only trust `eps` when `surprise` is present and consistent (`(eps − epsForecast)/|epsForecast|` ≈ `surprise` %).
+- (b) Cross-check against `nq:surprise:<SYM>` (the sheet already shows ROST $1.85 → $1.91 correctly).
+- (c) Bump `NQ_CAL` to v3, or cut the TTL, so the poisoned week-long copy is not reused.
