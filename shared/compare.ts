@@ -170,6 +170,24 @@ export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasda
   return { events: out, updates };
 }
 
+/**
+ * 0097: a company-dated row (`o`) the override moved onto `day` from another feed day never met `day`'s pre-report step
+ * (`preReportDay` runs per feed day, before `applyToEvents`), so it stayed "Figures pending" after the company reported.
+ * Such a row with no figures takes Nasdaq's pair for `day` (pre-report consensus and the actual, one source, `pr: "n"`,
+ * as 0072's settlePastRow does), never Finnhub's estimate as revised after the print. Only dollar rows (`usd`), only
+ * with both of Nasdaq's figures; anything else is left as it was.
+ */
+export function fillMovedFigures(events: EarningsEvent[], day: string, nq: { e: Record<string, number>; a: Record<string, number> | null }, usd: (s: string) => boolean): EarningsEvent[] {
+  if (!nq.a) return events;
+  return events.map((e) => {
+    if (!e.o || e.d !== day || e.eA != null || e.rA != null || e.c || !usd(e.s)) return e;
+    const a = nq.a?.[e.s], est = nq.e[e.s];
+    if (a == null || est == null) return e;
+    const { nA: _nA, nE: _nE, ...rest } = e;
+    return { ...rest, eA: a, eE: est, pr: "n" as const };
+  });
+}
+
 const dayFigure = (v: unknown) => parseFloat(String(v ?? "").replace(/[$,\s]/g, "").replace(/^\((.*)\)$/, "-$1"));
 function dayColumn(body: any, key: "epsForecast" | "eps"): Record<string, number> {
   const out: Record<string, number> = {};
