@@ -159,7 +159,7 @@ describe("0083 self-review", () => {
   });
 
   it("the day after, Nasdaq's own day calendar listing it on the feed's day is evidence: results expected", async () => {
-    cache.store.set(CAL("nq:cal:v2:2026-11-16"), JSON.stringify({ e: { [SYM]: 19.2 }, a: null }));
+    cache.store.set(CAL("nq:cal:v3:2026-11-16"), JSON.stringify({ e: { [SYM]: 19.2 }, a: null }));
     const t = await sheet();
     expect(t.next).toMatchObject({ date: "2026-11-16", status: "results-pending" });
   });

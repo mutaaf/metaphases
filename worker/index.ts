@@ -22,7 +22,7 @@ import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove, usualSession } from "../shared/reaction";
-import { applyPreReport, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, sameActual, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
+import { applyPreReport, fillMovedFigures, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, sameActual, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
@@ -187,7 +187,8 @@ async function readSnap(day: string): Promise<EstSnapshot> {
 }
 
 /** Nasdaq's day calendar: pre-report EPS consensus (`e`) and, on the same basis, the reported EPS (`a`, 0058) for that day's reporters (one call per day, cached). */
-const NQ_CAL = (day: string) => CAL(`nq:cal:v2:${day}`);
+// 0097: v3, because v2 copies (7 days) can hold last year's EPS for names whose actual hadn't posted yet.
+const NQ_CAL = (day: string) => CAL(`nq:cal:v3:${day}`);
 async function nasdaqDay(day: string, today: string, ctx: ExecutionContext): Promise<{ e: Record<string, number>; a: Record<string, number> | null }> {
   const req = NQ_CAL(day);
   const hit = await readJson<{ e: Record<string, number>; a: Record<string, number> | null }>(req);
@@ -200,7 +201,10 @@ async function nasdaqDay(day: string, today: string, ctx: ExecutionContext): Pro
   // Until it does, the actuals are null (rows not judged yet) and the answer is kept an hour, not a week.
   const a = (body?.data?.rows ?? []).some((r: any) => r && "eps" in r) ? nasdaqDayActuals(body) : null;
   const val = { e, a };
-  ctx.waitUntil(putJson(req, val, day < today && a ? 7 * 86400 : 3600));
+  // 0097: Nasdaq posts a day's actuals in batches (before-open names first), so a recent day with a forecast still
+  // missing its actual is kept an hour, not a week, or a late batch (Ross, after the close) would wait 7 days.
+  const partial = !!a && Object.keys(e).some((s) => !(s in a)) && day >= addDays(today, -4);
+  ctx.waitUntil(putJson(req, val, day < today && a && !partial ? 7 * 86400 : 3600));
   return val;
 }
 
@@ -234,6 +238,47 @@ async function preReportDay(day: string, events: EarningsEvent[], today: string,
   }
   return out;
 }
+
+/** Nasdaq's figures are dollars, and an untracked row is shown in dollars: the rule settlePast fills by. */
+const dollarFigures = (s: string) => !(s in U) || isUsd(U[s].ec ?? "USD");
+/**
+ * 0097: past days read for company-dated rows per request. Every such day an override can still date (entries stop
+ * applying 14 days on: about 10 weekdays), so a month range answers like a week range (0041) even while newer days
+ * hold rows that can't fill yet. Warm reads are cache hits; a cold or failing day is fetched at most every 15 min.
+ */
+const MOVED_DAYS_MAX = 10;
+const NQ_MOVED_FAIL = (day: string) => CAL(`nq:cal:fail:v1:${day}`);
+/**
+ * 0097: run company-dated rows that `applyToEvents` moved onto a past day through that day's Nasdaq figures (the same
+ * cached `nasdaqDay` call the day's own pre-report step makes). `fetchFresh: false` reads the cache only (share text).
+ */
+async function preReportMoved(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true): Promise<EarningsEvent[]> {
+  const want = (e: EarningsEvent) => !!e.o && e.d < today && e.eA == null && e.rA == null && !e.c && dollarFigures(e.s);
+  const days = [...new Set(events.filter((e) => want(e) && e.d >= addDays(today, -14)).map((e) => e.d))].sort().reverse().slice(0, MOVED_DAYS_MAX);
+  if (!days.length) return events;
+  // Cache first; a fresh read only while no failure is remembered for that day (15 min), so a Nasdaq outage never
+  // costs these calls on every read (this runs per request, not per day-cache build).
+  const one = async (d: string) => {
+    const hit = await readJson<{ e: Record<string, number>; a: Record<string, number> | null }>(NQ_CAL(d));
+    if (hit || !fetchFresh || (await readJson<number>(NQ_MOVED_FAIL(d))) != null) return hit;
+    return nasdaqDay(d, today, ctx).catch(() => { ctx.waitUntil(putJson(NQ_MOVED_FAIL(d), 1, 900)); return null; });
+  };
+  const got = await Promise.all(days.map(one));
+  const filled = days.reduce((out, d, i) => { const nq = got[i]; return nq && nq.e ? fillMovedFigures(out, d, nq, dollarFigures) : out; }, events);
+  // The release can come the evening before the company's date (HP: call Nov 19 at 10 a.m., release Nov 18 after the
+  // close, and Nasdaq lists it on Nov 18). A row Nasdaq's own day doesn't list at all takes the weekday before's pair,
+  // well inside 0081's FIGURES_EARLY_DAYS. A row Nasdaq lists on its day but hasn't judged yet waits for that day.
+  const eve = days.map((d, i) => {
+    const nq = got[i];
+    if (!nq?.e) return null;
+    const unlisted = new Set(filled.filter((e) => want(e) && e.d === d && !(e.s in nq.e) && !(e.s in (nq.a ?? {}))).map((e) => e.s));
+    return unlisted.size ? { d, prev: prevWeekday(d), unlisted } : null;
+  }).filter((x): x is { d: string; prev: string; unlisted: Set<string> } => !!x);
+  if (!eve.length) return filled;
+  const prevGot = await Promise.all(eve.map((x) => one(x.prev)));
+  return eve.reduce((out, x, i) => { const nq = prevGot[i]; return nq && nq.e ? fillMovedFigures(out, x.d, nq, dollarFigures, x.unlisted) : out; }, filled);
+}
+const prevWeekday = (d: string) => { let p = addDays(d, -1); while ([0, 6].includes(new Date(p + "T12:00:00Z").getUTCDay())) p = addDays(p, -1); return p; };
 
 /**
  * 0080: Nasdaq's day calendar for `day` doesn't list `sym` (the calendar's `nx` test), through the same cached call
@@ -519,7 +564,7 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
     });
   }
   // Nasdaq's figures are dollars: fill only rows whose figures are dollars too (untracked rows are shown in dollars).
-  const usd = (s: string) => !(s in U) || isUsd(U[s].ec ?? "USD");
+  const usd = dollarFigures;
   return events.map((e) => {
     const out = needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today)
       : suspects.has(e.s) && needsFiguresCheck(e, today) ? settleFiguresRow(e, reports.get(e.s) ?? null, today)
@@ -610,6 +655,7 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     pending = unfetched(doc, SUPP_SYMBOLS);
   }
   let fixed = flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U));
+  if (from < today) fixed = await preReportMoved(fixed, today, ctx).catch(() => fixed);
   if (from < today) fixed = await settlePast(fixed, today, ctx).catch(() => fixed);
   // 0041: one report, one row (after the past check, whose `nd` mark picks the twin that happened).
   fixed = await oneRowInRange(fixed, from, to, today, ctx).catch(() => oneReportOneRow(fixed.filter((e) => e.d >= from && e.d <= to)));
@@ -1366,7 +1412,8 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
       const withSupp = mergeSupplement(await calendarDay(day, env, ctx), await readSupp(), day, day, () => true); // cache only (0024)
       const today = iso(todayNY());
       // 0072 (and 0064): a projection that never happened, or one on a holiday, isn't counted. Cache only here.
-      const base = flagClosed(applyToEvents(withSupp, OVERRIDES, day, day, today, (s) => s in U));
+      const moved = flagClosed(applyToEvents(withSupp, OVERRIDES, day, day, today, (s) => s in U));
+      const base = await preReportMoved(moved, today, ctx, false).catch(() => moved);
       const past = await settlePast(base, today, ctx, false).catch(() => base);
       const settled = await oneRowInRange(past, day, day, today, ctx).catch(() => oneReportOneRow(past.filter((e) => e.d === day)));
       const byCap = (a: EarningsEvent, b: EarningsEvent) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0);

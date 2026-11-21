@@ -87,10 +87,10 @@ describe("applyPreReport pairs Nasdaq's estimate with Nasdaq's actual (0058)", (
 
 describe("Nasdaq's day calendar columns (0058)", () => {
   const body = { data: { rows: [
-    { symbol: "AMD", eps: "$1.84", epsForecast: "$1.68" },
-    { symbol: "APO", eps: "$1.82", epsForecast: "$2.04" },
-    { symbol: "LOSS", eps: "($0.12)", epsForecast: "($0.20)" },
-    { symbol: "SOON", eps: "", epsForecast: "$1.00" },
+    { symbol: "AMD", eps: "$1.84", surprise: "9.52", epsForecast: "$1.68" },
+    { symbol: "APO", eps: "$1.82", surprise: "-10.78", epsForecast: "$2.04" },
+    { symbol: "LOSS", eps: "($0.12)", surprise: "40", epsForecast: "($0.20)" },
+    { symbol: "SOON", eps: "", surprise: "N/A", epsForecast: "$1.00" },
   ] } };
   it("reads the reported EPS beside the forecast", () => {
     expect(nasdaqDayActuals(body)).toEqual({ AMD: 1.84, APO: 1.82, LOSS: -0.12 });
@@ -171,7 +171,7 @@ const get = async (path: string) => {
 describe("worker (0058)", () => {
   it("/api/calendar: a pr:n row carries Nasdaq's actual and is judged on that pair", async () => {
     calRows = [{ symbol: "LITE", date: "2026-11-03", hour: "amc", quarter: 1, year: 2027, epsEstimate: 4.4, epsActual: 4.57, revenueEstimate: null, revenueActual: null }];
-    nqDayRows = [{ symbol: "LITE", eps: "$3.76", epsForecast: "$3.82" }];
+    nqDayRows = [{ symbol: "LITE", eps: "$3.76", surprise: "-1.57", epsForecast: "$3.82" }];
     const r = await get("/api/calendar?from=2026-11-03&to=2026-11-03");
     const lite = r.events.find((e: any) => e.s === "LITE");
     expect(lite).toMatchObject({ eA: 4.57, eE: 3.82, nA: 3.76, pr: "n" });
@@ -186,7 +186,7 @@ describe("worker (0058)", () => {
     expect(lite).toMatchObject({ eA: 4.57, eE: 3.82, nA: null, pr: "n" });
     expect(resultOf(lite)).toBeNull();
     const cache = (globalThis as any).caches.default as MemCache;
-    const key = [...cache.store.keys()].find((k) => k.includes("nq%3Acal%3Av2%3A2026-11-11"));
+    const key = [...cache.store.keys()].find((k) => k.includes("nq%3Acal%3Av3%3A2026-11-11"));
     expect(key).toBeTruthy();
     expect(cache.ttl.get(key!)).toBe(3600);
   });
