@@ -200,7 +200,10 @@ async function nasdaqDay(day: string, today: string, ctx: ExecutionContext): Pro
   // Until it does, the actuals are null (rows not judged yet) and the answer is kept an hour, not a week.
   const a = (body?.data?.rows ?? []).some((r: any) => r && "eps" in r) ? nasdaqDayActuals(body) : null;
   const val = { e, a };
-  ctx.waitUntil(putJson(req, val, day < today && a ? 7 * 86400 : 3600));
+  // 0097: Nasdaq posts a day's actuals in batches (before-open names first), so a recent day with a forecast still
+  // missing its actual is kept an hour, not a week, or a late batch (Ross, after the close) would wait 7 days.
+  const partial = !!a && Object.keys(e).some((s) => !(s in a)) && day >= addDays(today, -4);
+  ctx.waitUntil(putJson(req, val, day < today && a && !partial ? 7 * 86400 : 3600));
   return val;
 }
 
@@ -239,6 +242,7 @@ async function preReportDay(day: string, events: EarningsEvent[], today: string,
 const dollarFigures = (s: string) => !(s in U) || isUsd(U[s].ec ?? "USD");
 /** 0097: at most this many past days are read for moved company-dated rows per request (newest first). */
 const MOVED_DAYS_MAX = 3;
+const NQ_MOVED_FAIL = (day: string) => CAL(`nq:cal:fail:v1:${day}`);
 /**
  * 0097: run company-dated rows that `applyToEvents` moved onto a past day through that day's Nasdaq figures (the same
  * cached `nasdaqDay` call the day's own pre-report step makes). `fetchFresh: false` reads the cache only (share text).
@@ -247,7 +251,14 @@ async function preReportMoved(events: EarningsEvent[], today: string, ctx: Execu
   const want = (e: EarningsEvent) => !!e.o && e.d < today && e.eA == null && e.rA == null && !e.c && dollarFigures(e.s);
   const days = [...new Set(events.filter(want).map((e) => e.d))].sort().reverse().slice(0, MOVED_DAYS_MAX);
   if (!days.length) return events;
-  const got = await Promise.all(days.map((d) => (fetchFresh ? nasdaqDay(d, today, ctx).catch(() => null) : readJson<{ e: Record<string, number>; a: Record<string, number> | null }>(NQ_CAL(d)))));
+  // Cache first; a fresh read only while no failure is remembered for that day (15 min), so a Nasdaq outage never
+  // costs these calls on every read (this runs per request, not per day-cache build).
+  const one = async (d: string) => {
+    const hit = await readJson<{ e: Record<string, number>; a: Record<string, number> | null }>(NQ_CAL(d));
+    if (hit || !fetchFresh || (await readJson<number>(NQ_MOVED_FAIL(d))) != null) return hit;
+    return nasdaqDay(d, today, ctx).catch(() => { ctx.waitUntil(putJson(NQ_MOVED_FAIL(d), 1, 900)); return null; });
+  };
+  const got = await Promise.all(days.map(one));
   return days.reduce((out, d, i) => { const nq = got[i]; return nq && nq.e ? fillMovedFigures(out, d, nq, dollarFigures) : out; }, events);
 }
 

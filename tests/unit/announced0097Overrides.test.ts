@@ -107,4 +107,23 @@ describe("0097 moved rows get the company's day's Nasdaq figures", () => {
       expect(wmt).toMatchObject({ d: "2026-11-19", eA: 0.65 });
     });
   }
+
+  it("a failing Nasdaq day is not asked again on every read (15-minute back-off)", async () => {
+    vi.setSystemTime(new Date("2026-11-21T15:00:00Z"));
+    const base = (globalThis.fetch as any).getMockImplementation();
+    let nqDayCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      const url = new URL(u);
+      if (url.hostname === "api.nasdaq.com" && url.pathname === "/api/calendar/earnings") { nqDayCalls++; return new Response("teapot", { status: 418 }); }
+      return base(u);
+    }));
+    const first = await get("/api/calendar?from=2026-11-19&to=2026-11-19");
+    expect(first.events.find((e: any) => e.s === "ROST")).toMatchObject({ eA: null });
+    const after = nqDayCalls;
+    for (let i = 0; i < 3; i++) await get("/api/calendar?from=2026-11-16&to=2026-11-22");
+    // Later reads may build other days' caches, but never ask Nov 19 again for the moved rows.
+    const nov19 = (globalThis.fetch as any).mock.calls.filter(([u]: [string]) => u.includes("api.nasdaq.com/api/calendar/earnings?date=2026-11-19")).length;
+    expect(after).toBeGreaterThan(0);
+    expect(nov19).toBeLessThanOrEqual(2);
+  });
 });
