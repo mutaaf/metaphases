@@ -60,7 +60,7 @@ describe("/api/ticker: a rate-limited `symbol=` read takes the date the calendar
     expect(r.history.map((h: any) => h.date)).toEqual(expect.arrayContaining(REPORTS));
     // Still short-lived, and never saved as the last good copy.
     expect(cc).toContain("max-age=30");
-    expect(store().has(key("tk:stale:v7:ZM"))).toBe(false);
+    expect(store().has(key("tk:stale:v8:ZM"))).toBe(false);
   }, 20000);
 
   it("the calendar's last good copy of a day stands in when the fresh day is cold", async () => {
@@ -90,7 +90,7 @@ describe("/api/ticker: a rate-limited `symbol=` read takes the date the calendar
     stub(503);
     store().set(key("cal:v3:2026-11-23"), JSON.stringify([zmRow]));
     const good = { at: Date.parse("2026-11-20T14:00:00Z"), day: "2026-11-20", data: { next: { date: "2026-11-23", session: "amc", quarter: 3, year: 2027 }, history: [], warnings: [], justReported: null, expectedMove: null } };
-    store().set(key("tk:stale:v7:ZM"), JSON.stringify(good));
+    store().set(key("tk:stale:v8:ZM"), JSON.stringify(good));
     const { body: r } = await sheet("ZM");
     expect(r.warnings[0]).toMatch(/^This is an earlier read/);
     expect(r.warnings).not.toContain(CALENDAR_NEXT);
@@ -111,7 +111,7 @@ describe("0092 review: the fallback never mislabels what it didn't borrow", () =
     store().set(key("cal:v3:2026-11-23"), JSON.stringify([zmRow]));
     // Yesterday's good copy: its report day is today, so it can't stand in for the whole sheet, only for history.
     const old = { at: Date.parse("2026-11-19T14:00:00Z"), day: "2026-11-19", data: { next: { date: "2026-11-20", session: "bmo", quarter: 3, year: 2027 }, history: [{ date: "2026-08-25", move: 9 }], warnings: [], justReported: null, expectedMove: 9, beatRate: 1 } };
-    store().set(key("tk:stale:v7:ZM"), JSON.stringify(old));
+    store().set(key("tk:stale:v8:ZM"), JSON.stringify(old));
     const { body: r } = await sheet("ZM");
     expect(r.next).toMatchObject({ date: "2026-11-23", session: "amc" });
     expect(r.warnings.some((w: string) => w.startsWith("Past reports are an earlier read"))).toBe(false);
