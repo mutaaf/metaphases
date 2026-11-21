@@ -1,12 +1,12 @@
 ---
 id: 0096
 title: Software sheets judge past reports on Nasdaq's GAAP-style figures, so CrowdStrike, Asana and Snowflake beats read as misses beside an adjusted estimate
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-20
-pr:
+pr: 169
 by: critic
 ---
 
@@ -48,3 +48,8 @@ Fetching company press releases. Per-ADR and currency mixes beyond what the shar
 
 ## Build attempt 1 (#164, reverted)
 The period alignment (`matchQuarters`, −1-month shift, Finnhub period ≤ report date) went live at 04:08 UTC on 2026-11-21 and paired each Nasdaq row with the previous quarter's Finnhub figures. Finnhub labels a Jul-31 quarter `…-09-30`, after the report date. KSS showed −$0.19 → −$0.13 on its Aug 26 row and a 2/2 record; CRWD's Aug 26 row read $0.2722 → $0.275, not $0.29 → $0.31. Reverted. Before you retry, read LESSONS 2026-11-21. The fail-closed guard (`nasdaqHistoryOffBasis`) was sound and can be reused. The basis evidence must come from the correctly matched Finnhub quarter.
+
+## Build attempt 2
+Why `f` didn't win: a **period-key mismatch**. Nasdaq names the fiscal month ("Jul 2026"); Finnhub `stock/earnings` labels that quarter with the calendar quarter-end containing it ("2026-09-30"), so the exact key never met for Jan/Apr/Jul/Oct (and Feb/May/Aug/Nov) fiscal years, and the sheet fell back to Nasdaq's GAAP-style pair. `sameEpsBasis` wasn't involved.
+
+`matchQuarters` now pairs a non-exact row only when two independent signals agree: the label is the quarter-end containing Nasdaq's month, **and** Finnhub's fiscal `year`/`quarter` is the one the row should be, counted back from a Finnhub calendar row for the same company (`nextE`, else `lastE`) by the gap between report dates (÷ 91.3 days). If the label convention is ever not what LESSONS 2026-11-21 says, nothing pairs (never the neighbouring quarter, #164's failure) and #164's fail-closed guard (`nasdaqHistoryOffBasis`) marks the rows "basis differs". Exact labels match as before. The last-good sheet copy moves to `tk:stale:v9` so #164's copies are never reused.
