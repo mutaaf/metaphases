@@ -46,3 +46,9 @@ Who it hurts: the glancer sees a famous retailer "pending" two days after its re
 
 ## Out of scope
 HP's release-versus-call day (Nasdaq says Nov 18 after hours, the override is the Nov 19 call). Leave it on the call day, but its figures must show.
+
+## Build attempt 1 (#167, reverted)
+`fillMovedFigures` took Nasdaq's Nov 19 pair from the worker's cached day read (`nq:cal:v2:2026-11-19`). The live result was correct for the before-open names (WSM $2.18 → $2.19, BBWI $0.12 → $0.26). It was wrong for the after-close names: **ROST $1.85 → $1.58, GAP $0.76 → $0.62**. Those actuals are last year's Q3 EPS. Nasdaq's live day calendar says $1.91 and $0.82. So the Worker's cached copy was read before the after-close actuals posted, and in that copy the `eps` column held a stale (prior-year) figure for not-yet-reported rows, cached 7 days. Before retrying:
+- (a) Capture what Nasdaq's day calendar returns for an after-close name between the close and the posting (`eps`, `surprise`, `lastYearEPS` or similar), and only trust `eps` when `surprise` is present and consistent (`(eps − epsForecast)/|epsForecast|` ≈ `surprise` %).
+- (b) Cross-check against `nq:surprise:<SYM>` (the sheet already shows ROST $1.85 → $1.91 correctly).
+- (c) Bump `NQ_CAL` to v3, or cut the TTL, so the poisoned week-long copy is not reused.
