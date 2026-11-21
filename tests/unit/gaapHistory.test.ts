@@ -83,6 +83,9 @@ describe("nasdaqHistoryOffBasis: an adjusted next estimate against a GAAP-style 
     // Cruise-line-shaped turnaround: Nasdaq's losses are the adjusted ones Finnhub also has, so the record stands.
     expect(nasdaqHistoryOffBasis([-0.85, -0.55, -0.31], 0.74, [{ nq: -0.31, fh: -0.31 }, { nq: -0.55, fh: -0.5501 }])).toBe(false);
   });
+  it("review: near-zero actuals a cent or two apart are rounding, not another basis", () => {
+    expect(nasdaqHistoryOffBasis([0.02, 0.03, 0.01], 0.05, [{ nq: 0.02, fh: 0.03 }, { nq: 0, fh: 0.01 }])).toBe(false);
+  });
   it("near-zero small caps and short tables aren't caught by the 3× test", () => {
     expect(nasdaqHistoryOffBasis([0.01, 0.02, 0.03, 0.02], 0.1)).toBe(false); // under 20¢ next
     expect(nasdaqHistoryOffBasis([0.05, 0.06], 0.4)).toBe(false); // two quarters can't show a year's seasons
@@ -193,6 +196,21 @@ describe("worker /api/ticker: #164's live failure shapes (0096 attempt 2)", () =
     const aug = r.history.find((h: any) => h.date === "2026-08-26");
     expect(aug.epsA).toBe(1.28);
     expect(aug.epsE).not.toBe(-0.19);
+    expect(r.history.filter((h: any) => h.basis)).toEqual([]);
+    expect(r.beatRate).toEqual({ beats: 4, total: 4 });
+  });
+
+  it("review: KSS/M with Finnhub's estimate revised after the print (−$0.14 against Nasdaq's −$0.19): Nasdaq's own turnaround pair stands, 4 of 4", async () => {
+    calRows = [{ symbol: "KSS", date: "2026-11-24", hour: "bmo", quarter: 3, year: 2026, epsEstimate: -0.0017, epsActual: null, revenueEstimate: null, revenueActual: null }];
+    surprises = [
+      { period: "2026-09-30", quarter: 2, year: 2026, estimate: 0.7, actual: 1.28 },
+      { period: "2026-06-30", quarter: 1, year: 2026, estimate: -0.1, actual: -0.13 },
+      { period: "2026-03-31", quarter: 4, year: 2025, estimate: 1.0, actual: 1.07 },
+      { period: "2025-12-31", quarter: 3, year: 2025, estimate: -0.14, actual: 0.1 },
+    ];
+    nqSurprise = [row("Jul 2026", "8/26/2026", 1.28, "0.55"), row("Apr 2026", "5/28/2026", -0.13, "-0.18"), row("Jan 2026", "3/10/2026", 1.07, "0.85"), row("Oct 2025", "11/25/2025", 0.1, "-0.19")];
+    const r = await get("/api/ticker/KSS");
+    expect(r.history.map((h: any) => h.epsE)).toEqual([0.55, -0.18, 0.85, -0.19]);
     expect(r.history.filter((h: any) => h.basis)).toEqual([]);
     expect(r.beatRate).toEqual({ beats: 4, total: 4 });
   });

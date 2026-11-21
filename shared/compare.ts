@@ -100,6 +100,13 @@ export function matchQuarters<T extends { period?: unknown; year?: unknown; quar
   return out.map((f) => f && out.filter((g) => g === f).length > 1 ? undefined : f);
 }
 
+/**
+ * 0096: two feeds' actuals for one quarter on the same basis: equal, within EPS_BASIS_MAX, or a few cents apart near
+ * zero (0.02 against 0.03 is rounding, not GAAP against adjusted). CRWD's Nasdaq 0.01 against Finnhub's 0.31 isn't.
+ */
+export const sameActual = (a: number | null | undefined, b: number | null | undefined) =>
+  a != null && b != null && Number.isFinite(a) && Number.isFinite(b) && (a === b || sameEpsBasis(a, b) || Math.abs(a - b) < EPS_NEAR_ZERO / 2);
+
 /** 0096: how many times every past actual the next (adjusted) estimate may be before the history reads as another basis. */
 export const EPS_OFF_BASIS_RATIO = 3;
 /** 0096: the 3× test needs a next estimate at least this big (a few cents against a cent or two is noise, not a basis). */
@@ -114,7 +121,7 @@ const EPS_OFF_BASIS_MIN_NEXT = 0.2; // EPS_NEAR_ZERO × 2 (declared further down
  */
 export function nasdaqHistoryOffBasis(actuals: number[], nextE: number | null | undefined, pairs: { nq: number | null; fh: number | null }[] = []): boolean {
   const both = pairs.filter((p) => fin(p.nq) && fin(p.fh));
-  if (both.some((p) => p.nq !== p.fh && !sameEpsBasis(p.nq, p.fh))) return true;
+  if (both.some((p) => !sameActual(p.nq, p.fh))) return true;
   if (both.length) return false;
   const a = actuals.filter(fin);
   if (!fin(nextE) || nextE < EPS_NEAR_ZERO / 2 || a.length < 2) return false;

@@ -22,7 +22,7 @@ import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove, usualSession } from "../shared/reaction";
-import { applyPreReport, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
+import { applyPreReport, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, sameActual, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
@@ -975,6 +975,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // One consensus per quarter: Finnhub's (the calendar's) when we have it for this quarter, else Nasdaq's.
     const f = !usd ? undefined
       : lastE && lastE.date === date && lastE.epsEstimate != null ? { estimate: lastE.epsEstimate, actual: lastE.epsActual }
+      // 0096 review: a matched Finnhub quarter whose actual agrees with Nasdaq's is the same basis, so Nasdaq's own
+      // pair stands (0094's turnarounds, KSS/M): Finnhub's estimate may have been revised after the print. Finnhub's
+      // pair only takes over when the actuals are on different bases (CRWD $0.01 against $0.31).
+      : fhQuarter[i] && sameActual(parseFloat(String(r.eps)), typeof fhQuarter[i]!.actual === "number" ? fhQuarter[i]!.actual as number : null) ? undefined
       : fhQuarter[i];
     // That date's own session when the calendar has it, else the habit; unknown stays unknown (move "—").
     const session: Session = lastE && lastE.date === date ? ownSession(lastE) : habit;
@@ -984,8 +988,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const nE = typeof r.consensusForecast === "number" ? r.consensusForecast : parseFloat(r.consensusForecast);
     // 0094: Nasdaq's estimate with Nasdaq's own actual is one table's pair: a turnaround is judged, not "basis differs".
     const sameSource = pick.source === "nasdaq" && pick.epsA != null && pick.epsA === parseFloat(String(r.eps));
-    const h = keep(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit, undefined, sameSource), f?.actual);
-    if (sameSource && f?.actual == null) nasdaqOnly.add(h);
+    const h = keep(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit, undefined, sameSource), f ? f.actual : fhQuarter[i]?.actual);
+    if (sameSource && f?.actual == null && fhQuarter[i]?.actual == null) nasdaqOnly.add(h);
     history.push(h);
   });
   // 0096: Nasdaq's own pairs on a GAAP-style basis (SNOW, ZS, CRWD, ASAN) beside an adjusted next estimate: not a
