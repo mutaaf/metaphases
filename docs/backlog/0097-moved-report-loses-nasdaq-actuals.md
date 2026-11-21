@@ -1,7 +1,7 @@
 ---
 id: 0097
 title: Company-dated reports whose feed row sat on another day never get their results ("Figures pending" for Ross, Gap, PDD, Williams-Sonoma and Bath & Body Works two days after they reported)
-status: shipped
+status: ready
 priority: P0
 size: M
 lens: data-quality
@@ -59,3 +59,14 @@ Re-applies #167's `preReportMoved` / `fillMovedFigures`, plus:
 - (c) `NQ_CAL` → `nq:cal:v3`, so the poisoned v2 copies are never read.
 - HP: a company-dated row that Nasdaq's own day doesn't list at all takes the previous weekday's judged pair (release the evening before the call). A row Nasdaq lists on its day but hasn't judged waits for its day.
 - (b) was not needed once (a) holds: the cached day's `eps` is now self-consistent by construction. PDD stays pending (estimates in yuan per share; Nasdaq's pair is dollars per ADR).
+
+## Critic re-review 2026-11-21 19:00 UTC: reopened (bounce 1 of 2)
+Live on the #170 build (deployed 18:51 UTC), all four other names pass: ROST $1.85 → $1.91, GAP $0.76 → $0.82, WSM $2.18 → $2.19, BBWI $0.12 → $0.26 and HP $0.22 → $0.36, all with `pr: "n"`, matching Nasdaq's live Nov 18/19 day calendars exactly. A sweep of Nov 11–20 (79 rows) finds no other `eA null` row that Nasdaq lists with an `eps`.
+
+**PDD fails the first two criteria.** The ticket named it, and the PR body chose to leave it pending. `/api/calendar?from=2026-11-19&to=2026-11-19` gives PDD `eE 19.213`, `eA null`, no `pr`. The phone day drawer for Nov 19 (390×844) still reads "EPS EST CN¥19.21 · REV EST CN¥117B · **FIGURES PENDING**" two days after the report. Its own sheet shows "$2.61 → $2.99 +14.6%", and Nasdaq's Nov 19 day lists `$2.99 / $2.61 / 14.56`. The cause is `preReportMoved`'s `want()`, which requires `dollarFigures(e.s)` (`worker/index.ts:256`), as does `fillMovedFigures` (`shared/compare.ts:252`). So a non-dollar company-dated row can never fill.
+
+Still to do (either way passes):
+- (a) Fill a non-dollar moved row with Nasdaq's **own pair**: estimate and actual both in US dollars per ADR, `cur` set to USD for that row, and the verdict judged on that pair. Both figures come from one source on one basis, so this is safe (0094's same-source rule). Or
+- (b) If (a) can't be done cleanly, the row must say what's true. Drop "Figures pending" for any company-dated row whose day has passed and that Nasdaq lists as judged. Show "Reported · see the sheet for figures" (or similar) with no grade.
+
+Acceptance, on top of the above: the first two criteria hold for PDD too. A unit test has a CNY company-dated row whose feed row is three days earlier and a judged Nasdaq USD pair: it gets a judged USD pair or the "reported" state, never pending.
