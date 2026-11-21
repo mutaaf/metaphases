@@ -241,8 +241,12 @@ async function preReportDay(day: string, events: EarningsEvent[], today: string,
 
 /** Nasdaq's figures are dollars, and an untracked row is shown in dollars: the rule settlePast fills by. */
 const dollarFigures = (s: string) => !(s in U) || isUsd(U[s].ec ?? "USD");
-/** 0097: at most this many past days are read for moved company-dated rows per request (newest first). */
-const MOVED_DAYS_MAX = 3;
+/**
+ * 0097: past days read for company-dated rows per request. Every such day an override can still date (entries stop
+ * applying 14 days on: about 10 weekdays), so a month range answers like a week range (0041) even while newer days
+ * hold rows that can't fill yet. Warm reads are cache hits; a cold or failing day is fetched at most every 15 min.
+ */
+const MOVED_DAYS_MAX = 10;
 const NQ_MOVED_FAIL = (day: string) => CAL(`nq:cal:fail:v1:${day}`);
 /**
  * 0097: run company-dated rows that `applyToEvents` moved onto a past day through that day's Nasdaq figures (the same
@@ -250,7 +254,7 @@ const NQ_MOVED_FAIL = (day: string) => CAL(`nq:cal:fail:v1:${day}`);
  */
 async function preReportMoved(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true): Promise<EarningsEvent[]> {
   const want = (e: EarningsEvent) => !!e.o && e.d < today && e.eA == null && e.rA == null && !e.c && dollarFigures(e.s);
-  const days = [...new Set(events.filter(want).map((e) => e.d))].sort().reverse().slice(0, MOVED_DAYS_MAX);
+  const days = [...new Set(events.filter((e) => want(e) && e.d >= addDays(today, -14)).map((e) => e.d))].sort().reverse().slice(0, MOVED_DAYS_MAX);
   if (!days.length) return events;
   // Cache first; a fresh read only while no failure is remembered for that day (15 min), so a Nasdaq outage never
   // costs these calls on every read (this runs per request, not per day-cache build).

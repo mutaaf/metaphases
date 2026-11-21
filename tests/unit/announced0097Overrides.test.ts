@@ -95,6 +95,9 @@ class MemCache {
   }
 }
 let nq19: Record<string, string>[] = NQ19;
+let extraFeed: typeof feed = [];
+// Nov 12 (live): Cisco, company-dated after the close; Finnhub had it on Nov 11.
+const NQ12 = [{ symbol: "CSCO", eps: "$1.21", surprise: "5.22", epsForecast: "$1.15" }];
 const env = { FINNHUB_API_KEY: "k", FRED_API_KEY: "k", ASSETS: { fetch: async () => new Response("") } } as any;
 let pending: Promise<unknown>[] = [];
 const ctx = { waitUntil: (p: Promise<unknown>) => { pending.push(p); }, passThroughOnException() {} } as any;
@@ -108,6 +111,7 @@ describe("0097 moved rows get the company's day's Nasdaq figures", () => {
   beforeEach(() => {
     pending = [];
     nq19 = NQ19;
+    extraFeed = [];
     vi.useFakeTimers({ toFake: ["Date"] });
     (globalThis as any).caches = { default: new MemCache() };
     vi.stubGlobal("fetch", vi.fn(async (u: string) => {
@@ -115,7 +119,7 @@ describe("0097 moved rows get the company's day's Nasdaq figures", () => {
       if (url.hostname === "api.nasdaq.com") {
         if (url.pathname === "/api/calendar/earnings") {
           const date = url.searchParams.get("date");
-          const rows = date === "2026-11-19" ? nq19 : date === "2026-11-18" ? NQ18 : [{ symbol: "ZZZZ", eps: "$1.00", epsForecast: "$1.00" }];
+          const rows = date === "2026-11-19" ? nq19 : date === "2026-11-18" ? NQ18 : date === "2026-11-12" ? NQ12 : [{ symbol: "ZZZZ", eps: "$1.00", epsForecast: "$1.00" }];
           return new Response(JSON.stringify({ data: { rows } }));
         }
         return new Response("{}", { status: 404 });
@@ -123,7 +127,7 @@ describe("0097 moved rows get the company's day's Nasdaq figures", () => {
       if (url.pathname.endsWith("/calendar/earnings")) {
         const from = url.searchParams.get("from") ?? "0000", to = url.searchParams.get("to") ?? "9999";
         const sym = url.searchParams.get("symbol");
-        const rows = feed.filter((r) => (sym ? r.symbol === sym : r.date >= from && r.date <= to));
+        const rows = [...feed, ...extraFeed].filter((r) => (sym ? r.symbol === sym : r.date >= from && r.date <= to));
         return new Response(JSON.stringify({ earningsCalendar: rows }));
       }
       if (url.pathname.endsWith("/stock/earnings")) return new Response("[]");
@@ -172,6 +176,21 @@ describe("0097 moved rows get the company's day's Nasdaq figures", () => {
     const late = await get("/api/calendar?from=2026-11-16&to=2026-11-22");
     expect(late.events.find((e: any) => e.s === "ROST")).toMatchObject({ eE: 1.85, eA: 1.91, pr: "n" });
     expect(late.events.find((e: any) => e.s === "GAP")).toMatchObject({ eE: 0.76, eA: 0.82, pr: "n" });
+  });
+
+  it("an older moved day still fills in a month range while newer days hold rows that can't fill yet (one answer per range, 0041)", async () => {
+    nq19 = NQ19_EARLY; // ROST and GAP listed on Nov 19 but not judged
+    extraFeed = [
+      { symbol: "CSCO", date: "2026-11-11", hour: "amc", quarter: 1, year: 2027, epsEstimate: 1.2111, epsActual: null, revenueEstimate: 15e9, revenueActual: null },
+      // Company-dated rows Nasdaq doesn't list on their day or the day before (they can't fill).
+      { symbol: "TSN", date: "2026-11-16", hour: "bmo", quarter: 4, year: 2026, epsEstimate: 0.5885, epsActual: null, revenueEstimate: 14e9, revenueActual: null },
+      { symbol: "PANW", date: "2026-11-18", hour: "amc", quarter: 1, year: 2027, epsEstimate: 0.9907, epsActual: null, revenueEstimate: 2.6e9, revenueActual: null },
+    ];
+    vi.setSystemTime(new Date("2026-11-21T15:00:00Z"));
+    for (const [from, to] of [["2026-11-09", "2026-11-15"], ["2026-11-01", "2026-11-30"]]) {
+      const r = await get(`/api/calendar?from=${from}&to=${to}`);
+      expect(r.events.find((e: any) => e.s === "CSCO"), from).toMatchObject({ d: "2026-11-12", eE: 1.15, eA: 1.21, pr: "n" });
+    }
   });
 
   it("a failing Nasdaq day is not asked again on every read (15-minute back-off)", async () => {
