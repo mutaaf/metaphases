@@ -1,12 +1,12 @@
 ---
 id: 0096
 title: Software sheets judge past reports on Nasdaq's GAAP-style figures, so CrowdStrike, Asana and Snowflake beats read as misses beside an adjusted estimate
-status: shipped
+status: ready
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-20
-pr: 164
+pr:
 by: critic
 ---
 
@@ -45,3 +45,6 @@ Unit: the history join with a Nasdaq GAAP-style row and a Finnhub adjusted row f
 
 ## Out of scope
 Fetching company press releases. Per-ADR and currency mixes beyond what the shared fix covers. `shared/grades.ts` (frozen; only its beat-rate input changes).
+
+## Build attempt 1 (#164, reverted)
+The period alignment (`matchQuarters`, −1-month shift, Finnhub period ≤ report date) went live at 04:08 UTC on 2026-11-21 and paired each Nasdaq row with the previous quarter's Finnhub figures. Finnhub labels a Jul-31 quarter `…-09-30`, after the report date. KSS showed −$0.19 → −$0.13 on its Aug 26 row and a 2/2 record; CRWD's Aug 26 row read $0.2722 → $0.275, not $0.29 → $0.31. Reverted. Before you retry, read LESSONS 2026-11-21. The fail-closed guard (`nasdaqHistoryOffBasis`) was sound and can be reused. The basis evidence must come from the correctly matched Finnhub quarter.
