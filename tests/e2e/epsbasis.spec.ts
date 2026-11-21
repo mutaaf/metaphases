@@ -73,3 +73,32 @@ test("a US retailer's sheet: a turnaround reads 'turned a profit', and its basis
   await expect(note).not.toContainText("FFO");
   await expect(note).not.toContainText("ADR");
 });
+
+// 0096: a GAAP-style Nasdaq record beside an adjusted next estimate (CRWD): one judged quarter, the rest "basis differs",
+// and the table's note doesn't claim those rows are adjusted EPS.
+test("a software sheet: the adjusted quarter is a beat, the GAAP-style rows read 'basis differs', and the note says 'the other actuals'", async ({ page }) => {
+  await page.route("**/api/ticker/CRWD", async (r) => {
+    const body = JSON.parse(readFileSync(new URL("../fixtures/ticker-NVDA.json", import.meta.url), "utf8").replaceAll('"NVDA"', '"CRWD"'));
+    body.profile = { ...body.profile, name: "CrowdStrike Holdings", country: "US" };
+    body.next = { ...body.next, epsE: 0.3176 };
+    const [a, b, c, d] = body.history;
+    body.history = [
+      { ...a, epsE: 0.29, epsA: 0.31, surprisePct: 6.9 },
+      { ...b, epsE: 0.03, epsA: 0.04, surprisePct: null, basis: "differs" },
+      { ...c, epsE: 0.05, epsA: 0.06, surprisePct: null, basis: "differs" },
+      { ...d, epsE: 0.02, epsA: 0, surprisePct: null, basis: "differs" },
+    ];
+    body.beatRate = { beats: 1, total: 1 };
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/CRWD");
+  const rows = page.locator(".rx-table tbody tr");
+  await expect(rows.first()).toContainText("+6.9%");
+  await expect(rows.nth(1)).toContainText("basis differs");
+  await expect(page.locator(".rx-table")).not.toContainText("missed");
+  await expect(page.locator(".rx-basis", { hasText: "adjusted EPS" })).toContainText("The other actuals are usually");
+  const wide = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, ...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth)));
+  expect(wide).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await page.locator(".rx-table").scrollIntoViewIfNeeded();
+  if (process.env.SHOT) await page.screenshot({ path: `${process.env.SHOT}/crwd-${test.info().project.name}.png` });
+});

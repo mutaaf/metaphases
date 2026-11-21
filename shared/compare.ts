@@ -61,6 +61,47 @@ export function periodKey(p: unknown): string | null {
   return nq && MON[nq[1]] ? `${nq[2]}-${MON[nq[1]]}` : null;
 }
 
+/**
+ * 0096: Finnhub's `stock/earnings` quarter for each Nasdaq `earnings-surprise` row. Finnhub labels a fiscal quarter
+ * by a calendar quarter-end (Apple's quarter to Apr 1 is "2023-03-31" in its docs), while Nasdaq names the fiscal
+ * month ("Jul 2026" for CrowdStrike's quarter to Jul 31). An exact key never met for the Jan/Apr/Jul/Oct fiscal
+ * years (CRWD, SNOW, ZS, ASAN, MDB, IOT, CRM), so their history fell back to Nasdaq's GAAP-style pair.
+ * One shift of −1, 0 or +1 month for the whole sheet (only one of them can land on a calendar quarter-end; an exact
+ * fiscal label matches at 0), the one with the most matches; and a Finnhub period after the report date is never
+ * that report's quarter.
+ */
+export function matchQuarters<T extends { period?: unknown }>(nq: { key: string | null; reported: string }[], fh: T[] | null | undefined): (T | undefined)[] {
+  const list = (Array.isArray(fh) ? fh : []).filter((f) => typeof f?.period === "string" && periodKey(f.period) != null);
+  const shifted = (key: string, d: number) => {
+    const [y, m] = key.split("-").map(Number);
+    const t = y * 12 + (m - 1) + d;
+    return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`;
+  };
+  const at = (d: number) => nq.map((r) => r.key == null ? undefined
+    : list.find((f) => periodKey(f.period) === shifted(r.key as string, d) && String(f.period).slice(0, 10) <= r.reported));
+  let best: (T | undefined)[] = nq.map(() => undefined), most = 0;
+  for (const d of [0, -1, 1]) {
+    const m = at(d), n = m.filter(Boolean).length;
+    if (n > most) { best = m; most = n; }
+  }
+  return best;
+}
+
+/** 0096: how many times every past actual the next (adjusted) estimate may be before the history reads as another basis. */
+export const EPS_OFF_BASIS_RATIO = 3;
+/**
+ * 0096: Nasdaq's past actuals look like another measure from the next estimate (Finnhub's, the adjusted figure
+ * analysts forecast): a positive estimate against nothing but losses (ASAN, SNOW), or more than
+ * EPS_OFF_BASIS_RATIO× every past actual (ZS $1.19 next against $0.14, CRWD $0.32 against $0.06). Then those rows
+ * aren't a beat record, whatever their own pair says. A year of history, seasonal quarters included, sits inside 3×.
+ */
+export function nasdaqHistoryOffBasis(actuals: number[], nextE: number | null | undefined): boolean {
+  const a = actuals.filter(fin);
+  if (!fin(nextE) || nextE < EPS_NEAR_ZERO / 2 || a.length < 2) return false;
+  if (a.every((x) => x < 0)) return true;
+  return nextE > EPS_OFF_BASIS_RATIO * Math.max(...a.map(Math.abs));
+}
+
 export interface ConsensusPick { epsE: number | null; epsA: number | null; surprisePct: number | null; source: "finnhub" | "nasdaq" | null }
 const num = (v: unknown) => { const x = typeof v === "number" ? v : parseFloat(String(v ?? "")); return Number.isFinite(x) ? x : null; };
 
