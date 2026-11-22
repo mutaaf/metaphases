@@ -125,7 +125,7 @@ export function redFlags(t: TickerResponse | null, opts: { tracked: boolean; tod
   // 0078: a feed day Nasdaq contests isn't a report day, so no "Reports today" once it has come.
   if (isDated(t.next) && opts.today && !(t.next.nasdaq && t.next.nasdaq.date !== t.next.date && t.next.date <= opts.today)) {
     const n = Math.round((Date.parse(t.next.date) - Date.parse(opts.today)) / 86400000);
-    if (n >= 0 && n <= 7) F.push({ key: "soon", tone: "info", label: n === 0 ? "Reports today" : `Reports in ${n} day${n === 1 ? "" : "s"}`, why: "Buying right before a report means betting on how it lands." });
+    if (n >= 0 && n <= 7) F.push({ key: "soon", tone: "info", label: `${n === 0 ? "Reports today" : `Reports in ${n} day${n === 1 ? "" : "s"}`}${t.next.feedDay ? " (date unconfirmed)" : ""}`, why: "Buying right before a report means betting on how it lands." });
   }
   return F;
 }

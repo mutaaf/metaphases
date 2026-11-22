@@ -4,7 +4,10 @@ import { tickerShareTitle } from "../../shared/pending";
 import { tickerShareDesc } from "../../shared/reported";
 import { contestedDay } from "../../shared/closedRows";
 import { eventProjected } from "../../shared/projected";
-import { nasdaqLabel, dateMark } from "../../src/lib/dateMark";
+import { nasdaqLabel, dateMark, disagreeWhy } from "../../src/lib/dateMark";
+import { redFlags } from "../../src/lib/hype";
+import { factsFor } from "../../worker/ai/prompts";
+import { readFileSync } from "node:fs";
 import type { EarningsEvent, TickerResponse } from "../../shared/types";
 import worker from "../../worker/index";
 
@@ -28,8 +31,10 @@ describe("leadsNasdaq", () => {
     expect(leadsNasdaq(kss, { date: "2026-11-23", session: "bmo" }, TODAY)).toBe(false); // same day: 0050 fills the session
     expect(leadsNasdaq(kss, null, TODAY)).toBe(false); // a cold cross-check
   });
-  it("only while the feed's day is still ahead (a passed day is 0078's) and Nasdaq's hasn't passed", () => {
-    expect(leadsNasdaq(kss, { date: "2026-11-24", session: "bmo" }, "2026-11-23")).toBe(false);
+  it("also on and after the feed's own day (review: KSS mustn't flip back on Monday), until Nasdaq's day passes", () => {
+    expect(leadsNasdaq(kss, { date: "2026-11-24", session: "bmo" }, "2026-11-23")).toBe(true);
+    expect(leadsNasdaq(kss, { date: "2026-11-24", session: "bmo" }, "2026-11-24")).toBe(true);
+    expect(leadsNasdaq(kss, { date: "2026-11-24", session: "bmo" }, "2026-11-25")).toBe(false);
     expect(leadsNasdaq({ date: "2026-11-25", session: "" }, { date: "2026-11-20", session: "bmo" }, TODAY)).toBe(false);
   });
 });
@@ -79,6 +84,25 @@ describe("share title and description", () => {
   it("without the lead, today's titles are unchanged", () => {
     const { feedDay: _f, hs: _h, ...plain } = next;
     expect(tickerShareTitle("KSS", "Kohl's", { ...plain, date: "2026-11-23", session: "", nasdaq: { date: "2026-11-24", session: "bmo" }, projected: true })).toBe("KSS reports Mon, Nov 23 (unconfirmed; Nasdaq lists Tue, Nov 24) · Metaphases");
+  });
+});
+
+describe("review: the other surfaces never state Nasdaq's leading day as settled", () => {
+  const NVDA = JSON.parse(readFileSync(new URL("../fixtures/ticker-NVDA.json", import.meta.url), "utf8")) as TickerResponse;
+  const lead = { date: "2026-11-24", session: "bmo" as const, quarter: 3, year: 2026, epsE: 0.1, revE: 3.5e9, hs: "n" as const, feedDay: "2026-11-23" };
+  it("Hype Check's 'Reports in N days' says the date is unconfirmed", () => {
+    const t = structuredClone(NVDA);
+    t.next = lead;
+    expect(redFlags(t, { tracked: true, today: TODAY }).find((f) => f.key === "soon")?.label).toBe("Reports in 2 days (date unconfirmed)");
+  });
+  it("the AI is told the date is unconfirmed, with the feed's day", () => {
+    const facts = factsFor("ticker", { symbol: "KSS", name: "Kohl's", next: lead }).join("\n");
+    expect(facts).toMatch(/on 2026-11-24 bmo, date unconfirmed \(Nasdaq's calendar lists this day and time; our feed projects 2026-11-23/);
+  });
+  it("the 'isn't confirmed' note names the right mark (drawer and Compass)", () => {
+    expect(disagreeWhy(1, 0)).toBe("Nasdaq's calendar lists it on another day or time, marked “Nasdaq” below.");
+    expect(disagreeWhy(1, 1)).toBe("Nasdaq's calendar lists it here, but our data feed projects another day, marked “Feed projects” below.");
+    expect(disagreeWhy(3, 1)).toBe("our data feed and Nasdaq's calendar list them on different days or times, marked below.");
   });
 });
 
@@ -165,6 +189,27 @@ describe("0099 on the worker", () => {
     const tue = r.events.filter((e: EarningsEvent) => e.d === "2026-11-24" && e.x === "differs").map((e: EarningsEvent) => e.s).sort();
     expect(tue).toEqual(["QQKS", "QQUR"]);
     expect(r.events.filter((e: EarningsEvent) => e.d === "2026-11-23").map((e: EarningsEvent) => e.s).sort()).toEqual(["QQAM", "QQNT"]);
+  });
+
+  it("on the feed's own day (Mon Nov 23), the sheet and the calendar still lead with Tuesday", async () => {
+    vi.setSystemTime(new Date("2026-11-23T15:00:00Z")); // Monday 10 AM ET
+    const r = await warm();
+    expect(r.events.filter((e: EarningsEvent) => e.s === "QQKS")).toEqual([expect.objectContaining({ d: "2026-11-24", h: "bmo", xd: "2026-11-23", xf: 1 })]);
+    const t = await call("/api/ticker/QQKS");
+    expect(t.next).toMatchObject({ date: "2026-11-24", session: "bmo", feedDay: "2026-11-23" });
+    expect(t.next.status).toBeUndefined();
+    expect(t.read[0]).toMatch(/^Nasdaq's calendar lists .* on Tuesday, Nov 24 before the opening bell, but that's unconfirmed/);
+  });
+
+  it("the calendar subscription (ICS) puts the report on Nasdaq's day, tentative, with no stated time", async () => {
+    await warm();
+    const r = await worker.fetch(new Request("https://mutaafaziz.com/metaphases/api/ics?s=QQKS,QQAM"), env, ctx);
+    const ics = await r.text();
+    const ev = ics.split("BEGIN:VEVENT").slice(1);
+    const kss = ev.find((e) => e.includes("QQKS"))!;
+    expect(kss).toMatch(/DTSTART;VALUE=DATE:20261124/);
+    expect(kss).toMatch(/TENTATIVE/);
+    expect(ev.find((e) => e.includes("QQAM"))).toMatch(/DTSTART[^\n]*20261123/);
   });
 
   it("with a cold cross-check (no Nasdaq), today's behaviour: the feed's projected day", async () => {

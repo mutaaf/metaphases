@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { EarningsEvent } from "../../shared/types";
 import { useCalendar } from "../lib/api";
 import { ETFS, ETF_ASOF, heldVia, nameOf } from "../lib/data";
-import { dateMark } from "../lib/dateMark";
+import { dateMark, disagreeWhy } from "../lib/dateMark";
 import { addDays, fmtShort, todayISO, weekOf } from "../lib/dates";
 import { money } from "../lib/format";
 import { setParam } from "../lib/router";
@@ -115,10 +115,11 @@ export default function CompassPage() {
               {(() => {
                 // 0070: the same two notes as the day drawer, so a date the company hasn't confirmed never reads as fact.
                 const nx = marked.filter((m) => m?.kind === "differs").length;
+                const nf = exposure.filter((r, i) => marked[i]?.kind === "differs" && r.e.xf).length; // 0099
                 const np = marked.filter((m) => m?.kind === "projected").length;
                 return (nx > 0 || np > 0) && (
                   <div data-testid="ex-notes">
-                    {nx > 0 && <Notice><Term k="xcheck">{nx === 1 ? "One date here isn't confirmed" : `${nx} dates here aren't confirmed`}</Term>: Nasdaq's calendar lists {nx === 1 ? "it" : "them"} on another day or time, marked “Nasdaq” below. Our feed and Nasdaq disagree, so check the company's own announcement.</Notice>}
+                    {nx > 0 && <Notice><Term k="xcheck">{nx === 1 ? "One date here isn't confirmed" : `${nx} dates here aren't confirmed`}</Term>: {disagreeWhy(nx, nf)} Our feed and Nasdaq disagree, so check the company's own announcement.</Notice>}
                     {np > 0 && <Notice><Term k="unconfirmed">{np === 1 ? "One date here is projected" : `${np} dates here are projected`}</Term>: {np === 1 ? "the company hasn't" : "the companies haven't"} announced {np === 1 ? "it" : "them"} yet, so {np === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>}
                   </div>
                 );
