@@ -19,7 +19,7 @@ import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
 import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
-import { currencyBreak, sanitizeMetric, withoutOff } from "../shared/currencyBreak";
+import { currencyBreak, dropsPb, sanitizeMetric, withoutOff } from "../shared/currencyBreak";
 import { companyCurrencyPairs, periodEnd, rateOn } from "../shared/adrPairs";
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
@@ -1108,7 +1108,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // 0098: a quarter Finnhub reports in dollars beside yuan quarters (PDD, BABA) is dropped from the bars, and the TTM
   // growth it skews is unavailable rather than an F.
   const brk = currencyBreak(quarterly, currency);
-  if (brk.off.length) warnings.push(`${brk.off.length === 1 ? "One quarter" : `${brk.off.length} quarters`} the data feed reported in another currency ${brk.off.length === 1 ? "is" : "are"} left out of the quarterly figures${brk.growthBroken ? ", and growth isn't graded" : ""}.`);
+  // 0101: a newest quarter in another currency also skews the quarterly price-to-book (about the ADS ratio too high).
+  const noPb = dropsPb(metric?.metric, brk);
+  const ungraded = [brk.growthBroken && "growth", noPb && "price-to-book"].filter(Boolean);
+  if (brk.off.length) warnings.push(`${brk.off.length === 1 ? "One quarter" : `${brk.off.length} quarters`} the data feed reported in another currency ${brk.off.length === 1 ? "is" : "are"} left out of the quarterly figures${ungraded.length ? `, and ${ungraded.join(" and ")} ${ungraded.length > 1 ? "aren't" : "isn't"} graded` : ""}.`);
   const compass = metric?.metric ? compassGrade(sanitizeMetric(metric.metric, brk)) : { score: null, grade: null, factors: [] };
   const setup = chart && chart.c.length > 60
     ? setupGrade({ close: chart.c, high: chart.h, low: chart.l, beatRate: beatRate && beatRate.total >= MIN_BEAT_RECORD ? beatRate.beats / beatRate.total : null })
