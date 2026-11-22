@@ -13,7 +13,7 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) 
       const [first, ...rest] = body.history;
       body.history = [
         { ...first, epsE: 19.213, epsA: 21.04, surprisePct: 9.49, cur: "CNY" },
-        ...rest.map((h: any) => ({ ...h, surprisePct: null, basis: "differs" })),
+        ...rest.map((h: any) => ({ ...h, surprisePct: null, basis: "differs", why: "fx" })),
       ];
       body.beatRate = { beats: 1, total: 1 };
       await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
@@ -26,10 +26,17 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) 
     await expect(top).toContainText("+9.5%");
     await expect(top).not.toContainText("$21.04");
     await expect(sheet.locator(".rx-table tbody tr").nth(1)).toContainText("basis differs");
-    await expect(sheet.locator("[data-testid=rx-epsbasis]")).toContainText("converted at that quarter's exchange rate");
+    await expect(sheet.locator("[data-testid=rx-fxbasis]")).toContainText("doesn't match the company's own, converted to dollars");
+    await expect(sheet.locator("[data-testid=rx-epsbasis]")).toHaveCount(0);
     await expect(sheet.locator("[data-testid=nc-currency]")).toContainText("the latest report is in Chinese yuan");
     await expect(sheet.getByText("1/1 beats")).toBeVisible();
     expect(await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth)))).toBeLessThanOrEqual(1);
+    // The price chart's report marker quotes the same pair, in yuan (never "$21.04").
+    const chart = sheet.locator(".pchart");
+    await chart.locator(".pc-mark[aria-label='Report 2026-09-01']").focus();
+    await page.keyboard.press("Enter");
+    await expect(chart.locator(".pc-detail")).toContainText("EPS CN¥19.21 → CN¥21.04");
+    expect(await page.evaluate(() => Math.max(...[...document.querySelectorAll(".rx-table")].map((t) => t.scrollWidth - t.clientWidth)))).toBeLessThanOrEqual(1);
     await sheet.locator(".rx-table").scrollIntoViewIfNeeded();
     await page.screenshot({ path: `test-results/0100-adr-${size.width}.png` });
   });

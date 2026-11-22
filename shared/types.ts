@@ -86,6 +86,8 @@ export interface Reaction {
   basis?: "differs";
   /** 0100: the estimate and actual are in this currency (the calendar's pair for a non-dollar reporter), not US dollars. The move is always the dollar share's. */
   cur?: string;
+  /** 0100: why `basis` is set: "fx" = Nasdaq's newest dollar actual doesn't match the company's own figure converted to dollars. */
+  why?: "fx";
 }
 
 export interface TickerResponse {

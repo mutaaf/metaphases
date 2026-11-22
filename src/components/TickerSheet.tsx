@@ -4,7 +4,7 @@ import type { Factor, Reaction, TickerResponse } from "../../shared/types";
 import { useTicker } from "../lib/api";
 import { co, curOf, heldVia, nameOf, reitOf, ETF_ASOF } from "../lib/data";
 import { daysBetween, fmtDay, fmtLong, todayISO } from "../lib/dates";
-import { currencyName, eps, epsIn, isUsd, mcap, money, moneyIn, pct } from "../lib/format";
+import { currencyName, eps, epsIn, isUsd, mcap, money, moneyIn, pct, rowEps } from "../lib/format";
 import { actions, useStore } from "../lib/store";
 import { BASE } from "../lib/router";
 import { AiPreviewMount } from "./ai/mount";
@@ -69,9 +69,6 @@ function FactorList({ factors }: { factors: Factor[] }) {
   );
 }
 
-/** 0100: a row whose pair is the calendar's own-currency figures says its currency (CN¥21.04); every other row is dollars. */
-const rowEps = (r: Reaction, v: number | null) => (r.cur ? epsIn(v, r.cur) : eps(v));
-
 function Reactions({ history, expected, usd, reit = false }: { history: Reaction[]; expected: number | null; usd: boolean; reit?: boolean }) {
   const rows = [...history].reverse();
   const max = Math.max(4, ...rows.map((r) => Math.abs(r.move ?? 0)));
@@ -105,9 +102,8 @@ function Reactions({ history, expected, usd, reit = false }: { history: Reaction
           ))}
         </tbody>
       </table>
-      {history.some((r) => r.basis) && (history.some((r) => r.cur)
-        ? <p className="muted small rx-basis" data-testid="rx-epsbasis">"basis differs": the older reports' US-dollar figures don't match the company's own results converted at that quarter's exchange rate, so they aren't a beat or a miss and aren't in the beat record.</p>
-        : <p className="muted small rx-basis" data-testid="rx-epsbasis">"basis differs": <Term k="epsbasis">EPS basis differs from the estimate</Term> ({basisFootnote(reit)}), so that quarter isn't a beat or a miss and isn't in the beat record.</p>)}
+      {history.some((r) => r.why === "fx") && <p className="muted small rx-basis" data-testid="rx-fxbasis">"basis differs" on the older reports: Nasdaq's latest US-dollar result doesn't match the company's own, converted to dollars, so Nasdaq's older dollar figures aren't counted as beats or misses or in the beat record.</p>}
+      {history.some((r) => r.basis && r.why !== "fx") && <p className="muted small rx-basis" data-testid="rx-epsbasis">"basis differs": <Term k="epsbasis">EPS basis differs from the estimate</Term> ({basisFootnote(reit)}), so that quarter isn't a beat or a miss and isn't in the beat record.</p>}
       {history.some((r) => r.move == null && !r.session && r.date.length === 10) && <p className="muted small rx-basis">"—" means no feed says whether that report came before the open or after the close, so we don't guess which day it moved.</p>}
       <p className="muted small rx-basis">{usd && "Estimates use the calendar's consensus wherever we have it for that quarter. "}{history.some((r) => r.basis) && history.some((r) => !r.basis && r.epsA != null) ? "The other actuals" : "Actuals"} are usually <Term k="adjustedeps">adjusted EPS</Term>, the figure analysts forecast, so they can differ from the profit in the company's filings.</p>
     </div>

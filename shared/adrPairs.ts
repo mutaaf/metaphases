@@ -17,7 +17,8 @@ export interface CalendarPair {
   d: string;
   eE?: number | null;
   eA?: number | null;
-  /** The calendar row's own currency when it isn't the estimate currency (0097: Nasdaq's dollar pair, "USD"). */
+  /** The row's currency when it isn't the estimate currency ("USD": 0097's Nasdaq pair). Defensive: day caches are
+   *  stored before that step, so a cached row doesn't carry it today. */
   ec?: string;
 }
 
@@ -45,12 +46,23 @@ export function periodEnd(label: string): string | null {
 export function nasdaqMatchesCompany(nasdaqUsd: number | null | undefined, companyEps: number | null | undefined, perUsd: number | null | undefined): boolean {
   if (!fin(nasdaqUsd) || !fin(companyEps) || !fin(perUsd) || perUsd <= 0 || companyEps === 0) return false;
   const inUsd = companyEps / perUsd;
-  return Math.sign(inUsd) === Math.sign(nasdaqUsd) && Math.abs(nasdaqUsd / inUsd - 1) <= ADR_FX_MAX;
+  if (Math.sign(inUsd) !== Math.sign(nasdaqUsd)) return false;
+  // An ADS worth a whole number of shares (TSM 5, TM 10): Nasdaq's per-ADS figure is that multiple of a per-share one.
+  const ratio = nasdaqUsd / inUsd, ads = Math.round(ratio);
+  return ads >= 1 && Math.abs(ratio / ads - 1) <= ADR_FX_MAX;
+}
+
+/** Units per dollar on `day` from Yahoo's daily FX bars, else null. Bars are stamped at midnight London, which is 23:00Z
+ *  the day before in summer: the date is read 12 h later, so a bar is always its own day. */
+export function rateOn(t: number[], c: number[], day: string): number | null {
+  let rate: number | null = null;
+  t.forEach((ts, i) => { if (new Date((ts + 43200) * 1000).toISOString().slice(0, 10) <= day && c[i] > 0) rate = c[i]; });
+  return rate;
 }
 
 /**
  * The sheet's history with the calendar's pair on the calendar's report (in `cur`, judged by `judge`), and Nasdaq's
- * other dollar pairs marked "basis differs" unless its newest actual matches the company's at `perUsd`. No calendar
+ * other dollar pairs marked "basis differs" (`why: "fx"`) unless its newest actual matches the company's at `perUsd`. No calendar
  * pair in the company's currency (a cold cache, a row the calendar shows in dollars): history unchanged.
  */
 export function companyCurrencyPairs(
@@ -61,11 +73,12 @@ export function companyCurrencyPairs(
   const at = sameReportRow(history, row.d);
   if (at < 0) return history;
   const nq = history[at];
-  const { basis: _b, ...rest } = nq;
+  const { basis: _b, why: _w, ...rest } = nq;
   const surprisePct = row.eE !== 0 ? ((row.eA - row.eE) / Math.abs(row.eE)) * 100 : null;
   const own = { ...judge({ ...rest, epsE: row.eE, epsA: row.eA, surprisePct }), cur };
-  const agrees = nasdaqMatchesCompany(nq.epsA, row.eA, perUsd);
+  // The just-reported row (0039) has no Nasdaq figure yet: nothing to test, so the older pairs stand until it lists.
+  const agrees = nq.epsA == null || nasdaqMatchesCompany(nq.epsA, row.eA, perUsd);
   return history.map((h, i) => i === at ? own
     : agrees || h.cur || h.epsA == null || h.basis ? h
-    : { ...h, surprisePct: null, basis: "differs" as const });
+    : { ...h, surprisePct: null, basis: "differs" as const, why: "fx" as const });
 }

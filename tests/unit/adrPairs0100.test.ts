@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../../worker/index";
-import { ADR_FX_MAX, companyCurrencyPairs, nasdaqMatchesCompany, periodEnd, sameReportRow } from "../../shared/adrPairs";
+import { ADR_FX_MAX, companyCurrencyPairs, nasdaqMatchesCompany, periodEnd, rateOn, sameReportRow } from "../../shared/adrPairs";
 import type { Reaction } from "../../shared/types";
 
 // 0100: the critic's 2026-11-22 07:00 check. The calendar row carries the feed's own-currency pair, which matches the
@@ -24,7 +24,7 @@ describe("companyCurrencyPairs (0100)", () => {
   });
   it("PDD: Nasdaq's $2.99 is 4.7% off the company's US$3.14, so its older dollar pairs are 'basis differs'", () => {
     const out = companyCurrencyPairs(pddNq(), { d: "2026-11-19", eE: 19.213, eA: 21.04 }, "CNY", 6.71, judge);
-    expect(out.slice(1).every((h) => h.basis === "differs" && h.surprisePct == null && !h.cur)).toBe(true);
+    expect(out.slice(1).every((h) => h.basis === "differs" && h.why === "fx" && h.surprisePct == null && !h.cur)).toBe(true);
     expect(out.slice(1).map((h) => h.epsA)).toEqual([2.72, 1.23, 2.36]); // still shown, just not judged
   });
   it("BABA: CN¥11.39 → CN¥8.10, −28.9%, never Nasdaq's −33.3%", () => {
@@ -56,6 +56,25 @@ describe("companyCurrencyPairs (0100)", () => {
     expect(companyCurrencyPairs(nq, { d: "2026-11-19", eE: 2.61, eA: 2.99, ec: "USD" }, "CNY", 6.71, judge)).toBe(nq);
     expect(companyCurrencyPairs(nq, { d: "2026-11-24", eE: 19.2, eA: 21 }, "CNY", 6.71, judge)).toBe(nq);
     expect(companyCurrencyPairs(nq, { d: "2026-11-19", eE: 19.2, eA: null }, "CNY", 6.71, judge)).toBe(nq);
+  });
+  it("just reported, Nasdaq not listing it yet (0039 row, no dollar actual): the row takes the calendar pair, older pairs stand", () => {
+    const nq = pddNq(); nq[0] = { ...nq[0], epsE: null, epsA: null, surprisePct: null };
+    const out = companyCurrencyPairs(nq, { d: "2026-11-19", eE: 19.213, eA: 21.04 }, "CNY", null, judge);
+    expect(out[0]).toMatchObject({ epsE: 19.213, epsA: 21.04, cur: "CNY" });
+    expect(out.slice(1)).toEqual(nq.slice(1));
+  });
+  it("an ADS worth a whole number of shares (TSM: per-share NT$ vs per-ADS $, 5 shares) is the same basis", () => {
+    // NT$27.6 a share at 30 per dollar = $0.92; Nasdaq's $4.60 per ADS is exactly 5×.
+    expect(nasdaqMatchesCompany(4.6, 27.6, 30)).toBe(true);
+    expect(nasdaqMatchesCompany(4.2, 27.6, 30)).toBe(false); // 4.57× is no whole number of shares
+  });
+  it("Yahoo's FX bars stamped 23:00Z in British summer time are their own (next) day", () => {
+    const t = [Date.parse("2026-09-29T23:00:00Z") / 1000, Date.parse("2026-09-30T23:00:00Z") / 1000];
+    expect(rateOn(t, [6.71, 6.75], "2026-09-30")).toBe(6.71); // the Oct 1 bar isn't Sep 30's
+    expect(rateOn(t, [6.71, 6.75], "2026-10-01")).toBe(6.75);
+    expect(rateOn(t, [6.71, 6.75], "2026-09-29")).toBeNull();
+    const winter = [Date.parse("2026-12-31T00:00:00Z") / 1000];
+    expect(rateOn(winter, [6.6], "2026-12-31")).toBe(6.6);
   });
   it("helpers: period end, same-report window, the 3% band", () => {
     expect(periodEnd("Sep 2026")).toBe("2026-09-30");
@@ -142,6 +161,16 @@ describe("worker /api/ticker: an ADR's newest report matches the calendar (0100)
     expect(r.history[0]).toMatchObject({ epsE: 4.5237, epsA: 5.86608, cur: "CNY" });
     expect(r.history[0].surprisePct).toBeGreaterThan(0);
     expect(r.beatRate).toEqual({ beats: 1, total: 1 });
+  });
+
+  it("feed's day one off Nasdaq's, Nasdaq within 3%: the calendar's pair, and the older quarters keep counting", async () => {
+    calRows = [];
+    nqSurprise = [row("Sep 2026", "11/19/2026", 3.12, "2.61"), row("Jun 2026", "8/24/2026", 2.72, "2.69"), row("Mar 2026", "5/27/2026", 1.23, "2.03")];
+    calDay("2026-11-18", [{ s: "PDD", d: "2026-11-18", h: "bmo", q: 3, y: 2026, eE: 19.213, eA: 21.04, t: 1 }]);
+    const r = await get("/api/ticker/PDD");
+    expect(r.history[0]).toMatchObject({ date: "2026-11-19", epsA: 21.04, cur: "CNY" });
+    expect(r.history.some((h: any) => h.basis)).toBe(false);
+    expect(r.beatRate).toEqual({ beats: 2, total: 3 });
   });
 
   it("cold calendar cache: Nasdaq's dollar pair stays, unlabelled (the sheet says the table is in dollars)", async () => {
