@@ -6,7 +6,7 @@ import type { EarningsEvent } from "../../shared/types";
 import { InstallCoach, LensSwitch } from "../components/Everyday";
 import { GradeBadge, Icon, Phase, Skeleton, Tile } from "../components/bits";
 import { useCalendar, useMacro, useTicker } from "../lib/api";
-import { curOf, heldVia, rowCur, nameOf, UNIVERSE } from "../lib/data";
+import { heldVia, rowCur, nameOf, UNIVERSE } from "../lib/data";
 import { addDays, nowMinNY, todayISO } from "../lib/dates";
 import { currencyName, epsIn, isUsd, money } from "../lib/format";
 import { moodPlain, movePlain, whatTheyDo, whenPlain } from "../lib/plain";
