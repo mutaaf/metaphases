@@ -5,7 +5,7 @@
 // another day, once the feed's day has come: it isn't a report day until the company says so.
 import type { EarningsEvent } from "./types";
 
-type Row = Pick<EarningsEvent, "c" | "od"> & Partial<Pick<EarningsEvent, "d" | "o" | "x" | "xd" | "eA" | "rA">>;
+type Row = Pick<EarningsEvent, "c" | "od"> & Partial<Pick<EarningsEvent, "d" | "o" | "x" | "xd" | "xf" | "eA" | "rA">>;
 
 /**
  * 0078: the feed's day has come (or passed) with no figures, no company date (`o`), and Nasdaq's calendar lists
@@ -13,7 +13,7 @@ type Row = Pick<EarningsEvent, "c" | "od"> & Partial<Pick<EarningsEvent, "d" | "
  * Depends on `today`, so it's computed by the caller, never stored in a cache.
  */
 export const contestedDay = (e: Row, today: string) =>
-  !e.o && e.x === "differs" && !!e.xd && !!e.d && e.xd !== e.d && e.d <= today && e.eA == null && e.rA == null;
+  !e.o && !e.xf && e.x === "differs" && !!e.xd && !!e.d && e.xd !== e.d && e.d <= today && e.eA == null && e.rA == null;
 
 /** Not a dated report: projected onto a holiday (0064), a projection that passed unreported (0072) or, given `today`, a contested day that has come (0078). */
 export const unconfirmedRow = (e: Row, today?: string) => !!e.c || !!e.od || (today != null && contestedDay(e, today));

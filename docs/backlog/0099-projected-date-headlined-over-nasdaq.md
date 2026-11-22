@@ -1,12 +1,12 @@
 ---
 id: 0099
 title: A projected feed date leads the headline over Nasdaq's listed day and session (Kohl's and Urban Outfitters read "Monday, November 23 · tomorrow"; every other source says Tuesday)
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-22
-pr:
+pr: 175
 by: critic
 ---
 
@@ -30,11 +30,11 @@ The disagreement copy is honest, so this isn't wrong data. But the headline is t
 - Change nothing when the feed row has a session of its own, when the company has announced a date (overrides win), or when Nasdaq has no session.
 
 ## Acceptance criteria
-- [ ] Unit: a KSS-shaped `next` (feed Nov 23 `""` projected; Nasdaq Nov 24 `bmo`) headlines Nov 24 before open and names Nov 23 as the feed's projection. The same row with a feed session `amc`, or with a company source, keeps the feed's day.
-- [ ] `ogTitle` for that sheet leads with "Tue, Nov 24" and still says "unconfirmed".
-- [ ] The day drawer for the Nasdaq day lists the row under "Date not confirmed", and the feed's day no longer counts it.
-- [ ] e2e on fixtures at 390×844 and 1440×900: the sheet's headline reads the Nasdaq day, and the "Two calendars disagree" line names the feed's day.
-- [ ] Loading / empty / error / partial states handled: with a cold cross-check (no `nasdaq`), the sheet shows today's behaviour.
+- [x] Unit: a KSS-shaped `next` (feed Nov 23 `""` projected; Nasdaq Nov 24 `bmo`) headlines Nov 24 before open and names Nov 23 as the feed's projection. The same row with a feed session `amc`, or with a company source, keeps the feed's day.
+- [x] `ogTitle` for that sheet leads with "Tue, Nov 24" and still says "unconfirmed".
+- [x] The day drawer for the Nasdaq day lists the row under "Date not confirmed", and the feed's day no longer counts it.
+- [x] e2e on fixtures at 390×844 and 1440×900: the sheet's headline reads the Nasdaq day, and the "Two calendars disagree" line names the feed's day.
+- [x] Loading / empty / error / partial states handled: with a cold cross-check (no `nasdaq`), the sheet shows today's behaviour.
 
 ## Test plan
 Vitest on the contested-headline helper (`shared/contestedTime.ts` or wherever `contested` is built) and `ogTitle` (`shared/pending.ts`) with the three cases above. Extend the contested-date e2e fixture spec.

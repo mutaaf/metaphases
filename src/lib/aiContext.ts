@@ -16,7 +16,7 @@ const slimEvent = (e: EarningsEvent) => {
   const epsNC = ej.v === "not-comparable";
   // The estimate it was judged against (Nasdaq's when Finnhub's is on another basis), never a figure that contradicts `res`.
   // 0067: a row projected onto a market holiday (`c`) carries no session and is marked unconfirmed (`cx`).
-  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.c ? "" : e.h, ...(e.c ? { cx: e.c } : e.hs === "n" && e.h ? { hx: 1 } : {}), ...(!e.c && e.x === "differs" && e.xd && e.xd !== e.d ? { xd: e.xd } : {}), eE: ej.pending ? null : ej.via ? ej.est : e.eE, eA: ej.act ?? e.eA, epsNC: epsNC || undefined, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: e.ec ?? c?.ec, res: resultOf(e) ?? undefined };
+  return { s: e.s, n: c?.n, sec: c?.sec, mc: c?.mc, d: e.d, h: e.c ? "" : e.h, ...(e.c ? { cx: e.c } : e.hs === "n" && e.h ? { hx: 1 } : {}), ...(!e.c && e.x === "differs" && e.xd && e.xd !== e.d ? { xd: e.xd, ...(e.xf ? { xf: 1 } : {}) } : {}), eE: ej.pending ? null : ej.via ? ej.est : e.eE, eA: ej.act ?? e.eA, epsNC: epsNC || undefined, rE: e.rE, rA: nc ? null : e.rA, revNC: nc || undefined, cur: e.ec ?? c?.ec, res: resultOf(e) ?? undefined };
 };
 
 export function slimMacro(m: MacroResponse | null | undefined, from: string, to: string) {

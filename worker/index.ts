@@ -32,6 +32,7 @@ import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, trad
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
 import { shownSession } from "../shared/contestedTime";
 import { applyMemos, contestsIn, dayStanding, memoCross, noteContests, windowCovered, XMEMO_DAYS, type XMemos } from "../shared/contestMemo";
+import { leadRows, leadsNasdaq } from "../shared/leadDay";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
@@ -676,6 +677,8 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     const memos = await readMemos(env);
     rememberContests(env, ctx, memos, contestsIn(fixed, windowCovered(w, today)), today);
     fixed = applyMemos(fixed, memos, today, w);
+    // 0099: a timeless projection Nasdaq lists on another day with a session sits on Nasdaq's day, still unconfirmed.
+    fixed = leadRows(fixed, from, to, today);
     unchecked = windowDays(today).length - (w?.loaded.length ?? 0);
     // 0061: the days on screen that haven't been compared yet, so the client says "still checking" and asks again,
     // instead of showing a cold read as if it had been checked.
@@ -1121,6 +1124,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const use = c ?? (windowCovered(nqWin, today) ? null : memoCross(await memosOf(), symbol, upNext.date, today));
     if (use?.x === "differs" && use.xd) nqNext = { date: use.xd, session: use.xh ?? "" };
   }
+  // 0099: the feed's timeless projection against Nasdaq's timed listing on another day: Nasdaq's day leads, unconfirmed.
+  const leadNq = upNext && projected && nqNext && leadsNasdaq({ date: upNext.date, session: upNext.hour || "", source: upNext.source }, nqNext, today) ? nqNext : undefined;
   // Only when there's something a memo could change: a contest, or current evidence against one.
   if (seen.some((x) => x.clear || x.c?.x === "differs" || x.c?.x === "agree")) rememberContests(env, ctx, await memosOf(), seen, today);
   // 0091: an upcoming report with no session (DELL's date-only notice, a blank feed time) says when the company has
@@ -1143,6 +1148,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   } else if (upNext && projected && !nqNext) {
     // 0007: the feed's projection, not the company's date: "expected around", and no session stated as fact.
     read.push(`${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} is expected around ${longDay(upNext.date)}, but the company hasn't confirmed the date yet.`);
+  } else if (upNext && leadNq) {
+    read.push(`Nasdaq's calendar lists ${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} on ${longDay(leadNq.date)} ${WHEN_LONG[leadNq.session]}, but that's unconfirmed: our data feed projects ${longDay(upNext.date)}, and the company hasn't announced a date.`);
   } else if (upNext && nqNext && nqNext.date !== upNext.date && upNext.date <= today) {
     // 0078: the feed's day has come, Nasdaq lists another, the company hasn't said: no "reports today", no "expected".
     read.push(`${name}'s Q${upNext.quarter} report date isn't confirmed: our data feed put it on ${longDay(upNext.date)}, but Nasdaq's calendar lists ${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}, and no results are in our data yet.`);
@@ -1177,6 +1184,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     next: checking ? { date: checking.date, session: checking.hour as Session, quarter: checking.quarter, year: checking.year, epsE: checking.eE, revE: checking.rE, currency, status: "checking" }
       : duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
+      : upNext && leadNq ? { date: leadNq.date, session: leadNq.session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, hs: "n", feedDay: upNext.date }
       : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...((upNext.hs === "n" || upNext.hs === "h") && upNext.hour && !upNext.source ? { hs: upNext.hs as "n" | "h" } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}), ...(usual ? { usual } : {}), ...(call ? { call } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
@@ -1624,7 +1632,9 @@ function cardFromSheet(sym: string, d: TickerResponse): string {
   const rc = reportedCard(d, iso(todayNY()));
   // 0059: a date (or time) Nasdaq lists differently is never drawn as fact: no session glyph, and the headline says so.
   const nq = !rc && when ? d.next?.nasdaq : undefined;
-  const contested = nq ? { headline: `Reports ${when}, ${nq.date === d.next!.date ? "time" : "date"} unconfirmed`, session: "" as Session }
+  // 0099: Nasdaq's day leads over the feed's timeless projection: drawn as unconfirmed, no session glyph.
+  const contested = !rc && when && d.next?.feedDay ? { headline: `Reports ${when}, date unconfirmed`, session: "" as Session }
+    : nq ? { headline: `Reports ${when}, ${nq.date === d.next!.date ? "time" : "date"} unconfirmed`, session: "" as Session }
     // 0007: a projected date is "expected around", with no session glyph.
     : !rc && when && d.next?.projected ? { headline: `Around ${when} · unconfirmed`, session: "" as Session }
     // 0050: a time only Nasdaq's calendar gives is expected, not the company's.
