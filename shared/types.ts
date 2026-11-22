@@ -28,6 +28,8 @@ export interface EarningsEvent {
   fd?: string;
   /** After the print, where eE/rE came from (0035): "s" = our pre-report snapshot of Finnhub's estimates, "n" = Nasdaq's pre-report EPS consensus. Absent = Finnhub's current figure, which may have been revised toward the actual. */
   pr?: "s" | "n";
+  /** 0097: the currency of this row's EPS pair when it isn't the company's: a non-dollar company-dated row filled with Nasdaq's own dollars-per-ADR pair (PDD). Absent = the company's estimate currency. */
+  ec?: "USD";
   /** 0049: Nasdaq's pre-report EPS consensus when `eE` is on another basis from `eA` (REIT FFO vs GAAP EPS) and Nasdaq's is on the actual's. Judge with `epsVerdict`. */
   nE?: number;
   /** 0058: Nasdaq's actual for the quarter when `eE` is Nasdaq's (`pr: "n"`) and its actual differs from `eA`; null = Nasdaq has none, so the pair isn't judged. Judge with `epsVerdict`. */

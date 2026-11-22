@@ -28,6 +28,8 @@ export const co = (s: string): Co | undefined => UNIVERSE[s];
 export const nameOf = (s: string) => UNIVERSE[s]?.n ?? s;
 /** Currency of a company's estimates ("USD" unless the universe knows it reports in another). */
 export const curOf = (s: string): string => UNIVERSE[s]?.ec ?? "USD";
+/** 0097: a calendar row's currency: its own (`ec`, Nasdaq's dollar pair on a yuan reporter) before the company's. */
+export const rowCur = (e: Pick<EarningsEvent, "s" | "ec">): string => e.ec ?? curOf(e.s);
 /** Popularity proxy: market cap (millions). Untracked large reporters fall in after the universe. */
 export const popularity = (e: EarningsEvent) => (UNIVERSE[e.s]?.mc ?? 0) + (e.rE ?? 0) / 1e9;
 
@@ -47,7 +49,7 @@ export function resultOf(e: EarningsEvent): Result {
   // An EPS on another basis from its estimate (0049) isn't judged, and neither is the report.
   const ev = epsOf(e).v;
   const epsBeat = ev === "beat" ? true : ev === "miss" ? false : null;
-  const rv = revenueVerdict(e, curOf(e.s));
+  const rv = revenueVerdict(e, rowCur(e));
   const revBeat = rv === "beat" ? true : rv === "miss" ? false : null;
   if (epsBeat == null) return null;
   if (revBeat == null) return epsBeat ? "beat" : "miss";

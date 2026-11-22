@@ -4,7 +4,7 @@ import type { EarningsEvent, MacroEvent } from "../../shared/types";
 import { EARLY_CLOSE, HOLIDAYS } from "../../shared/market";
 import { useCalendar, useMacro, prefetchTicker } from "../lib/api";
 import { checkingOf, missingDays } from "../lib/partial";
-import { co, curOf, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultOf, SECTORS, surprise, UNIVERSE } from "../lib/data";
+import { co, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultOf, rowCur, SECTORS, surprise, UNIVERSE } from "../lib/data";
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { figuresPending, noResultYet } from "../../shared/pending";
 import { NOT_GRADED_WHY } from "../../shared/reported";
@@ -91,7 +91,7 @@ function TileButton({ e, size = 44 }: { e: EarningsEvent; size?: number }) {
       className={`tbtn ${r ? `res-${r}` : ""}${proj ? " tbtn-projected" : ""}`}
       onClick={(ev) => { ev.stopPropagation(); setParam("t", e.s); }}
       onMouseEnter={() => prefetchTicker(e.s)}
-      title={`${nameOf(e.s)} (${e.s}) · ${sessionText(e.h, e.hs)}${e.eE != null ? ` · est. ${epsIn(e.eE, curOf(e.s))}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}${due ? " · figures pending" : proj ? " · date not confirmed" : ""}`}
+      title={`${nameOf(e.s)} (${e.s}) · ${sessionText(e.h, e.hs)}${e.eE != null ? ` · est. ${epsIn(e.eE, rowCur(e))}` : ""}${r ? ` · ${r.toUpperCase()}` : ""}${due ? " · figures pending" : proj ? " · date not confirmed" : ""}`}
       aria-label={`${nameOf(e.s)}, ${sessionText(e.h, e.hs).toLowerCase()}, ${r ? r : due ? "figures pending" : proj ? "date not confirmed" : "upcoming"}${starred ? ", on your watchlist" : ""}`}
     >
       <Tile s={e.s} size={size} />
@@ -163,7 +163,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
   const r = resultOf(e);
   const s = surprise(e);
   const c = co(e.s);
-  const cur = curOf(e.s);
+  const cur = rowCur(e);
   const mark = dateMark(e, todayISO());
   return (
     <button className="erow" onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
@@ -212,7 +212,7 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
       <span className="eyebrow sess-mini"><Phase h="" size={10} projected /> Date not confirmed</span>
       {unconfirmed.slice(0, 14).map((e) => (
         <button key={e.s} className="wrow wrow-projected" title={`${nameOf(e.s)}: ${why(e)}; date not confirmed`} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
-          <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eE, curOf(e.s))}</span>
+          <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eE, rowCur(e))}</span>
         </button>
       ))}
       {unconfirmed.length > 14 && <span className="muted small">+{unconfirmed.length - 14} more</span>}
@@ -504,7 +504,7 @@ function WeekColumn({ day, events, next, macro, failed, loaded, checking = false
           <span className="eyebrow sess-mini"><Phase h={g.h} size={10} /> {sessionLabel(g.h, checking)}</span>
           {g.list.slice(0, 14).map((e) => (
             <button key={e.s} className={`wrow ${resultOf(e) ? `res-${resultOf(e)}` : ""}${e.eA == null && e.x !== "differs" && eventProjected(e, todayISO()) ? " wrow-projected" : ""}`} title={pendingNow(e) ? `${nameOf(e.s)}: figures pending` : e.eA == null && e.x !== "differs" && eventProjected(e, todayISO()) ? `${nameOf(e.s)}: date not confirmed by the company yet` : undefined} onClick={() => setParam("t", e.s)} onMouseEnter={() => prefetchTicker(e.s)}>
-              <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eA ?? e.eE, curOf(e.s))}</span>
+              <Tile s={e.s} size={24} /><b>{e.s}</b><span className="muted">{epsIn(e.eA ?? e.eE, rowCur(e))}</span>
             </button>
           ))}
           {g.list.length > 14 && <span className="muted small">+{g.list.length - 14} more</span>}

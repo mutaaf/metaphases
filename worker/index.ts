@@ -253,7 +253,8 @@ const NQ_MOVED_FAIL = (day: string) => CAL(`nq:cal:fail:v1:${day}`);
  * cached `nasdaqDay` call the day's own pre-report step makes). `fetchFresh: false` reads the cache only (share text).
  */
 async function preReportMoved(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true): Promise<EarningsEvent[]> {
-  const want = (e: EarningsEvent) => !!e.o && e.d < today && e.eA == null && e.rA == null && !e.c && dollarFigures(e.s);
+  // Non-dollar rows too: they take Nasdaq's pair whole, in dollars (`ec`, re-review of 0097).
+  const want = (e: EarningsEvent) => !!e.o && e.d < today && e.eA == null && e.rA == null && !e.c;
   const days = [...new Set(events.filter((e) => want(e) && e.d >= addDays(today, -14)).map((e) => e.d))].sort().reverse().slice(0, MOVED_DAYS_MAX);
   if (!days.length) return events;
   // Cache first; a fresh read only while no failure is remembered for that day (15 min), so a Nasdaq outage never

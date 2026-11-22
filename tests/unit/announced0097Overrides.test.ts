@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { epsVerdict, fillMovedFigures, judgedDayEps, nasdaqDayActuals } from "../../shared/compare";
 import worker from "../../worker/index";
+import { curOf, resultOf, rowCur } from "../../src/lib/data";
+import { weekContext } from "../../src/lib/aiContext";
 
 // 0097: a company-dated row whose Finnhub row sat on another day (ROST, GAP, BBWI Nov 18; WSM Nov 17; PDD Nov 16)
 // never met the company's day's Nasdaq actuals: the per-day pre-report step ran on the feed's day, before the
@@ -13,7 +15,8 @@ const feed = [
   { symbol: "WSM", date: "2026-11-17", hour: "bmo", quarter: 3, year: 2027, epsEstimate: 2.2063, epsActual: null, revenueEstimate: 2018285353, revenueActual: null },
   { symbol: "GAP", date: "2026-11-18", hour: "", quarter: 3, year: 2027, epsEstimate: 0.7855, epsActual: null, revenueEstimate: 4056477675, revenueActual: null },
   { symbol: "BBWI", date: "2026-11-18", hour: "", quarter: 3, year: 2027, epsEstimate: 0.1213, epsActual: null, revenueEstimate: 1581967398, revenueActual: null },
-  // Estimates in yuan per share: Nasdaq's dollars-per-ADR pair can't replace them.
+  // Estimates in yuan per share. Re-review (bounce 1): the row takes Nasdaq's own dollars-per-ADR pair, both figures
+  // from one source on one basis, with the row's currency set to dollars and the yuan revenue estimate dropped.
   { symbol: "PDD", date: "2026-11-16", hour: "bmo", quarter: 3, year: 2026, epsEstimate: 19.213, epsActual: null, revenueEstimate: 117133197205, revenueActual: null },
   // Release the evening before the company's date (call Nov 19, 10 a.m. ET): Nasdaq lists it on Nov 18 only.
   { symbol: "HP", date: "2026-11-19", hour: "amc", quarter: 4, year: 2026, epsEstimate: 0.2755, epsActual: null, revenueEstimate: 1105702188, revenueActual: null },
@@ -49,9 +52,25 @@ describe("0097 fillMovedFigures", () => {
     expect(fillMovedFigures([{ ...row, o: undefined }], "2026-11-19", nq, () => true)[0].eA).toBeNull();
     expect(fillMovedFigures([row], "2026-11-18", nq, () => true)[0].eA).toBeNull();
     expect(fillMovedFigures([{ ...row, eA: 1.9 }], "2026-11-19", nq, () => true)[0]).toMatchObject({ eA: 1.9, eE: 1.9138 });
-    expect(fillMovedFigures([{ ...row, s: "PDD" }], "2026-11-19", nq, (s) => s !== "PDD")[0].eA).toBeNull();
     expect(fillMovedFigures([row], "2026-11-19", { e: { ROST: 1.85 }, a: null }, () => true)[0].eA).toBeNull();
     expect(fillMovedFigures([row], "2026-11-19", { e: {}, a: { ROST: 1.91 } }, () => true)[0].eA).toBeNull();
+  });
+  it("a non-dollar row takes Nasdaq's dollar pair whole: EPS in USD per ADR (`ec`), no yuan revenue beside it", () => {
+    const pdd = { ...row, s: "PDD", eE: 19.213, rE: 117133197205 };
+    const [r] = fillMovedFigures([pdd], "2026-11-19", nq, (s) => s !== "PDD");
+    expect(r).toMatchObject({ eE: 2.61, eA: 2.99, pr: "n", ec: "USD", rE: null, rA: null });
+    expect(epsVerdict(r)).toMatchObject({ v: "beat" });
+    // A dollar row never carries `ec` (its currency is the company's).
+    expect(fillMovedFigures([row], "2026-11-19", nq, () => true)[0].ec).toBeUndefined();
+  });
+  it("the client reads a row's currency from `ec` first, so PDD's pair shows as $2.61 → $2.99, judged a beat", () => {
+    const filled = fillMovedFigures([{ ...row, s: "PDD", eE: 19.213, rE: 117133197205 }], "2026-11-19", nq, (s) => s !== "PDD")[0];
+    expect(curOf("PDD")).toBe("CNY");
+    expect(rowCur(filled)).toBe("USD");
+    expect(rowCur({ ...filled, ec: undefined })).toBe("CNY");
+    expect(resultOf(filled)).toBe("beat");
+    const ctx = weekContext([filled], null, "2026-11-16", "2026-11-22", "2026-11-21") as any;
+    expect(JSON.stringify(ctx)).toContain('"cur":"USD"');
   });
 });
 
@@ -149,8 +168,11 @@ describe("0097 moved rows get the company's day's Nasdaq figures", () => {
         expect(rows[0], s).toMatchObject({ d: "2026-11-19", eE, eA, pr: "n" });
         expect(epsVerdict(rows[0]).v, s).toBe("beat");
       }
-      const pdd = r.events.find((e: any) => e.s === "PDD");
-      expect(pdd).toMatchObject({ d: "2026-11-19", eA: null });
+      // Re-review (bounce 1): PDD, yuan estimates, judged on Nasdaq's own dollars-per-ADR pair, never "pending".
+      const pdd = r.events.filter((e: any) => e.s === "PDD");
+      expect(pdd).toHaveLength(1);
+      expect(pdd[0]).toMatchObject({ d: "2026-11-19", eE: 2.61, eA: 2.99, pr: "n", ec: "USD", rE: null, rA: null });
+      expect(epsVerdict(pdd[0]).v).toBe("beat");
       const wmt = r.events.find((e: any) => e.s === "WMT");
       expect(wmt).toMatchObject({ d: "2026-11-19", eA: 0.65 });
     });
@@ -204,6 +226,11 @@ describe("0097 moved rows get the company's day's Nasdaq figures", () => {
     }));
     const first = await get("/api/calendar?from=2026-11-19&to=2026-11-19");
     expect(first.events.find((e: any) => e.s === "ROST")).toMatchObject({ eA: null });
+    // A non-dollar row with no Nasdaq pair gets no figures and no `ec`: nothing is invented (it stays pending).
+    const pdd = first.events.find((e: any) => e.s === "PDD");
+    expect(pdd.eA).toBeNull();
+    expect(pdd.pr).toBeUndefined();
+    expect(pdd.ec).toBeUndefined();
     const after = nqDayCalls;
     for (let i = 0; i < 3; i++) await get("/api/calendar?from=2026-11-16&to=2026-11-22");
     // Later reads may build other days' caches, but never ask Nov 19 again for the moved rows.
