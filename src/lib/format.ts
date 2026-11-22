@@ -11,6 +11,8 @@ export const money = (v: number | null | undefined) => {
 };
 /** Dollars a share, with `epsIn`'s sign rule: never "-$0.00" (0089). */
 export const eps = (v: number | null | undefined) => epsIn(v, "USD");
+/** 0100: a history row in the company's own currency (the calendar's pair) says so (CN¥21.04); every other row is dollars. */
+export const rowEps = (r: { cur?: string }, v: number | null | undefined) => (r.cur ? epsIn(v, r.cur) : eps(v));
 export const pct = (v: number | null | undefined, d = 1, sign = true) => (v == null ? "—" : `${sign && v > 0 ? "+" : ""}${v.toFixed(d)}%`);
 /** Market value in USD millions (data/universe.json `mc`, converted from the listing's currency, 0042).
  *  0 means unknown (no FX rate), shown as a dash rather than "$0". */
