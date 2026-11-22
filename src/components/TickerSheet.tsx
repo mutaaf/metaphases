@@ -69,6 +69,9 @@ function FactorList({ factors }: { factors: Factor[] }) {
   );
 }
 
+/** 0100: a row whose pair is the calendar's own-currency figures says its currency (CN¥21.04); every other row is dollars. */
+const rowEps = (r: Reaction, v: number | null) => (r.cur ? epsIn(v, r.cur) : eps(v));
+
 function Reactions({ history, expected, usd, reit = false }: { history: Reaction[]; expected: number | null; usd: boolean; reit?: boolean }) {
   const rows = [...history].reverse();
   const max = Math.max(4, ...rows.map((r) => Math.abs(r.move ?? 0)));
@@ -80,7 +83,7 @@ function Reactions({ history, expected, usd, reit = false }: { history: Reaction
           const beat = r.epsA != null && r.epsE != null && !r.basis ? r.epsA >= r.epsE : null;
           const h = r.move == null ? 0 : (Math.abs(r.move) / max) * 50;
           return (
-            <div key={r.date} className="rx-col" title={`${r.period}: ${r.move == null ? (r.session ? "no price data" : "report time unknown, so no move") : pct(r.move)} · EPS ${eps(r.epsA)} vs ${eps(r.epsE)}`}>
+            <div key={r.date} className="rx-col" title={`${r.period}: ${r.move == null ? (r.session ? "no price data" : "report time unknown, so no move") : pct(r.move)} · EPS ${rowEps(r, r.epsA)} vs ${rowEps(r, r.epsE)}`}>
               <span className={`rx-bar ${r.move != null && r.move >= 0 ? "up" : "down"}`} style={{ height: `${h}%`, [r.move != null && r.move >= 0 ? "bottom" : "top"]: "50%" }} />
               <span className="rx-val">{r.move == null ? "—" : pct(r.move, 1)}</span>
               <span className={`rx-dot ${beat == null ? "" : beat ? "res-beat" : "res-miss"}`} />
@@ -95,14 +98,16 @@ function Reactions({ history, expected, usd, reit = false }: { history: Reaction
           {history.map((r) => (
             <tr key={r.date}>
               <td><Phase h={r.session} size={10} /> {r.date.length === 10 ? `${new Date(r.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} ’${r.date.slice(2, 4)}` : r.period}</td>
-              <td>{eps(r.epsE)} → <b>{eps(r.epsA)}</b></td>
+              <td>{rowEps(r, r.epsE)} → <b>{rowEps(r, r.epsA)}</b></td>
               <td className={r.surprisePct != null ? (r.surprisePct >= 0 ? "pos" : "neg") : surpriseWords(r) ? (wordsBeat(r) ? "pos" : "neg") : ""}>{r.basis ? <span className="muted" title="The actual isn't on the same basis as the estimate">basis differs</span> : surpriseWords(r) ?? pct(r.surprisePct)}</td>
               <td className={r.move == null ? "" : r.move >= 0 ? "pos" : "neg"}>{pct(r.move)}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      {history.some((r) => r.basis) && <p className="muted small rx-basis" data-testid="rx-epsbasis">"basis differs": <Term k="epsbasis">EPS basis differs from the estimate</Term> ({basisFootnote(reit)}), so that quarter isn't a beat or a miss and isn't in the beat record.</p>}
+      {history.some((r) => r.basis) && (history.some((r) => r.cur)
+        ? <p className="muted small rx-basis" data-testid="rx-epsbasis">"basis differs": the older reports' US-dollar figures don't match the company's own results converted at that quarter's exchange rate, so they aren't a beat or a miss and aren't in the beat record.</p>
+        : <p className="muted small rx-basis" data-testid="rx-epsbasis">"basis differs": <Term k="epsbasis">EPS basis differs from the estimate</Term> ({basisFootnote(reit)}), so that quarter isn't a beat or a miss and isn't in the beat record.</p>)}
       {history.some((r) => r.move == null && !r.session && r.date.length === 10) && <p className="muted small rx-basis">"—" means no feed says whether that report came before the open or after the close, so we don't guess which day it moved.</p>}
       <p className="muted small rx-basis">{usd && "Estimates use the calendar's consensus wherever we have it for that quarter. "}{history.some((r) => r.basis) && history.some((r) => !r.basis && r.epsA != null) ? "The other actuals" : "Actuals"} are usually <Term k="adjustedeps">adjusted EPS</Term>, the figure analysts forecast, so they can differ from the profit in the company's filings.</p>
     </div>
@@ -242,7 +247,9 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
                   ? `Because the two calendars disagree on the time, the typical move is measured on the day this stock has usually moved after a report: ${data.moveSession.session === "bmo" ? "the report day itself (as for a report before the open)" : "the day after (as for a report after the close)"}.`
                   : "Because the two calendars disagree on the time, and the stock's past moves don't settle it, we can't tell which day the market reacted, so past moves show “—”."}</p>}
                 {data.next.epsBasis && <p className="nc-cur muted small" data-testid="nc-ffo">This <Term k="reit">REIT</Term>'s recent results came in on a different measure from the feed's estimate (usually funds from operations, FFO, against net income a share), so we don't show the estimate as the bar.</p>}
-                {!isUsd(estCur) && <p className="nc-cur muted small">Estimates are in <Term k="reportingcurrency">{currencyName(estCur)}</Term>, not US dollars, and so are the quarterly figures from its filings. The reaction table below is in US dollars.</p>}
+                {!isUsd(estCur) && <p className="nc-cur muted small" data-testid="nc-currency">Estimates are in <Term k="reportingcurrency">{currencyName(estCur)}</Term>, not US dollars, and so are the quarterly figures from its filings. {data.history.some((h) => h.cur)
+                  ? <>In the reaction table below, the latest report is in {currencyName(estCur)}, the same figures as the calendar; older reports and every price move are in US dollars.</>
+                  : <>The reaction table below is in US dollars.</>}</p>}
               </section>
             )}
 

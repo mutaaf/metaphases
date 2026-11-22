@@ -20,6 +20,7 @@ import { handleAi } from "./ai";
 import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { currencyBreak, sanitizeMetric, withoutOff } from "../shared/currencyBreak";
+import { companyCurrencyPairs, periodEnd } from "../shared/adrPairs";
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove, usualSession } from "../shared/reaction";
@@ -1081,6 +1082,20 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     } as Reaction, usd ? reported.nE : null, reit, usd ? reported.nA : undefined), usd ? reported.eA : null));
   }
 
+  // 0100: a non-dollar reporter's newest report takes the calendar's own-currency pair (one report, one answer), and
+  // Nasdaq's older dollar pairs count only when its newest actual matches the company's figure in dollars.
+  if (!usd && history.length) {
+    const top = history.find((h) => h.date.length === 10);
+    // The cached row, never the sheet's own report-day row: only the cached one says whether its pair is in dollars (`ec`).
+    const calRow = top ? await calendarRowNear(symbol, top.date) : null;
+    if (top && calRow && calRow.eE != null && calRow.eA != null && !(calRow.ec && calRow.ec !== currency)) {
+      const perUsd = await fxPerUsd(currency, periodEnd(top.period) ?? top.date, symbol, ctx);
+      const next = companyCurrencyPairs(history, calRow, currency, perUsd, (h) => judgeReaction(h, null, reit));
+      next.forEach((h, i) => { if (h !== history[i]) keep(h, h.cur ? null : fhActual.get(history[i]) ?? null); });
+      history.splice(0, history.length, ...next);
+    }
+  }
+
   const judged = history.filter((h) => h.epsA != null && h.epsE != null && !h.basis);
   const beats = judged.filter((h) => (h.epsA as number) >= (h.epsE as number)).length;
   const beatRate = judged.length ? { beats, total: judged.length } : null;
@@ -1197,6 +1212,34 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   };
   if (ffo && body.next) body.next.epsBasis = "ffo";
   return body;
+}
+
+/** 0100: the calendar's cached row for `symbol`'s report on `day`, or a day either side (the feed's day can be one off
+ *  Nasdaq's). Cache only, read in order and stopping at the first row with figures: only non-dollar sheets ask. */
+async function calendarRowNear(symbol: string, day: string): Promise<{ d: string; eE: number | null; eA: number | null; ec?: string } | null> {
+  for (const d of [day, addDays(day, -1), addDays(day, 1)]) {
+    try {
+      const hit = (await caches.default.match(CAL_DAY(d))) ?? (await caches.default.match(CAL(`cal:stale:v3:${d}`)));
+      const e = hit ? ((await hit.json()) as EarningsEvent[]).find((x) => x.s === symbol && x.eA != null) : undefined;
+      if (e) return { d, eE: e.eE ?? null, eA: e.eA ?? null, ...(e.ec ? { ec: e.ec } : {}) };
+    } catch { /* an unreadable day says nothing */ }
+  }
+  return null;
+}
+
+/** 0100: units of `cur` per US dollar on `day` (Yahoo's `CNY=X` close on or before it), else the universe's refreshed
+ *  rate, else null (then nothing is shown to agree). */
+async function fxPerUsd(cur: string, day: string, symbol: string, ctx: ExecutionContext): Promise<number | null> {
+  if (/^[A-Z]{3}$/.test(cur)) {
+    try {
+      const fx = await candles(`${cur}=X`, "1y", ctx);
+      let rate: number | null = null;
+      fx.t.forEach((t, i) => { if (new Date(t * 1000).toISOString().slice(0, 10) <= day && fx.c[i] > 0) rate = fx.c[i]; });
+      if (rate != null) return rate;
+    } catch { /* fall through */ }
+  }
+  const usdPer = (U[symbol] as { fx?: number; mcCur?: string } | undefined);
+  return usdPer?.fx && usdPer.fx > 0 && usdPer.mcCur === cur ? 1 / usdPer.fx : null;
 }
 
 /** The newest cached calendar row for `symbol` on `days` (newest first), whatever its quarter. */

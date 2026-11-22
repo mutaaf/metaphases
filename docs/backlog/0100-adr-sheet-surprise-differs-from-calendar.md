@@ -1,7 +1,7 @@
 ---
 id: 0100
 title: An ADR's latest report shows two different surprises, one on the calendar and one on the sheet (PDD +9.5% vs +14.6%, Alibaba −28.9% vs −33.3%)
-status: ready
+status: in-progress
 priority: P1
 size: M
 lens: data-quality
