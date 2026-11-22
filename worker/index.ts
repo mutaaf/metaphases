@@ -1089,6 +1089,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // 0098: a quarter Finnhub reports in dollars beside yuan quarters (PDD, BABA) is dropped from the bars, and the TTM
   // growth it skews is unavailable rather than an F.
   const brk = currencyBreak(quarterly, currency);
+  if (brk.off.length) warnings.push(`${brk.off.length === 1 ? "One quarter" : `${brk.off.length} quarters`} the data feed reported in another currency ${brk.off.length === 1 ? "is" : "are"} left out of the quarterly figures${brk.growthBroken ? ", and growth isn't graded" : ""}.`);
   const compass = metric?.metric ? compassGrade(sanitizeMetric(metric.metric, brk)) : { score: null, grade: null, factors: [] };
   const setup = chart && chart.c.length > 60
     ? setupGrade({ close: chart.c, high: chart.h, low: chart.l, beatRate: beatRate && beatRate.total >= MIN_BEAT_RECORD ? beatRate.beats / beatRate.total : null })

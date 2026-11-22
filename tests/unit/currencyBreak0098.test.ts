@@ -128,10 +128,12 @@ describe("/api/ticker on a currency-mixed series", () => {
     expect(g.grade).toBeNull();
     expect(g.why).toBe("Growth history unavailable.");
     expect(d.compass.factors.find((f) => f.key === "profitability")!.grade).not.toBeNull();
+    expect(d.warnings).toContain("One quarter the data feed reported in another currency is left out of the quarterly figures, and growth isn't graded.");
   });
   it("a dollar reporter with the same numbers is graded on the feed's metrics, unchanged", async () => {
     const d = await sheet(US);
     expect(d.quarters.length).toBe(8);
     expect(d.compass.factors.find((f) => f.key === "growth")!.grade).toBe("F");
+    expect(d.warnings.join(" ")).not.toMatch(/another currency/);
   });
 });
