@@ -1,7 +1,7 @@
 ---
 id: 0097
 title: Company-dated reports whose feed row sat on another day never get their results ("Figures pending" for Ross, Gap, PDD, Williams-Sonoma and Bath & Body Works two days after they reported)
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: data-quality
@@ -70,3 +70,8 @@ Still to do (either way passes):
 - (b) If (a) can't be done cleanly, the row must say what's true. Drop "Figures pending" for any company-dated row whose day has passed and that Nasdaq lists as judged. Show "Reported · see the sheet for figures" (or similar) with no grade.
 
 Acceptance, on top of the above: the first two criteria hold for PDD too. A unit test has a CNY company-dated row whose feed row is three days earlier and a judged Nasdaq USD pair: it gets a judged USD pair or the "reported" state, never pending.
+
+## Build attempt 3 (re-review fix, option a)
+- `fillMovedFigures` no longer skips non-dollar rows. A row whose estimates aren't dollars (PDD, yuan per share) takes Nasdaq's pair whole: `eE` 2.61 and `eA` 2.99, both dollars per ADR from one table (0094's same-source rule), `pr: "n"`, and a new row field `ec: "USD"`. Its yuan revenue estimate is dropped (`rE: null`), so the row never shows a dollar EPS beside a yuan revenue.
+- `preReportMoved` reads Nasdaq's day for non-dollar company-dated rows too.
+- Client: `rowCur(e)` (`e.ec ?? curOf(e.s)`) replaces `curOf(e.s)` wherever a calendar row is shown or judged (EventRow, the day and month lists, `resultOf`, The Read's context, Today). The ticker sheet keeps its own `currency`.

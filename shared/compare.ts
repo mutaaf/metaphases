@@ -242,18 +242,20 @@ export function applyPreReport(events: EarningsEvent[], snap: EstSnapshot, nasda
  * 0097: a company-dated row (`o`) the override moved onto `day` from another feed day never met `day`'s pre-report step
  * (`preReportDay` runs per feed day, before `applyToEvents`), so it stayed "Figures pending" after the company reported.
  * Such a row with no figures takes Nasdaq's pair for `day` (pre-report consensus and the actual, one source, `pr: "n"`,
- * as 0072's settlePastRow does), never Finnhub's estimate as revised after the print. Only dollar rows (`usd`), only
- * with both of Nasdaq's figures; anything else is left as it was. `only` limits it to those symbols (the release-eve
+ * as 0072's settlePastRow does), never Finnhub's estimate as revised after the print. Only with both of Nasdaq's
+ * figures; anything else is left as it was. A row whose estimates aren't dollars (`usd` false: PDD, yuan per share)
+ * takes the pair whole, in dollars per ADR (`ec: "USD"`): both figures from one source on one basis (0094's
+ * same-source rule), and the yuan revenue estimate is dropped so the row never mixes currencies. `only` limits it to those symbols (the release-eve
  * pass, where `nq` is the weekday before `day`: Helmerich & Payne released Nov 18 after the close, called Nov 19).
  */
 export function fillMovedFigures(events: EarningsEvent[], day: string, nq: { e: Record<string, number>; a: Record<string, number> | null }, usd: (s: string) => boolean, only?: Set<string>): EarningsEvent[] {
   if (!nq.a) return events;
   return events.map((e) => {
-    if (!e.o || e.d !== day || (only && !only.has(e.s)) || e.eA != null || e.rA != null || e.c || !usd(e.s)) return e;
+    if (!e.o || e.d !== day || (only && !only.has(e.s)) || e.eA != null || e.rA != null || e.c) return e;
     const a = nq.a?.[e.s], est = nq.e[e.s];
     if (a == null || est == null) return e;
     const { nA: _nA, nE: _nE, ...rest } = e;
-    return { ...rest, eA: a, eE: est, pr: "n" as const };
+    return usd(e.s) ? { ...rest, eA: a, eE: est, pr: "n" as const } : { ...rest, eA: a, eE: est, rE: null, rA: null, pr: "n" as const, ec: "USD" as const };
   });
 }
 
