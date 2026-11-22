@@ -7,14 +7,14 @@
 // Nothing changes when the feed names a session, when the company has announced a date (overrides win), when
 // Nasdaq gives no session, or when there's no cross-check at all (a cold window).
 import type { EarningsEvent, Session } from "./types";
-import { isProjected } from "./projected";
 
 const timed = (h: Session | "" | undefined): h is "bmo" | "amc" => h === "bmo" || h === "amc";
 
 /** True when Nasdaq's listing (`nq`) should headline the next report instead of the feed's projected row. */
 export function leadsNasdaq(feed: { date: string; session: string; source?: string | null }, nq: { date: string; session: Session } | null | undefined, today: string): boolean {
-  if (!nq || feed.source || feed.session) return false;
-  if (!isProjected({ date: feed.date, session: "", source: feed.source }, today)) return false;
+  // Not only while the feed's day is ahead: once it comes (or passes) with no figures and no time, Nasdaq's timed day
+  // still leads until it passes itself, or KSS would flip back to "Date not confirmed" the day before it reports.
+  if (!nq || feed.source || feed.session || !feed.date) return false;
   return nq.date !== feed.date && nq.date >= today && timed(nq.session);
 }
 

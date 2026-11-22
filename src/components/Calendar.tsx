@@ -9,7 +9,7 @@ import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { figuresPending, noResultYet } from "../../shared/pending";
 import { NOT_GRADED_WHY } from "../../shared/reported";
 import { eventProjected } from "../../shared/projected";
-import { dateMark } from "../lib/dateMark";
+import { dateMark, disagreeWhy } from "../lib/dateMark";
 import { sessionText } from "../lib/sessionText";
 import { contestedDay, splitClosed, unconfirmedRow } from "../../shared/closedRows";
 import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, nowMinNY, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
@@ -277,10 +277,7 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
           const n = events.filter((e) => e.x === "differs").length;
           // 0099: rows placed here on Nasdaq's word (`xf`) are marked "Feed projects …" instead.
           const f = events.filter((e) => e.x === "differs" && e.xf).length;
-          return n > 0 && <Notice><Term k="xcheck">{n === 1 ? "One date here isn't confirmed" : `${n} dates here aren't confirmed`}</Term>: {f === 0
-            ? <>Nasdaq's calendar lists {n === 1 ? "it" : "them"} on another day or time, marked “Nasdaq” below.</>
-            : f === n ? <>Nasdaq's calendar lists {n === 1 ? "it" : "them"} here, but our data feed projects another day, marked “Feed projects” below.</>
-            : <>our data feed and Nasdaq's calendar list them on different days or times, marked below.</>} Our feed and Nasdaq disagree, so check the company's own announcement.</Notice>;
+          return n > 0 && <Notice><Term k="xcheck">{n === 1 ? "One date here isn't confirmed" : `${n} dates here aren't confirmed`}</Term>: {disagreeWhy(n, f)} Our feed and Nasdaq disagree, so check the company's own announcement.</Notice>;
         })()}
         {(() => {
           // 0007: dates the company hasn't announced (Nasdaq disagreements have their own note above).

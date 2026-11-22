@@ -212,7 +212,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
 
             {data.next && (
               <section className="next-card">
-                <div className="nc-phase"><Phase h={shownSession(data.next)} size={44} projected={proj} /></div>
+                <div className="nc-phase"><Phase h={shownSession(data.next)} size={44} projected={proj || !!data.next.feedDay} /></div>
                 <div>
                   <span className="eyebrow">{due || checking ? "This report" : "Next report"} · Q{data.next.quarter} {data.next.year}</span>
                   <h3>{checking ? "Date being checked" : data.next.closed || data.next.overdue || dayContested ? "Date not confirmed" : proj ? `Around ${fmtLong(data.next.date)}` : fmtLong(data.next.date)}</h3>
