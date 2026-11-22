@@ -19,6 +19,7 @@ import { moodPlain, whatTheyDo, whenPlain } from "../shared/plain";
 import { handleAi } from "./ai";
 import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
+import { currencyBreak, sanitizeMetric, withoutOff } from "../shared/currencyBreak";
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove, usualSession } from "../shared/reaction";
@@ -727,11 +728,11 @@ const MIN_BEAT_RECORD = 2;
 /**
  * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
  * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
- * (`tk:stale:v9:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
+ * (`tk:stale:v10:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
  */
 async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
   const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v8:${symbol}`)}`);
-  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v9:${symbol}`)}`);
+  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v10:${symbol}`)}`);
   const hit = await caches.default.match(key);
   if (hit) { const data = (await hit.json()) as TickerResponse; return { data, ttl: sheetTtl(data) }; }
   const built = await buildTicker(symbol, env, ctx);
@@ -1085,7 +1086,10 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const moves = history.map((h) => h.move).filter((m): m is number => m != null);
   const expectedMove = typicalMove(moves); // 0088: never an average of one or two reports
 
-  const compass = metric?.metric ? compassGrade(metric.metric) : { score: null, grade: null, factors: [] };
+  // 0098: a quarter Finnhub reports in dollars beside yuan quarters (PDD, BABA) is dropped from the bars, and the TTM
+  // growth it skews is unavailable rather than an F.
+  const brk = currencyBreak(quarterly, currency);
+  const compass = metric?.metric ? compassGrade(sanitizeMetric(metric.metric, brk)) : { score: null, grade: null, factors: [] };
   const setup = chart && chart.c.length > 60
     ? setupGrade({ close: chart.c, high: chart.h, low: chart.l, beatRate: beatRate && beatRate.total >= MIN_BEAT_RECORD ? beatRate.beats / beatRate.total : null })
     : { score: null, grade: null, factors: [], trend: "—", rsi: null, atrPct: null, from52wHigh: null };
@@ -1178,7 +1182,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     ...(contest && chart ? { moveSession: { feed: contest.feed, nasdaq: contest.nasdaq, session: habit } } : {}),
     spark: chart ? chart.c.slice(-126) : [],
     chart: chart ? shapeChart(chart.t, chart.c) : null,
-    quarters: quartersFrom(quarterly, profile?.shareOutstanding ?? null),
+    quarters: quartersFrom(withoutOff(quarterly, brk.off), profile?.shareOutstanding ?? null),
     read, warnings,
   };
   if (ffo && body.next) body.next.epsBasis = "ffo";
