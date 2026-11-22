@@ -40,6 +40,15 @@ describe("0101 price-to-book on a currency-mixed series", () => {
     const m = sanitizeMetric({ pbQuarterly: 1.4, revenueGrowthTTMYoy: 5 }, currencyBreak(LI, "CNY"));
     expect(pbOf(m)).toBe("1.4×");
   });
+  it("P/B stays out once the dollar quarters outnumber the yuan ones (12 cached: 6 and 6, then 4 and 8)", () => {
+    const yuan = [100, 102, 98, 105, 101, 99], usd = [15, 14.6, 15.2, 14.9, 15.1, 15.3, 15, 14.8];
+    const q = (xs: number[]) => xs.map((v, i) => ({ period: `20${String(20 + Math.floor(i / 4)).padStart(2, "0")}-${["03-31", "06-30", "09-30", "12-31"][i % 4]}`, v }));
+    for (const s of [q([...yuan, ...usd.slice(0, 6)]), q([...yuan.slice(0, 4), ...usd])]) {
+      const brk = currencyBreak({ salesPerShare: s }, "CNY");
+      expect(brk.newestOff).toBe(true);
+      expect(pbOf(sanitizeMetric({ pbQuarterly: 9.7 }, brk))).toBe("—");
+    }
+  });
   it("names with no break keep exactly the feed's P/B (TSM, and any dollar reporter)", () => {
     const tsm = { pbQuarterly: 7.2, peTTM: 24 };
     expect(sanitizeMetric(tsm, currencyBreak(TSM, "TWD"))).toBe(tsm);

@@ -28,7 +28,7 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) 
     await expect(pb.locator("dd")).toHaveText("—");
     await expect(row.locator(".f-inputs")).not.toContainText("9.7×");
     await expect(row.locator(".f-inputs")).toContainText("22.0×");
-    await expect(row.locator(".factor-row")).toContainText("D");
+    await expect(row.locator(".factor-row")).toHaveText(/Valuation\s*D$/);
     expect(await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth)))).toBeLessThanOrEqual(1);
     await row.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `test-results/0101-adr-pb-${size.width}.png` });

@@ -53,7 +53,11 @@ export function currencyBreak(series: Series | undefined, currency: Currency | n
   const off = pts.filter((_, i) => !near(level[i], home)).map((p) => p.period);
   if (!off.length) return NONE;
   const window = new Set(pts.slice(-TTM_WINDOW).map((p) => p.period));
-  return { off, growthBroken: off.some((p) => window.has(p)), newestOff: off.includes(pts[pts.length - 1].period) };
+  // 0101: the newest quarter's book is in dollars when it sits a break below any other quarter (a dollar figure per share
+  // is always the smaller one beside yuan or HK dollars), even once dollar quarters are the majority and "home".
+  const last = level[level.length - 1];
+  const newestOff = off.includes(pts[pts.length - 1].period) || level.some((l) => l / last >= BREAK);
+  return { off, growthBroken: off.some((p) => window.has(p)), newestOff };
 }
 
 /** The quarterly series without the off-currency quarters (every key, so EPS and margins drop with them). */
