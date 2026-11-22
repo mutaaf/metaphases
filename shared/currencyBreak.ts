@@ -18,9 +18,12 @@ export interface CurrencyBreak {
   off: string[];
   /** A switch inside the newest eight quarters: Finnhub's TTM growth metrics are computed over the mix. */
   growthBroken: boolean;
+  /** 0101: the newest quarter is the off-currency one, so Finnhub's quarterly price-to-book (that quarter's book per
+   *  ordinary share against the ADS price) is off by about the ADS ratio. */
+  newestOff: boolean;
 }
 
-const NONE: CurrencyBreak = { off: [], growthBroken: false };
+const NONE: CurrencyBreak = { off: [], growthBroken: false, newestOff: false };
 
 /** Find the quarters reported in another currency, from `salesPerShare` alone (EPS swings too much to tell). Only
  *  for a company whose reporting currency isn't US dollars: a dollar reporter's series is left alone. */
@@ -50,7 +53,7 @@ export function currencyBreak(series: Series | undefined, currency: Currency | n
   const off = pts.filter((_, i) => !near(level[i], home)).map((p) => p.period);
   if (!off.length) return NONE;
   const window = new Set(pts.slice(-TTM_WINDOW).map((p) => p.period));
-  return { off, growthBroken: off.some((p) => window.has(p)) };
+  return { off, growthBroken: off.some((p) => window.has(p)), newestOff: off.includes(pts[pts.length - 1].period) };
 }
 
 /** The quarterly series without the off-currency quarters (every key, so EPS and margins drop with them). */
@@ -63,9 +66,19 @@ export function withoutOff(series: Series | undefined, off: string[]): Series | 
 }
 
 /** The metric map Compass grades: on a break inside the TTM window, the two growth metrics are unavailable, so the
- *  factor reads "Growth history unavailable." instead of grading a currency mix. */
+ *  factor reads "Growth history unavailable." instead of grading a currency mix. 0101: when the newest quarter is the
+ *  off-currency one, price-to-book (`pbQuarterly`, and `pb`, the grade's fallback key) is unavailable too: P/B reads
+ *  "—" and Valuation averages what's left. There's no book series to check a corrected figure against. */
 export function sanitizeMetric<M extends Record<string, unknown>>(metric: M, brk: CurrencyBreak): M {
-  if (!brk.growthBroken) return metric;
-  const { revenueGrowthTTMYoy: _r, epsGrowthTTMYoy: _e, ...rest } = metric;
-  return rest as M;
+  if (!brk.growthBroken && !brk.newestOff) return metric;
+  const out: Record<string, unknown> = { ...metric };
+  if (brk.growthBroken) { delete out.revenueGrowthTTMYoy; delete out.epsGrowthTTMYoy; }
+  if (brk.newestOff) { delete out.pbQuarterly; delete out.pb; }
+  return out as M;
+}
+
+/** 0101: whether the price-to-book `sanitizeMetric` drops was there to drop (the warning names it only then). */
+export function dropsPb(metric: Record<string, unknown> | undefined, brk: CurrencyBreak): boolean {
+  const ok = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+  return brk.newestOff && !!metric && (ok(metric.pbQuarterly) || ok(metric.pb));
 }

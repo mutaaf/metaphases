@@ -26,16 +26,16 @@ const DROP = { salesPerShare: pts([["2025-12-31", 10], ["2026-03-31", 10.5], ["2
 
 describe("currencyBreak", () => {
   it("finds PDD's newest quarter reported in dollars beside yuan quarters", () => {
-    expect(currencyBreak(PDD, "CNY")).toEqual({ off: ["2026-09-30"], growthBroken: true });
+    expect(currencyBreak(PDD, "CNY")).toEqual({ off: ["2026-09-30"], growthBroken: true, newestOff: true });
   });
   it("finds LI's one dollar quarter in the middle, and keeps the yuan quarters on both sides of it", () => {
-    expect(currencyBreak(LI, "CNY")).toEqual({ off: ["2025-12-31"], growthBroken: true });
+    expect(currencyBreak(LI, "CNY")).toEqual({ off: ["2025-12-31"], growthBroken: true, newestOff: false });
   });
   it("skips missing quarters (YMM) and still finds the newest one in dollars", () => {
     expect(currencyBreak(YMM, "CNY").off).toEqual(["2026-09-30"]);
   });
   it("leaves a clean home-currency series alone (TSM)", () => {
-    expect(currencyBreak(TSM, "TWD")).toEqual({ off: [], growthBroken: false });
+    expect(currencyBreak(TSM, "TWD")).toEqual({ off: [], growthBroken: false, newestOff: false });
   });
   it("leaves a real 60% one-quarter fall alone", () => {
     expect(currencyBreak(DROP, "EUR").off).toEqual([]);
@@ -46,7 +46,7 @@ describe("currencyBreak", () => {
   });
   it("a break older than the TTM window drops the quarter but keeps the growth metrics", () => {
     const old = { salesPerShare: [{ period: "2023-09-30", v: 14 }, ...pts([["2023-12-31", 100], ["2024-03-31", 101]]), ...PDD.salesPerShare.slice(0, 7)] };
-    expect(currencyBreak(old, "CNY")).toEqual({ off: ["2023-09-30"], growthBroken: false });
+    expect(currencyBreak(old, "CNY")).toEqual({ off: ["2023-09-30"], growthBroken: false, newestOff: false });
   });
 });
 
