@@ -8,7 +8,7 @@ import { useCalendar, prefetchTicker } from "../lib/api";
 import { missingDays } from "../lib/partial";
 import { co, curOf, reitOf, UNIVERSE } from "../lib/data";
 import { addDays, fmtShort, todayISO } from "../lib/dates";
-import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
+import { eps, epsIn, money, moneyIn, pct, rowEps } from "../lib/format";
 import { BASE, setParam } from "../lib/router";
 import { Icon, Phase, PHASE_LABEL, Skeleton, Term, Tile } from "./bits";
 import { isDated } from "../../shared/pending";
@@ -82,7 +82,7 @@ function MarkerDetail({ r }: { r: Reaction }) {
       <Phase h={r.session} size={14} />
       <b>{r.period}</b>
       <span>reported {new Date(r.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-      <span>EPS {eps(r.epsE)} → <b>{eps(r.epsA)}</b> ({r.basis ? "basis differs" : surpriseWords(r) ?? pct(r.surprisePct)})</span>
+      <span>EPS {rowEps(r, r.epsE)} → <b>{rowEps(r, r.epsA)}</b> ({r.basis ? "basis differs" : surpriseWords(r) ?? pct(r.surprisePct)})</span>
       <span>Stock {r.move == null ? "—" : <b className={r.move >= 0 ? "pos" : "neg"}>{pct(r.move)}</b>} across the report</span>
     </div>
   );

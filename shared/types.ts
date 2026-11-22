@@ -84,6 +84,10 @@ export interface Reaction {
   move: number | null; // % price move across the print
   /** 0049: the actual isn't on the estimate's basis (FFO vs GAAP, per ADR vs per share, GAAP vs adjusted): no surprise, not counted in the beat rate. */
   basis?: "differs";
+  /** 0100: the estimate and actual are in this currency (the calendar's pair for a non-dollar reporter), not US dollars. The move is always the dollar share's. */
+  cur?: string;
+  /** 0100: why `basis` is set: "fx" = Nasdaq's newest dollar actual doesn't match the company's own figure converted to dollars. */
+  why?: "fx";
 }
 
 export interface TickerResponse {
