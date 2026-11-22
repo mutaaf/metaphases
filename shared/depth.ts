@@ -89,6 +89,14 @@ export function quartersFrom(series: Record<string, Pt[]> | undefined, sharesMil
   });
 }
 
+/** The quarter a year before `last`: the quarter ending 330–400 days earlier (52/53-week years drift a few days),
+ *  never just four bars back, since a dropped quarter (0098) shifts the bars. Null when it isn't in the list. */
+export function yearAgoOf<T extends { period: string }>(rows: T[], last: T): T | null {
+  const day = (p: string) => Date.parse(p.slice(0, 10) + "T12:00:00Z") / 864e5;
+  const at = day(last.period);
+  return rows.find((q) => { const gap = at - day(q.period); return gap >= 330 && gap <= 400; }) ?? null;
+}
+
 // ── ICS (RFC 5545) ─────────────────────────────────────────────────────
 export interface IcsItem { symbol: string; name: string; date: string; session: Session; quarter: number; year: number; epsE: number | null; cur?: string; url: string; /** Projected onto a market holiday (0045): the entry says the date isn't confirmed. */ closed?: string; /** 0007: the feed's projection, not the company's date: STATUS:TENTATIVE. */ projected?: boolean }
 const SESSION_TEXT: Record<Session, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "time not yet confirmed" };

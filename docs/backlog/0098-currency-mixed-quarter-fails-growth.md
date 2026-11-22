@@ -1,12 +1,12 @@
 ---
 id: 0098
 title: A quarter the feed reports in dollars beside yuan quarters reads as an 85% revenue collapse and grades Growth F (PDD, Alibaba, NetEase, Full Truck, Futu)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-21
-pr:
+pr: 174
 by: critic
 ---
 

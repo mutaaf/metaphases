@@ -3,7 +3,7 @@
 import { surpriseWords } from "../../shared/basisWords";
 import { useMemo, useState } from "react";
 import type { Quarter, Reaction, TickerResponse } from "../../shared/types";
-import { nyDate, peersFor, placeMarkers, seasonScore } from "../../shared/depth";
+import { nyDate, peersFor, placeMarkers, seasonScore, yearAgoOf } from "../../shared/depth";
 import { useCalendar, prefetchTicker } from "../lib/api";
 import { missingDays } from "../lib/partial";
 import { co, curOf, reitOf, UNIVERSE } from "../lib/data";
@@ -124,7 +124,7 @@ export function QuarterTrend({ quarters, history, cur }: { quarters: Quarter[]; 
   const epsVals = rows.map((q) => q.eps ?? 0);
   const maxEps = Math.max(...epsVals.map(Math.abs), 0.01);
   const qLabel = (p: string) => { const d = new Date(p + "T12:00:00"); return `${d.toLocaleDateString("en-US", { month: "short" })} ’${p.slice(2, 4)}`; };
-  const last = rows[rows.length - 1], yearAgo = rows.length >= 5 ? rows[rows.length - 5] : null;
+  const last = rows[rows.length - 1], yearAgo = yearAgoOf(rows, last);
   const revYoY = last.rev != null && yearAgo?.rev ? ((last.rev - yearAgo.rev) / yearAgo.rev) * 100 : null;
   const surprises = history.filter((h) => h.surprisePct != null).length;
   return (
