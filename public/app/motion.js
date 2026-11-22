@@ -2,6 +2,12 @@
 // same CSS animations by scroll (.sdjs). Reduced motion (or no script) gets neither: a static, readable page.
 // Same-origin file because the CSP allows no inline script. ?sd=0 forces the fallback (for testing).
 (function (d) {
+  // The trailer: phones get the 9:16 poster; reduced motion never plays it (CSS shows the still instead).
+  document.addEventListener("DOMContentLoaded", function () {
+    var v = document.querySelector(".reel video"); if (!v) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { v.removeAttribute("autoplay"); v.preload = "none"; v.pause(); return; }
+    if (matchMedia("(max-width: 700px)").matches && v.getAttribute("data-poster-narrow")) v.poster = v.getAttribute("data-poster-narrow");
+  });
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   var sd = !!(window.CSS && CSS.supports && CSS.supports("animation-timeline: view()")) && !/[?&]sd=0/.test(location.search);
   d.classList.add("fx", sd ? "sd" : "sdjs");

@@ -176,6 +176,23 @@
   .fx .scroll-cue i { animation: drip 2.2s var(--ease) infinite; transform-origin: top; }
   @keyframes drip { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
 
+  /* ---------- the reel: an 18 s trailer, self-hosted (no third-party player). 9:16 on phones, 16:9 above; reduced motion gets the still ---------- */
+  .reel { padding: clamp(8px, 2vh, 24px) 0 0; }
+  .reel .k { text-align: center; }
+  .reel-frame { position: relative; margin: 0 auto; width: 100%; aspect-ratio: 16 / 9; border-radius: clamp(18px, 2.4vw, 30px); overflow: hidden; background: #0f0e22;
+    box-shadow: 0 50px 90px -46px color-mix(in srgb, var(--violet) 80%, transparent), 0 0 0 1px var(--hair), inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+  .reel-frame video, .reel-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .reel-still { display: none; }
+  .sd .reel-frame { animation: reel-in linear both; animation-timeline: view(); animation-range: entry 0% entry 70%; }
+  @keyframes reel-in { from { opacity: 0.2; transform: translateY(40px) scale(0.94); } }
+  @media (max-width: 700px) {
+    .reel-frame { aspect-ratio: 9 / 16; width: min(100%, 420px, calc((100svh - var(--bar) - 72px) * 9 / 16)); border-radius: 26px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reel-frame video { display: none; }
+    .reel-still { display: block; }
+  }
+
   section { position: relative; }
   .sec { padding: clamp(72px, 12vh, 140px) 0; }
 
@@ -550,6 +567,22 @@
       </div>
     </div>
     <div class="scroll-cue t-sec" aria-hidden="true">Scroll<i></i></div>
+  </section>
+
+  <section class="reel" aria-label="Moon Club trailer">
+    <div class="wrap">
+      <span class="k">The trailer · 18 s</span>
+      <div class="reel-frame">
+        <video autoplay muted loop playsinline preload="metadata" poster="reel-poster.jpg" data-poster-narrow="reel-poster-9x16.jpg" width="1280" height="720" aria-label="Trailer: the full moon, a moonrise, a shuttle launch, then Moon Club's game map and Ask Luna on a phone">
+          <source src="reel-9x16.mp4" type="video/mp4" media="(max-width: 700px)" />
+          <source src="reel-16x9.mp4" type="video/mp4" />
+        </video>
+        <picture class="reel-still">
+          <source srcset="reel-poster-9x16.jpg" media="(max-width: 700px)" />
+          <img src="reel-poster.jpg" alt="A shuttle lifts off under the words Learn the market" width="1280" height="720" loading="lazy" />
+        </picture>
+      </div>
+    </div>
   </section>
 
   <section class="duo" id="duo" aria-labelledby="duo-h">
