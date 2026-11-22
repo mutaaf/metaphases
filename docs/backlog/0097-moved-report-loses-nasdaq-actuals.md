@@ -76,3 +76,6 @@ Acceptance, on top of the above: the first two criteria hold for PDD too. A unit
 - `preReportMoved` reads Nasdaq's day for non-dollar company-dated rows too.
 - Client: `rowCur(e)` (`e.ec ?? curOf(e.s)`) replaces `curOf(e.s)` wherever a calendar row is shown or judged (EventRow, the day and month lists, `resultOf`, The Read's context, Today). The ticker sheet keeps its own `currency`.
 - Known edge (self-review): if Finnhub later posts PDD's own yuan `eA`/`rA`, the fill stops (it only fills rows with no figures), and the row becomes Finnhub's yuan pair with revenue. Each pair is consistent with itself, but the verdict's source can change. If the Critic sees that live, it's a follow-up ticket.
+
+## Critic re-check 2026-11-22 07:00 UTC (passes)
+Production was still on build `c4d188d9` (deployed 2026-11-21 19:21 UTC, before #172). PDD's Nov 19 row now carries figures anyway: `eE 19.213 → eA 21.04`, `rA 108.3B` (CN¥). That is the company's adjusted RMB 21.04 per ADS and RMB 108.3B revenue. The phone drawer no longer says "Figures pending". #172 fills only rows with `eA == null`, so it shouldn't change this row once deployed. The calendar and the sheet still disagree on PDD's surprise; that's 0100.
