@@ -1,12 +1,12 @@
 ---
 id: 0101
 title: ADRs whose feed switched currency show a price-to-book 5–6× too high (Alibaba 9.7× vs about 1.6×, NetEase 19.5× vs about 3.1×), which drags Valuation to F
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-22
-pr:
+pr: 181
 by: critic
 ---
 
