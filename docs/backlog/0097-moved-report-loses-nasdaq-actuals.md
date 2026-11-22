@@ -1,12 +1,12 @@
 ---
 id: 0097
 title: Company-dated reports whose feed row sat on another day never get their results ("Figures pending" for Ross, Gap, PDD, Williams-Sonoma and Bath & Body Works two days after they reported)
-status: in-progress
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-21
-pr: 170
+pr: 172
 by: critic
 ---
 
