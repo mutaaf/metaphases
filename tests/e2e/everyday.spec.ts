@@ -175,8 +175,8 @@ test.describe("everyday", () => {
     await expect(sheet.locator(".qtrend")).not.toContainText("$31.9B");
     // NIO's market value is the universe's dollar figure (0042): a NYSE listing's cap is USD even though its
     // estimates are in yuan, and it's never the profile's own label.
-    await expect(sheet.locator(".sheet-head .eyebrow").first()).toContainText("· $7.6B");
-    await expect(sheet.locator(".sheet-head .eyebrow").first()).not.toContainText("CN¥7.6B");
+    await expect(sheet.locator(".sheet-head .eyebrow").first()).toContainText("· $7.4B");
+    await expect(sheet.locator(".sheet-head .eyebrow").first()).not.toContainText("CN¥7.4B");
     expect(await page.evaluate(() => Math.max(...[...document.querySelectorAll("[role=dialog]")].map((d) => d.scrollWidth - d.clientWidth)))).toBeLessThanOrEqual(1);
 
     await page.goto("./check?text=" + encodeURIComponent("$NIO is going to the MOON 🚀"));

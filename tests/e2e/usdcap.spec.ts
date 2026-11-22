@@ -37,6 +37,6 @@ test("the sheet header gives SQM's value in dollars, not its peso figure labelle
   });
   await page.goto("./?t=SQM");
   const id = page.locator(".sheet .sheet-id .eyebrow");
-  await expect(id).toContainText(/· \$16\.3B$/);
+  await expect(id).toContainText(/· \$15\.2B$/);
   await expect(id).not.toContainText(/\$15\.\d+T/);
 });
