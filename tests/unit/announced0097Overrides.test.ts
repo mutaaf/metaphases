@@ -228,7 +228,8 @@ describe("0097 moved rows get the company's day's Nasdaq figures", () => {
     expect(first.events.find((e: any) => e.s === "ROST")).toMatchObject({ eA: null });
     // A non-dollar row with no Nasdaq pair gets no figures and no `ec`: nothing is invented (it stays pending).
     const pdd = first.events.find((e: any) => e.s === "PDD");
-    expect(pdd).toMatchObject({ eA: null, pr: undefined });
+    expect(pdd.eA).toBeNull();
+    expect(pdd.pr).toBeUndefined();
     expect(pdd.ec).toBeUndefined();
     const after = nqDayCalls;
     for (let i = 0; i < 3; i++) await get("/api/calendar?from=2026-11-16&to=2026-11-22");
