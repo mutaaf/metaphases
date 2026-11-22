@@ -11,7 +11,9 @@ const LOWER: Record<Session, string> = { bmo: "before open", dmh: "during hours"
 export type DateMark = { kind: "closed" } | { kind: "overdue" } | { kind: "differs"; label: string } | { kind: "projected" } | null;
 
 /** "Nasdaq: Thu, Nov 5, after close" (another day) or "Feed: after close · Nasdaq: before open" (same day). */
-export function nasdaqLabel(e: Pick<EarningsEvent, "d" | "xd" | "xh" | "fh">): string {
+export function nasdaqLabel(e: Pick<EarningsEvent, "d" | "xd" | "xh" | "fh" | "xf">): string {
+  // 0099: the row sits on Nasdaq's day; `xd` is the feed's projected day.
+  if (e.xf) return `Feed projects ${fmtDay(e.xd!)}`;
   const feed = e.fh ? `Feed: ${LOWER[e.fh]} · ` : "";
   const nq = e.xd === e.d ? (e.xh ? LOWER[e.xh] : "another time") : `${fmtDay(e.xd!)}${e.xh ? `, ${LOWER[e.xh]}` : ""}`;
   return `${feed}Nasdaq: ${nq}`;

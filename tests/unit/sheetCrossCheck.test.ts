@@ -87,12 +87,21 @@ describe("0059: the sheet reads a partly loaded Nasdaq window", () => {
     expect(JSON.parse(cache.store.get(CAL("nq:x:v1:2026-11-19"))!)).toEqual({ QQYW: "bmo" });
   });
 
-  it("a blank session whose day Nasdaq lists elsewhere: flagged, with Nasdaq's day named", async () => {
+  it("a blank session whose day Nasdaq lists elsewhere (with no time): flagged, with Nasdaq's day named", async () => {
+    cacheDays({ "2026-11-18": { FILLER: "" }, "2026-11-19": { QQYC: "" } });
+    const t = await sheet("QQYC");
+    expect(t.next).toMatchObject({ date: "2026-11-18", session: "", nasdaq: { date: "2026-11-19", session: "" } });
+    expect(tickerShareTitle("QQYC", "Qqyc", t.next)).toBe("QQYC reports Wed, Nov 18 (unconfirmed; Nasdaq lists Thu, Nov 19) · Metaphases");
+    expect(t.read.join(" ")).toMatch(/unconfirmed: Nasdaq's calendar lists Thursday, Nov 19\./);
+  });
+
+  // 0099: the same, but Nasdaq names a session: its timed day leads, still unconfirmed, naming the feed's projection.
+  it("a blank session whose day Nasdaq lists elsewhere before the open: Nasdaq's day leads, unconfirmed", async () => {
     cacheDays({ "2026-11-18": { FILLER: "" }, "2026-11-19": { QQYC: "bmo" } });
     const t = await sheet("QQYC");
-    expect(t.next).toMatchObject({ date: "2026-11-18", session: "", nasdaq: { date: "2026-11-19", session: "bmo" } });
-    expect(tickerShareTitle("QQYC", "Qqyc", t.next)).toBe("QQYC reports Wed, Nov 18 (unconfirmed; Nasdaq lists Thu, Nov 19) · Metaphases");
-    expect(t.read.join(" ")).toMatch(/unconfirmed: Nasdaq's calendar lists Thursday, Nov 19 before the opening bell/);
+    expect(t.next).toMatchObject({ date: "2026-11-19", session: "bmo", hs: "n", feedDay: "2026-11-18" });
+    expect(tickerShareTitle("QQYC", "Qqyc", t.next)).toBe("QQYC reports Thu, Nov 19 before the open (unconfirmed; our data feed projects Wed, Nov 18) · Metaphases");
+    expect(t.read.join(" ")).toMatch(/Nasdaq's calendar lists QQYC's Q3 report on Thursday, Nov 19 before the opening bell, but that's unconfirmed: our data feed projects Wednesday, Nov 18/);
   });
 
   it("Nasdaq's day fails: the sheet stays as Finnhub has it, with no warning about Nasdaq", async () => {

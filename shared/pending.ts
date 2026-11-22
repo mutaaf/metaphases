@@ -107,7 +107,7 @@ export const figuresPending = (e: { d: string; h: string; eA: number | null; rA:
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
 /** The `/t/:sym` share title: never a date beyond an unreported quarter (0038) or on a closed day (0045). */
-export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; hs?: "n" | "h"; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string }; projected?: true; usual?: "bmo" | "amc" } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
+export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; hs?: "n" | "h"; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string }; feedDay?: string; projected?: true; usual?: "bmo" | "amc" } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
   // 0039: a report that's out leads the title, whatever comes next.
   if (just) return just.epsA == null ? `${sym} reported Q${just.quarter} · Metaphases`
     // 0087: a pair whose same-source actual isn't posted yet is said to be ungraded, with no estimate quoted beside it.
@@ -118,6 +118,9 @@ export function tickerShareTitle(sym: string, name: string, next: { date: string
   if (isDated(next)) {
     const day = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
     const when = day(next.date);
+    // 0099: Nasdaq's timed listing leads over the feed's timeless projection, still unconfirmed.
+    const fd = (next as { feedDay?: string }).feedDay;
+    if (fd) return `${sym} reports ${when} ${SESSION_WORDS[(next as { session: string }).session] ?? ""} (unconfirmed; our data feed projects ${day(fd)}) · Metaphases`.replace("  ", " ");
     // 0059: never state a date two calendars disagree on as fact.
     const nq = (next as { nasdaq?: { date: string } }).nasdaq;
     if (nq) return nq.date === next.date ? `${sym} reports ${when}, time unconfirmed · Metaphases` : `${sym} reports ${when} (unconfirmed; Nasdaq lists ${day(nq.date)}) · Metaphases`;

@@ -13,6 +13,8 @@ test.beforeEach(async ({ page }) => {
     if (e.s === "CEG" && e.d === "2026-11-09") Object.assign(e, { x: "agree" });
     // 0062: same date, other session (DE/ROAD-shaped): Finnhub "amc", Nasdaq "bmo".
     if (e.s === "AMAT" && e.d === "2026-11-12") Object.assign(e, { x: "differs", xd: "2026-11-12", xh: "bmo" });
+    // 0099: KSS-shaped, as the worker places it: the feed's timeless Tue Nov 3 projection sits on Nasdaq's Wed Nov 4, before open.
+    if (e.s === "AMGN" && e.d === "2026-11-03") Object.assign(e, { d: "2026-11-04", h: "bmo", hs: "n", x: "differs", xd: "2026-11-03", xf: 1 });
   }
   await page.route("**/api/calendar**", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(cal) }));
 });
@@ -135,4 +137,40 @@ test("a contested session: Hype Check says the time isn't confirmed, with the un
   await expect(next).not.toContainText("after the market closes");
   await expect(next.locator(".phase-tbd")).toHaveCount(1);
   await noSideScroll(page);
+});
+
+// 0099: the feed's timeless projection (Tue Nov 3) against Nasdaq's timed listing (Wed Nov 4, before the open): Nasdaq's
+// day leads, still unconfirmed, and the "Two calendars disagree" line names the feed's day.
+test("a timeless projection Nasdaq lists on another day with a time: the sheet headlines Nasdaq's day, unconfirmed", async ({ page }) => {
+  await page.route("**/api/ticker/KSS", async (r) => {
+    const body = JSON.parse(fx("ticker-NVDA.json").replaceAll('"NVDA"', '"KSS"'));
+    const { nasdaq: _n, projected: _p, ...next } = body.next;
+    body.next = { ...next, date: "2026-11-04", session: "bmo", hs: "n", feedDay: "2026-11-03", quarter: 3, year: 2026, epsE: 0.1 };
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/KSS");
+  const card = page.locator(".next-card");
+  await expect(card.locator("h3")).toHaveText("Wednesday, November 4");
+  await expect(card.getByTestId("nc-session")).toHaveText("Before open (unconfirmed) · in 4 days");
+  await expect(card.getByTestId("nc-xcheck")).toHaveText("Two calendars disagree. This is Nasdaq's calendar's day and time. Our data feed projects Tuesday, November 3, with no time. Treat the date as unconfirmed until the company announces it.");
+  await expect(card.getByTestId("nc-expected")).toHaveCount(0);
+  await expect(card.getByTestId("nc-projected")).toHaveCount(0);
+  await noSideScroll(page);
+  await page.screenshot({ path: test.info().outputPath("lead-nasdaq-sheet.png") });
+});
+
+test("the row sits on Nasdaq's day, counted as not confirmed and marked with the feed's day; the feed's day no longer lists it", async ({ page }) => {
+  await page.goto("./?d=2026-11-04&day=2026-11-04");
+  const drawer = page.locator(".drawer[role=dialog]");
+  const amgn = drawer.locator(".erow", { hasText: "AMGN" });
+  await expect(amgn.locator(".erow-x")).toHaveText("Feed projects Tue, Nov 3");
+  expect(await amgn.locator(".erow-x").evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  await expect(drawer.locator(".notice", { hasText: "isn't confirmed" })).toContainText("Nasdaq's calendar lists it here, but our data feed projects another day, marked “Feed projects” below.");
+  // Under Nasdaq's session.
+  await expect(drawer.locator(".sess", { hasText: "Before open" }).locator(".erow-id b", { hasText: /^AMGN$/ })).toHaveCount(1);
+  await noSideScroll(page);
+  await page.screenshot({ path: test.info().outputPath("lead-nasdaq-drawer.png") });
+  await page.goto("./?d=2026-11-03&day=2026-11-03");
+  await expect(page.locator(".drawer[role=dialog] h2, .drawer[role=dialog] h3").first()).toBeVisible();
+  await expect(page.locator(".drawer[role=dialog] .erow-id b", { hasText: /^AMGN$/ })).toHaveCount(0);
 });
