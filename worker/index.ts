@@ -1125,7 +1125,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     if (use?.x === "differs" && use.xd) nqNext = { date: use.xd, session: use.xh ?? "" };
   }
   // 0099: the feed's timeless projection against Nasdaq's timed listing on another day: Nasdaq's day leads, unconfirmed.
-  const leadNq = upNext && projected && nqNext && leadsNasdaq({ date: upNext.date, session: upNext.hour || "", source: upNext.source }, nqNext, today) ? nqNext : undefined;
+  // Also once the feed's day has come or passed with no figures (0078's contest), until Nasdaq's own day passes.
+  const leadNq = upNext && nqNext && !pending && !duePending && !checking && !closed && leadsNasdaq({ date: upNext.date, session: upNext.hour || "", source: upNext.source }, nqNext, today) ? nqNext : undefined;
   // Only when there's something a memo could change: a contest, or current evidence against one.
   if (seen.some((x) => x.clear || x.c?.x === "differs" || x.c?.x === "agree")) rememberContests(env, ctx, await memosOf(), seen, today);
   // 0091: an upcoming report with no session (DELL's date-only notice, a blank feed time) says when the company has
@@ -1611,7 +1612,9 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
       const feedH = (e.hour || "") as Session;
       const c = nqWin && !e.source ? crossOne(sym, e.date, feedH, nqWin) : null;
       const contestedH = c?.x === "differs" && c.xd === e.date && !!c.xh;
-      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: e.date, session: contestedH ? "" : feedH, quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}), ...(isProjected({ date: e.date, session: e.hour || "", source: e.source }, today) ? { projected: true } : {}) });
+      // 0099: the feed's timeless projection against Nasdaq's timed listing elsewhere: Nasdaq's day, still tentative.
+      const lead = c?.x === "differs" && c.xd && !closedDay(e.date) && leadsNasdaq({ date: e.date, session: feedH, source: e.source }, { date: c.xd, session: c.xh ?? "" }, today) ? { date: c.xd, session: c.xh! } : null;
+      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: lead?.date ?? e.date, session: lead ? "" : contestedH ? "" : feedH, quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}), ...(lead || isProjected({ date: e.date, session: e.hour || "", source: e.source }, today) ? { projected: true } : {}) });
     }
   });
   items.sort((a, b) => a.date.localeCompare(b.date));
@@ -1687,9 +1690,10 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
         return storyTickerSvg({
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
           // 0007: a projected date is "expected around", with no session glyph.
-          when: isDated(d.next) ? (d.next.projected && !d.next.nasdaq ? `expected around ${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (not yet confirmed)` : whenPlain(d.next.date, shownSession(d.next), day)) : d.next ? "date not confirmed yet" : "date not announced yet",
+          // 0099: Nasdaq's day leading over the feed's projection is never drawn as settled.
+          when: isDated(d.next) ? (d.next.feedDay ? `${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (date not confirmed)` : d.next.projected && !d.next.nasdaq ? `expected around ${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (not yet confirmed)` : whenPlain(d.next.date, shownSession(d.next), day)) : d.next ? "date not confirmed yet" : "date not announced yet",
           // 0062: a session the two calendars contest is drawn as unknown.
-          session: isDated(d.next) && d.next.projected && !d.next.nasdaq ? "" : shownSession(d.next), epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
+          session: isDated(d.next) && ((d.next.projected && !d.next.nasdaq) || d.next.feedDay) ? "" : shownSession(d.next), epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
           beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, ...(reportedCard(d, day) ?? {}),
         });
       }

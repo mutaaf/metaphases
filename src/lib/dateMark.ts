@@ -27,3 +27,11 @@ export function dateMark(e: EarningsEvent, today: string): DateMark {
   if (e.eA == null && eventProjected(e, today)) return { kind: "projected" };
   return null;
 }
+
+/** The "isn't confirmed" note's explanation for `n` disputed rows, `f` of them placed on Nasdaq's day (0099, `xf`). */
+export function disagreeWhy(n: number, f: number): string {
+  const it = n === 1 ? "it" : "them";
+  if (f === 0) return `Nasdaq's calendar lists ${it} on another day or time, marked “Nasdaq” below.`;
+  if (f === n) return `Nasdaq's calendar lists ${it} here, but our data feed projects another day, marked “Feed projects” below.`;
+  return "our data feed and Nasdaq's calendar list them on different days or times, marked below.";
+}
