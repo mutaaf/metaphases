@@ -52,12 +52,18 @@ test.describe("deep links on a first visit", () => {
     await expect(picker(page)).toHaveCount(0);
     const note = drawer.locator(".lens-note");
     await expect(note).toBeVisible();
-    await note.getByRole("button", { name: /switch to trader/i }).focus();
-    await expect(note.getByRole("button", { name: /switch to trader/i })).toBeFocused();
+    await expect(page.locator(".lens-note:visible")).toHaveCount(1); // the page's own note hides under the drawer
+    // Focus moves into the drawer and Tab stays there, through the note's buttons.
+    expect(await drawer.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press("Tab");
+      expect(await drawer.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+    }
     await note.getByRole("button", { name: /keep plain english/i }).click();
     await expect(note).toHaveCount(0);
     expect(await lens(page)).toBe("everyday");
     await expect(drawer).toBeVisible();
+    expect(await drawer.evaluate((d) => d.contains(document.activeElement))).toBe(true); // focus isn't dropped
   });
 
   test("dismissing the inline note keeps plain English", async ({ page }) => {

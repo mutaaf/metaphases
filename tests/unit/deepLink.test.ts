@@ -17,6 +17,9 @@ describe("isDeepLink (0025)", () => {
     expect(isDeepLink("/", "?day=2026-11-02&utm=x")).toBe(true);
     expect(isDeepLink("/", "?day=")).toBe(false);
     expect(isDeepLink("/", "?day=tuesday")).toBe(false);
+    expect(isDeepLink("/", "?day=2026-13-45")).toBe(false);
+    expect(isDeepLink("/", "?day=2026-02-30")).toBe(false);
+    expect(isDeepLink("/", "?day=2028-02-29")).toBe(true);
     expect(isDeepLink("/compass", "?day=2026-11-17")).toBe(false);
   });
   it("keeps the picker for a plain first visit", () => {

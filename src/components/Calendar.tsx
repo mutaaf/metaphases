@@ -23,6 +23,7 @@ import { briefWeek } from "../lib/brief";
 import { useDialog } from "../lib/dialog";
 import { HomeHero } from "./Hero";
 import { LensNote } from "./Everyday";
+import { isISODay } from "../lib/deepLink";
 
 const HOLIDAY = Object.fromEntries(HOLIDAYS.map((h) => [h.date, h.name]));
 // 0040: the session is over and the feed has no figures yet. Never styled as upcoming, never tinted.
@@ -351,7 +352,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const all = data?.events ?? [];
   const filtered = useFiltered(all);
   const store = useStore();
-  const [openDay, setOpenDay] = useState<string | null>(param("day"));
+  const [openDay, setOpenDay] = useState<string | null>(() => { const d = param("day"); return isISODay(d) ? d : null; });
   const next = nextTradingDay(today);
   const bWeek = useMemo(() => briefWeek(weeks, anchor), [weeks, anchor]);
 
