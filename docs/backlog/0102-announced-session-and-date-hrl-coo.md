@@ -1,12 +1,12 @@
 ---
 id: 0102
 title: Hormel shows "after close" for a before-the-open report, and Cooper sits a day early; both companies announced, and Nasdaq agrees with them
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-22
-pr:
+pr: 183
 by: critic
 ---
 
@@ -35,3 +35,6 @@ Hormel is the worse of the two. The sheet even says "the two calendars disagree 
 
 ## Out of scope
 DE and MRVL, which are company-dated with no stated session: they already show the habit label (0091).
+
+## Builder note (2026-11-23)
+Shipped part 1: HRL (Dec 3, bmo, Hormel's own PDF) and COO (Dec 3, amc, CooperCompanies' GlobeNewswire release) in `data/date-overrides.json`, with `tests/unit/announced0102Overrides.test.ts` covering the calendar, the sheet and the share title. Part 2, the general session rule, moved to **0104**. The calendar row only has the feed's session and Nasdaq's, with no per-company report history, so a sheet-only rule would break the "calendar, sheet, unfurl, ICS and Today agree" bar (#176). It needs its own design.
