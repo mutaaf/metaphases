@@ -42,6 +42,24 @@ test.describe("deep links on a first visit", () => {
     await expect(picker(page)).toHaveCount(0);
   });
 
+  // 0065: the day drawer writes its own share URL (?day=); its recipient sees the day, not a questionnaire.
+  test("/?day=2026-11-02 opens the day drawer with no picker and the inline lens note", async ({ page }) => {
+    await page.goto("./?day=2026-11-02");
+    const drawer = page.locator(".drawer[role=dialog]");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toContainText(/November 2/);
+    await page.waitForTimeout(3000);
+    await expect(picker(page)).toHaveCount(0);
+    const note = drawer.locator(".lens-note");
+    await expect(note).toBeVisible();
+    await note.getByRole("button", { name: /switch to trader/i }).focus();
+    await expect(note.getByRole("button", { name: /switch to trader/i })).toBeFocused();
+    await note.getByRole("button", { name: /keep plain english/i }).click();
+    await expect(note).toHaveCount(0);
+    expect(await lens(page)).toBe("everyday");
+    await expect(drawer).toBeVisible();
+  });
+
   test("dismissing the inline note keeps plain English", async ({ page }) => {
     await page.goto("./t/WES");
     await expect(page.locator(".lens-note")).toHaveCount(1); // only in the sheet, which covers the page

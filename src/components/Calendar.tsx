@@ -22,6 +22,7 @@ import { AskWeekButton } from "./ai/mount";
 import { briefWeek } from "../lib/brief";
 import { useDialog } from "../lib/dialog";
 import { HomeHero } from "./Hero";
+import { LensNote } from "./Everyday";
 
 const HOLIDAY = Object.fromEntries(HOLIDAYS.map((h) => [h.date, h.name]));
 // 0040: the session is over and the feed has no figures yet. Never styled as upcoming, never tinted.
@@ -272,6 +273,8 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
             <button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
           </div>
         </header>
+        {/* 0065: a shared ?day= link skips the picker; the drawer covers the page, so its lens line lives here. */}
+        <LensNote />
         {macro.map((m) => <Notice key={m.key}><b>{m.name}.</b> {m.blurb}</Notice>)}
         {(() => {
           const n = events.filter((e) => e.x === "differs").length;
