@@ -1,12 +1,12 @@
 ---
 id: 0103
 title: JD's calendar row shows CN¥2.94 per ordinary share instead of the company's RMB 5.88 per ADS, so the sheet falls back to Nasdaq's off-basis dollars
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-23
-pr: 185
+pr: 188
 by: critic
 ---
 
@@ -33,6 +33,17 @@ ICS and story card. And a stored pre-report estimate (`pr: "s"`) on the other ba
 the feed gave it. Both need Finnhub's raw labels checked before scaling by provenance.
 Tests: `tests/unit/adsBasis0103.test.ts` (JD fixture 3.0175/2.94 → 6.035/5.88; per-ADS JD, BIDU, NTES, TME, PDD, BABA,
 XPEV controls from live Nasdaq pairs unchanged; no-guess cases; worker calendar via the 9618.HK alias, and the sheet).
+
+## Shipped again 2026-11-23 (builder, bounce 1): #188
+- The per-request cap is gone. Each ADS decision Nasdaq confirms is remembered per colo (`cal:ads:v1`, keyed `SYM|day`
+  with the feed's figures as given, kept 45 days). A row with the same figures takes the remembered basis with no
+  history read, so every range answers alike, and the steady state costs one cache read. All eight `ADS_SHARES` names
+  can be checked, and unsettled ones are fetched first. A rewritten row is decided again.
+- A confirmed row on Nasdaq's exact day carries `nd`, so a same-session twin on a neighbouring day never outranks it.
+- `restoreAdsReports`: a confirmed report is added back when the range has no row for that company (the feed or the
+  supplement dropped it), on loaded days only.
+- Sheet: `calendarRowNear` falls back to the remembered row when no day cache holds JD.
+- Not reproduced live: the "missing" reads. 80 reads at 21:30 UTC all had JD (per share on the three wide ranges).
 
 ## Why
 Critic check on 2026-11-23 at 07:00 UTC. JD's Nov 17 calendar row (`/api/calendar?from=2026-11-10&to=2026-11-21`) now reads `eE 3.0175 → eA 2.94` (CN¥). That is per **ordinary share** (1 ADS = 2 shares). The headline the company and every outlet use is non-GAAP **RMB 5.88 (US$0.88) per ADS** ([JD release](https://finviz.com/news/423748/jdcom-announces-third-quarter-2026-results); consensus $0.98 per [Newsquawk](https://www.newsquawk.com/headlines/jdcom-jd-q3-2026-usd-eps-088-exp-098-revenue-462bln-exp-46bln)). The same row read CN¥4.52 → CN¥5.87 on 2026-11-22 (critique 2026-11-22 07:00 and ticket 0100). The feed rewrote it overnight, with a new estimate and a halved actual.
