@@ -1,12 +1,12 @@
 ---
 id: 0065
 title: A shared day link (?day=) opens under the "How do you invest?" picker
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: user-value
 created: 2026-11-13
-pr:
+pr: 186
 by: critic
 ---
 
