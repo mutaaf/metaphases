@@ -1,8 +1,8 @@
 ---
 id: 0103
 title: JD's calendar row shows CN¥2.94 per ordinary share instead of the company's RMB 5.88 per ADS, so the sheet falls back to Nasdaq's off-basis dollars
-status: shipped
-priority: P1
+status: ready
+priority: P0
 size: S
 lens: data-quality
 created: 2026-11-23
@@ -57,3 +57,22 @@ Vitest beside the 0100 tests (`calendarRowNear` / ADR sheet assembly), with the 
 
 ## Out of scope
 Disagreements between consensus sources (Finnhub vs LSEG vs Newsquawk), for example BIDU and HD. Those are a source choice, not a basis error.
+
+## Critic re-review 2026-11-23 19:00 UTC: reopened (bounce 1 of 2), raised to P0
+Checked live on build `66ee25f2` (deployed 18:51 UTC, includes #185 and #186). The first criterion fails, and the row is now worse than before #185: it **disappears**.
+- **Three answers for one report, depending on the range and the request.** These are repeated `curl`s of `/api/calendar`, seconds apart:
+  - `from=2026-11-16&to=2026-11-22` (the week view): CN¥3.0175 → 2.94 (per share) 4 of 4. In the 18:50 run on the earlier build, the row was **missing** in 4 of 8.
+  - `from=2026-11-16&to=2026-11-21`: CN¥3.0175 → 2.94 in 2 of 4, **missing** in 2 of 4.
+  - `from=2026-11-17&to=2026-11-17` and `2026-11-16..18`: CN¥6.035 → 5.88 (correct) in 3 of 4, **missing** in 1 of 4.
+  - No other row in Nov 9 – Dec 6 flickers (8 reads per week, every row's presence and values compared). JD is the only one.
+- **The sheet is unchanged.** `/api/ticker/JD` `history[0]` is still Nasdaq's `$0.89 → $0.77`, with no `cur`. The second criterion (the sheet matches the calendar, in CN¥) fails.
+- **Likely causes, for the builder to confirm:**
+  - `ADS_CHECK_MAX = 4` with "newest rows first". A week holding BABA, PDD and NTES (Nov 19), JD and TME (Nov 17), and XPEV and BIDU (Nov 16) puts JD fifth or later among `ADS_SHARES` names, so wide ranges never check it. That's why only narrow ranges get CN¥5.88.
+  - The disappearance looks like `oneRowInRange` / `oneReportOneRow` choosing a neighbouring twin (cache only, so no ADS check and different figures) that is then dropped as out of range. It could also be the cache-miss path in `settlePast`. A reported company vanishing from the calendar is the worst outcome of the three.
+  - The sheet: `companyCurrencyPairs` needs the cached calendar row, but that row is cached per share, and the 3% FX check still runs before the ADS check.
+
+**Bar, in addition to the original criteria:**
+- [ ] 20 consecutive reads of each of `from=2026-11-16&to=2026-11-22`, `2026-11-16..21`, `2026-11-17..17` and `2026-11-10..21` all return JD's Nov 17 row, all at CN¥6.035 → 5.88 (±1%).
+- [ ] The ADS check doesn't depend on how many other ADRs share the range. It costs no Nasdaq call beyond the one cached per name; or JD's correction is persisted with the day cache.
+- [ ] A unit test with six ADR past rows in one week (JD 5th by date) still puts JD on the ADS basis. A test where the in-range row and a neighbouring twin differ in basis keeps exactly one in-range JD row.
+- [ ] `/t/JD` `history[0]` reads CN¥6.035 → 5.88 (−2.6%) with `cur: "CNY"`.
