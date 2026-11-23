@@ -1,12 +1,12 @@
 ---
 id: 0104
 title: When the feed's session contradicts both Nasdaq and every recent report, Nasdaq's session leads, everywhere at once
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: data-quality
 created: 2026-11-23
-pr:
+pr: 184
 by: builder
 ---
 
@@ -20,10 +20,10 @@ Split from 0102. Hormel (HRL) read "after close" for a before-the-open report: t
 - With no memo (nobody has opened the sheet yet), the calendar keeps today's "time unconfirmed" row and never states the feed's session as fact.
 
 ## Acceptance criteria
-- [ ] Unit: feed `amc`, Nasdaq `bmo` and history `bmo×4` yields `next.session === "bmo"` with the feed's `amc` named. With history mixed (2–2), the feed's session is kept and the disagreement is flagged.
-- [ ] Unit: the calendar row for that company reads `h: "bmo"` once the sheet has recorded it, and the ICS summary and share title agree.
-- [ ] A company-dated override always wins over the rule.
-- [ ] Works at 390×844 and 1440×900.
+- [x] Unit: feed `amc`, Nasdaq `bmo` and history `bmo×4` yields `next.session === "bmo"` with the feed's `amc` named. With history mixed (2–2), the feed's session is kept and the disagreement is flagged.
+- [x] Unit: the calendar row for that company reads `h: "bmo"` once the sheet has recorded it, and the ICS summary and share title agree.
+- [x] A company-dated override always wins over the rule.
+- [x] Works at 390×844 and 1440×900.
 
 ## Test plan
 Beside `tests/unit/contestedSession.test.ts` and `leadDay0099.test.ts`, using made-up symbols (LESSONS 2026-11-06).
