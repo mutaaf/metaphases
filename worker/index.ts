@@ -21,7 +21,7 @@ import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { currencyBreak, dropsPb, sanitizeMetric, withoutOff } from "../shared/currencyBreak";
 import { companyCurrencyPairs, periodEnd, rateOn } from "../shared/adrPairs";
-import { ADS_SHARES, onAdsBasis } from "../shared/adsBasis";
+import { ADS_SHARES, adsMemoEntry, adsMemoKey, fromAdsMemo, mergeAdsMemo, onAdsBasis, restoreAdsReports, type AdsMemo } from "../shared/adsBasis";
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove, usualSession } from "../shared/reaction";
@@ -564,10 +564,22 @@ const nqSurpriseReq = (s: string) => CAL(`nq:surprise:${s}`);
 const nqSurpriseFail = (s: string) => CAL(`nq:surprise:fail:v1:${s}`);
 /** At most this many symbols are fetched fresh per request (pooled, short timeout); the rest wait for a later read. */
 const PAST_FETCH_MAX = 8;
-/** 0103: up to this many ADRs whose row may be per share are fetched ahead of the rest (others take leftover slots). */
-const ADS_FETCH_MAX = 2;
-/** 0103: at most this many ADRs are checked per request (one cache read each). */
-const ADS_CHECK_MAX = 4;
+/** 0103: ADRs whose row the memo hasn't settled are fetched ahead of the rest (others take leftover slots). There are
+ *  only eight names in ADS_SHARES, and each is fetched once per 12 h, then remembered (no cap by count: a busy week
+ *  must not leave the fifth ADR unchecked, the 0103 bounce). */
+const ADS_FETCH_MAX = 8;
+/** 0103: remembered ADS decisions (one small document per colo), kept as long as a past row is checked. */
+const ADS_MEMO = CAL("cal:ads:v1");
+const ADS_MEMO_TTL = PAST_LOOKBACK_DAYS * 86400;
+const readAdsMemo = async (): Promise<AdsMemo> => (await readJson<AdsMemo>(ADS_MEMO)) ?? {};
+/** Read-merge-write (LESSONS 2026-11-05): another request's newer entries survive. */
+function commitAdsMemo(ctx: ExecutionContext, updates: AdsMemo, today: string) {
+  if (!Object.keys(updates).length) return;
+  ctx.waitUntil((async () => {
+    const latest = await readJson<AdsMemo>(ADS_MEMO);
+    await putJson(ADS_MEMO, mergeAdsMemo(latest, updates, addDays(today, -PAST_LOOKBACK_DAYS)), ADS_MEMO_TTL);
+  })().catch(() => {}));
+}
 /** 0076: neighbouring symbols checked per request for a past row moving into the range (one cache read each). */
 const MOVE_IN_MAX = 4;
 /** 0080: neighbouring rows with suspect figures checked per request (cache only). */
@@ -583,25 +595,32 @@ const adsRowToCheck = (e: EarningsEvent, today: string) =>
   e.s in ADS_SHARES && e.eA != null && e.eE != null && e.ec !== "USD" && e.d < today && e.d >= addDays(today, -PAST_LOOKBACK_DAYS);
 
 /** 0103: the row on the ADS basis when Nasdaq's dollar pair for the same report (±3 days) says so, at the universe's
- *  refreshed rate (the basis is a 2–8× question, so the day's rate doesn't matter). No pair or rate: unchanged. */
-function adsRow(e: EarningsEvent, reports: NqReport[] | null): EarningsEvent {
+ *  refreshed rate (the basis is a 2–8× question, so the day's rate doesn't matter). No pair or rate: unchanged.
+ *  `sure`: Nasdaq dates the report within a day of the row and both its figures are in, so the decision is remembered. */
+function adsRow(e: EarningsEvent, reports: NqReport[] | null): { row: EarningsEvent; sure: boolean } {
   const nq = reports?.find((r) => Math.abs(daysApart(r.date, e.d)) <= 3);
   const usdPer = USD_PER[e.ec ?? (U[e.s] as { ec?: string } | undefined)?.ec ?? ""];
-  return nq && usdPer ? onAdsBasis(e.s, e, nq, 1 / usdPer) : e;
+  if (!nq || !usdPer) return { row: e, sure: false };
+  const sure = Math.abs(daysApart(nq.date, e.d)) <= 1 && nq.eps != null && nq.est != null;
+  const row = onAdsBasis(e.s, e, nq, 1 / usdPer);
+  // 0041: Nasdaq dates the report on this very day, so a neighbouring twin (another basis, another day) never outranks it.
+  return { row: nq.date === e.d && !row.nd ? { ...row, nd: 1 } : row, sure };
 }
 /** Dollars per unit of each currency, from any universe entry refreshed in it (JD's and LI's CNY rate serves BIDU too). */
 const USD_PER: Record<string, number> = Object.fromEntries(Object.values(U as Record<string, { fx?: number; mcCur?: string }>)
   .filter((v) => v.mcCur && v.fx && v.fx > 0).map((v) => [v.mcCur as string, v.fx as number]));
 
-async function settlePast(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true, figuresMax = FIGURES_CHECK_MAX): Promise<EarningsEvent[]> {
+async function settlePast(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true, figuresMax = FIGURES_CHECK_MAX, memo?: AdsMemo): Promise<EarningsEvent[]> {
   // 0080: plus up to `figuresMax` suspect rows with figures (`nx`), biggest first, so the reads stay bounded.
   const suspects = new Set([...new Set(events.filter((e) => needsFiguresCheck(e, today)).map((e) => e.s))]
     .sort((x, y) => (U[y]?.mc ?? 0) - (U[x]?.mc ?? 0) || x.localeCompare(y)).slice(0, figuresMax));
-  // 0103: ADRs with a past row with figures, so a per-share row can be put on the ADS basis (a handful of names).
-  // At most ADS_CHECK_MAX names (newest rows first): each costs a cache read on every past-range request.
-  const adrs = new Set([...events.filter((e) => adsRowToCheck(e, today))].sort((a, b) => b.d.localeCompare(a.d)).map((e) => e.s).filter((s, i, a) => a.indexOf(s) === i).slice(0, ADS_CHECK_MAX));
+  // 0103: ADRs with a past row with figures, so a per-share row can be put on the ADS basis (at most the eight names
+  // in ADS_SHARES). A row the memo already settled (same figures as given) needs no history read.
+  const adsRows = events.filter((e) => adsRowToCheck(e, today));
+  const ads = adsRows.length ? memo ?? (await readAdsMemo()) : {};
+  const adrs = new Set(adsRows.filter((e) => !fromAdsMemo(e, ads)).map((e) => e.s));
   const syms = [...new Set([...events.filter((e) => needsPastCheck(e, today)).map((e) => e.s), ...suspects, ...adrs])];
-  if (!syms.length) return events;
+  if (!syms.length && !adsRows.length) return events;
   const reports = new Map<string, ReturnType<typeof nqReports> | null>();
   const misses: string[] = [];
   await Promise.all(syms.map(async (s) => {
@@ -634,16 +653,31 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
   }
   // Nasdaq's figures are dollars: fill only rows whose figures are dollars too (untracked rows are shown in dollars).
   const usd = dollarFigures;
-  return events.map((e) => {
+  const learned: AdsMemo = {};
+  const settled = events.map((e) => {
     let out = needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today)
       : suspects.has(e.s) && needsFiguresCheck(e, today) ? settleFiguresRow(e, reports.get(e.s) ?? null, today)
       : e;
     // 0103: after the suspect check too, so a surviving `nx` row is on the same basis as the sheet.
-    if (adrs.has(out.s) && adsRowToCheck(out, today)) out = adsRow(out, reports.get(out.s) ?? null);
+    if (adsRowToCheck(out, today)) {
+      const known = fromAdsMemo(out, ads);
+      if (known) out = known;
+      else if (adrs.has(out.s)) {
+        const { row, sure } = adsRow(out, reports.get(out.s) ?? null);
+        const m = sure ? adsMemoEntry(out, row) : null;
+        if (m) learned[adsMemoKey(out.s, out.d)] = m;
+        out = row;
+      }
+    }
     if (out.nx == null) return out;
     const { nx: _nx, ...rest } = out; // the day caches keep `nx` for the sheet; responses don't need it
     return rest;
   });
+  if (Object.keys(learned).length) {
+    Object.assign(ads, learned); // this request's restore step sees them too
+    if (fetchFresh) commitAdsMemo(ctx, learned, today);
+  }
+  return settled;
 }
 
 /**
@@ -653,7 +687,7 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
  * check (cache only), collapsed with the range's rows, and dropped again. A cold neighbour is simply not compared.
  * Call after settlePast: its `nd` mark decides between twins.
  */
-async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, today: string, ctx: ExecutionContext): Promise<EarningsEvent[]> {
+async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, today: string, ctx: ExecutionContext, memo?: AdsMemo): Promise<EarningsEvent[]> {
   const inRange = (e: EarningsEvent) => e.d >= from && e.d <= to;
   const syms = new Set(fixed.filter(inRange).map((e) => e.s));
   // 0076: a past row may have moved out (dropped below) or may move in from a neighbour: MOVE_MAX_DAYS ≤ SAME_REPORT_DAYS,
@@ -686,7 +720,7 @@ async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, t
   let pad = applied.filter((e) => !inRange(e));
   // 0080: a neighbouring twin with phantom figures would outrank this range's row, so suspects are settled here too
   // (cache only, fewer of them).
-  if (pad.length && pastPad) pad = await settlePast(pad, today, ctx, false, PAD_FIGURES_MAX).catch(() => pad);
+  if (pad.length && pastPad) pad = await settlePast(pad, today, ctx, false, PAD_FIGURES_MAX, memo).catch(() => pad);
   // Keep the twins of rows here and the rows that moved here; the rest only rode along to be checked.
   pad = pad.filter((e) => inRange(e) || syms.has(e.s));
   if (!pad.length) return oneReportOneRow(fixed.filter(inRange));
@@ -727,9 +761,13 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
   }
   let fixed = flagClosed(applyToEvents(events, OVERRIDES, from, to, today, (s) => s in U));
   if (from < today) fixed = await preReportMoved(fixed, today, ctx).catch(() => fixed);
-  if (from < today) fixed = await settlePast(fixed, today, ctx).catch(() => fixed);
+  // 0103: remembered ADS decisions, read once for the range and its neighbours (only when it reaches checked days).
+  const adsMemo = from < today && to >= addDays(today, -PAST_LOOKBACK_DAYS) ? await readAdsMemo() : undefined;
+  if (from < today) fixed = await settlePast(fixed, today, ctx, true, FIGURES_CHECK_MAX, adsMemo).catch(() => fixed);
   // 0041: one report, one row (after the past check, whose `nd` mark picks the twin that happened).
-  fixed = await oneRowInRange(fixed, from, to, today, ctx).catch(() => oneReportOneRow(fixed.filter((e) => e.d >= from && e.d <= to)));
+  fixed = await oneRowInRange(fixed, from, to, today, ctx, adsMemo).catch(() => oneReportOneRow(fixed.filter((e) => e.d >= from && e.d <= to)));
+  // 0103: a report Nasdaq confirmed is never missing because the feed (or the supplement) dropped it this time.
+  if (adsMemo) fixed = restoreAdsReports(fixed, adsMemo, from, to, (d) => loaded.has(d));
   // 0015: only ranges that reach the next 14 days (or a month past them, for a projected date Nasdaq lists sooner).
   // A Nasdaq failure leaves the events as Finnhub has them. It isn't a calendar failure, so it's not a warning:
   // warnings make the client say "busy" and retry (0047). `unchecked` counts the days that couldn't be compared.
@@ -1322,6 +1360,14 @@ async function calendarRowNear(symbol: string, day: string): Promise<{ d: string
       const e = hit ? ((await hit.json()) as EarningsEvent[]).find((x) => x.s === symbol && x.eA != null) : undefined;
       if (e) return { d, eE: e.eE ?? null, eA: e.eA ?? null, ...(e.ec ? { ec: e.ec } : {}) };
     } catch { /* an unreadable day says nothing */ }
+  }
+  // 0103: the calendar's remembered row for an ADR it confirmed (the day cache may hold no row for it at all).
+  if (symbol in ADS_SHARES) {
+    const memo = await readAdsMemo();
+    for (const d of [day, addDays(day, -1), addDays(day, 1)]) {
+      const r = memo[adsMemoKey(symbol, d)]?.row;
+      if (r && r.eA != null) return { d, eE: r.eE ?? null, eA: r.eA ?? null, ...(r.ec ? { ec: r.ec } : {}) };
+    }
   }
   return null;
 }
