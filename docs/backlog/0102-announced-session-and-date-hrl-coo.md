@@ -27,7 +27,7 @@ Hormel is the worse of the two. The sheet even says "the two calendars disagree 
 ## Acceptance criteria
 - [ ] Live: `/api/calendar?from=2026-12-03&to=2026-12-03` has HRL `h: "bmo"` and COO on Dec 3 `amc`. No COO row on Dec 2.
 - [ ] Live: `/t/HRL` reads "Before open" and the `og:title` says "before the open". `/t/COO`'s `og:title` names Thu, Dec 3 with no "unconfirmed".
-- [ ] Unit: a fixture with feed `amc`, Nasdaq `bmo` and history `bmo×4` yields `next.session === "bmo"`. With history mixed (2–2), the feed's session is kept and the disagreement is flagged.
+- [x] ~~Unit: a fixture with feed `amc`, Nasdaq `bmo` and history `bmo×4` yields `next.session === "bmo"`. With history mixed (2–2), the feed's session is kept and the disagreement is flagged.~~ Moved to 0104.
 - [ ] 390×844 screenshot of the Dec 3 drawer shows HRL under Before open.
 
 ## Test plan
