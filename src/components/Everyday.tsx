@@ -1,6 +1,6 @@
 // The Everyday investor's shell: lens picker, lens switch, the phone tab bar and the
 // "add to home screen" coach mark. Small on purpose — this ships in the main bundle.
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { useDialog } from "../lib/dialog";
 import { appPath, href, navigate, useLocation } from "../lib/router";
 import { actions, useStore } from "../lib/store";
@@ -69,11 +69,19 @@ function LensPickerDialog() {
 export function LensNote() {
   const { prefs } = useStore();
   if (prefs.lens !== "unset" || !landedDeep) return null;
+  // The note unmounts with the focused button inside it: hand focus to the dialog it sits in (or the page) first.
+  const set = (lens: "everyday" | "trader") => (e: MouseEvent<HTMLButtonElement>) => {
+    const note = e.currentTarget.closest(".lens-note");
+    const dlg = e.currentTarget.closest<HTMLElement>("[role=dialog]");
+    const to = dlg ? Array.from(dlg.querySelectorAll<HTMLElement>("button:not([disabled]), a[href]")).find((n) => !note?.contains(n)) : document.getElementById("main");
+    to?.focus({ preventScroll: true });
+    actions.setPref("lens", lens);
+  };
   return (
     <p className="lens-note" role="note">
       <span>In plain English</span>
-      <button onClick={() => actions.setPref("lens", "trader")}>Switch to Trader</button>
-      <button className="lens-note-x" onClick={() => actions.setPref("lens", "everyday")} aria-label="Keep plain English">
+      <button onClick={set("trader")}>Switch to Trader</button>
+      <button className="lens-note-x" onClick={set("everyday")} aria-label="Keep plain English">
         <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" /></svg>
       </button>
     </p>

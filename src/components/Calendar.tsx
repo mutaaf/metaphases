@@ -22,6 +22,8 @@ import { AskWeekButton } from "./ai/mount";
 import { briefWeek } from "../lib/brief";
 import { useDialog } from "../lib/dialog";
 import { HomeHero } from "./Hero";
+import { LensNote } from "./Everyday";
+import { isISODay } from "../lib/deepLink";
 
 const HOLIDAY = Object.fromEntries(HOLIDAYS.map((h) => [h.date, h.name]));
 // 0040: the session is over and the feed has no figures yet. Never styled as upcoming, never tinted.
@@ -272,6 +274,8 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
             <button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
           </div>
         </header>
+        {/* 0065: a shared ?day= link skips the picker; the drawer covers the page, so its lens line lives here. */}
+        <LensNote />
         {macro.map((m) => <Notice key={m.key}><b>{m.name}.</b> {m.blurb}</Notice>)}
         {(() => {
           const n = events.filter((e) => e.x === "differs").length;
@@ -348,7 +352,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const all = data?.events ?? [];
   const filtered = useFiltered(all);
   const store = useStore();
-  const [openDay, setOpenDay] = useState<string | null>(param("day"));
+  const [openDay, setOpenDay] = useState<string | null>(() => { const d = param("day"); return isISODay(d) ? d : null; });
   const next = nextTradingDay(today);
   const bWeek = useMemo(() => briefWeek(weeks, anchor), [weeks, anchor]);
 

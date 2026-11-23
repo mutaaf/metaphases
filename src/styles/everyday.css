@@ -11,6 +11,8 @@
 .lens-note span { margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lens-note button { white-space: nowrap; flex: none; }
 .lens-note button { min-height: 40px; padding: 0 var(--s2); font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--accent); }
+/* 0065: a day drawer opened from a shared ?day= link carries its own note; the page's stays hidden under it. */
+main:has(.drawer-scrim) > .lens-note { display: none; }
 .lens-note .lens-note-x { min-width: 40px; padding: 0; display: grid; place-items: center; color: var(--ink-2); }
 .lens-pick .mark { color: var(--accent); }
 .lens-pick h2 { font: 800 34px/1 var(--display); letter-spacing: -.04em; margin: var(--s2) 0 0; }

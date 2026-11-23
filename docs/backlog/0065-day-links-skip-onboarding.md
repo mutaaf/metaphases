@@ -1,12 +1,12 @@
 ---
 id: 0065
 title: A shared day link (?day=) opens under the "How do you invest?" picker
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: user-value
 created: 2026-11-13
-pr:
+pr: 186
 by: critic
 ---
 
@@ -17,9 +17,9 @@ Critic check 2026-11-13 07:00 UTC, build `341dc9e0`. 0025 made shared deep links
 - Treat `?day=` (and `?t=`, which `/t/*` is rewritten to) as a deep link in the picker's guard: no picker, the inline "Viewing in plain English · switch to Trader" line instead, as 0025 does for `/t/*`.
 
 ## Acceptance criteria
-- [ ] Fresh context, `/?day=2026-11-17` at 390×844 and 1440×900: no "How do you invest?" dialog; the drawer is visible and focusable
-- [ ] Plain `/` in a fresh context still shows the picker (0025 behaviour unchanged)
-- [ ] e2e `onboarding.spec.ts` gains the `?day=` route
+- [x] Fresh context, `/?day=2026-11-17` at 390×844 and 1440×900: no "How do you invest?" dialog; the drawer is visible and focusable
+- [x] Plain `/` in a fresh context still shows the picker (0025 behaviour unchanged)
+- [x] e2e `onboarding.spec.ts` gains the `?day=` route
 
 ## Test plan
 Extend `onboarding.spec.ts`'s per-route fresh-context loop with `/?day=2026-11-02`.
