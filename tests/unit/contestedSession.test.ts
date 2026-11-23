@@ -110,7 +110,8 @@ describe("/api/ticker when the two calendars disagree on the session", () => {
     stub(SYM, "amc", closes(ADI_DAY, ADI_NEXT));
     nasdaqSays(SYM, "bmo");
     const r = await sheet();
-    expect(r.next).toMatchObject({ date: NEXT_DAY, session: "amc", nasdaq: { date: NEXT_DAY, session: "bmo" } });
+    // 0104: all four reports moved on Nasdaq's session, so Nasdaq's leads the headline (expected), the feed's named.
+    expect(r.next).toMatchObject({ date: NEXT_DAY, session: "bmo", hs: "n", feedSession: "amc" });
     expect(r.moveSession).toEqual({ feed: "amc", nasdaq: "bmo", session: "bmo" });
     r.history.slice(0, 4).forEach((h: any, i: number) => { expect(h.session).toBe("bmo"); expect(h.move).toBeCloseTo(ADI_DAY[i], 4); });
     expect(r.expectedMove).toBeCloseTo(mean(ADI_DAY), 4); // ±3.2, never Finnhub's ±1.7

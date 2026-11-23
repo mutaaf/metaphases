@@ -32,6 +32,7 @@ import { dayShareText } from "../shared/dayShare";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, passedQuarter, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
 import { shownSession } from "../shared/contestedTime";
+import { applyLeads, leadFor, LEAD_MEMO_DAYS, nasdaqSessionLeads, noteLead, type SessionLeads } from "../shared/sessionLead";
 import { applyMemos, contestsIn, dayStanding, memoCross, noteContests, windowCovered, XMEMO_DAYS, type XMemos } from "../shared/contestMemo";
 import { leadRows, leadsNasdaq } from "../shared/leadDay";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
@@ -450,6 +451,42 @@ function rememberContests(env: Env, ctx: ExecutionContext, memos: XMemos | null,
   })().catch(() => {}));
 }
 
+// ── 0104: the sheet's session verdicts every colo's calendar and ICS can read ──
+// Same pattern as the day contests above: one small KV record, a 60 s per-colo copy in front of it, a write only
+// when a verdict changes, and its own small per-colo daily write cap (the namespace's free tier is shared).
+const SL_KEY = "sl:v1";
+const SL_TTL = (LEAD_MEMO_DAYS + 1) * 86400;
+const SL_LOCAL = CAL("sl:local:v1");
+const SL_WRITES_PER_DAY = 10;
+async function readLeads(env: Env): Promise<SessionLeads | null> {
+  if (!env.SUPPORT) return null;
+  const local = await readJson<{ m: SessionLeads | null }>(SL_LOCAL);
+  if (local) return local.m;
+  try {
+    const v = await env.SUPPORT.get(SL_KEY, { cacheTtl: 60 });
+    const m = v ? (JSON.parse(v) as SessionLeads) : null;
+    await putJson(SL_LOCAL, { m }, 60);
+    return m;
+  } catch { return null; }
+}
+function rememberLead(env: Env, ctx: ExecutionContext, memos: SessionLeads | null, s: string, d: string, lead: { h: "bmo" | "amc"; f: "bmo" | "amc" } | null, today: string): void {
+  const kv = env.SUPPORT;
+  if (!kv || !noteLead(memos, s, d, lead, today)) return;
+  ctx.waitUntil((async () => {
+    const countKey = CAL(`sl:n:v1:${today}`);
+    const n = (await readJson<number>(countKey)) ?? 0;
+    if (n >= SL_WRITES_PER_DAY) return;
+    // Last writer wins: merge onto the newest copy, so another company's verdict usually survives.
+    const latest = await kv.get(SL_KEY).then((v) => (v ? (JSON.parse(v) as SessionLeads) : null)).catch(() => memos);
+    const merged = noteLead(latest, s, d, lead, today);
+    if (!merged) return;
+    try {
+      await kv.put(SL_KEY, JSON.stringify(merged), { expirationTtl: SL_TTL });
+    } catch { return; }
+    await Promise.all([putJson(countKey, n + 1, 86400), putJson(SL_LOCAL, { m: merged }, 60)]);
+  })().catch(() => {}));
+}
+
 async function fetchCalendarDay(day: string, env: Env): Promise<EarningsEvent[]> {
   const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${day}&to=${day}&token=${env.FINNHUB_API_KEY}`);
   return toEvents(data.earningsCalendar);
@@ -680,6 +717,8 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     fixed = applyMemos(fixed, memos, today, w);
     // 0099: a timeless projection Nasdaq lists on another day with a session sits on Nasdaq's day, still unconfirmed.
     fixed = leadRows(fixed, from, to, today);
+    // 0104: a session the sheet settled (Nasdaq's, backed by every recent report) reads the same on the calendar.
+    fixed = applyLeads(fixed, await readLeads(env), today);
     unchecked = windowDays(today).length - (w?.loaded.length ?? 0);
     // 0061: the days on screen that haven't been compared yet, so the client says "still checking" and asks again,
     // instead of showing a cold read as if it had been checked.
@@ -1146,6 +1185,19 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // 0099: the feed's timeless projection against Nasdaq's timed listing on another day: Nasdaq's day leads, unconfirmed.
   // Also once the feed's day has come or passed with no figures (0078's contest), until Nasdaq's own day passes.
   const leadNq = upNext && nqNext && !pending && !duePending && !checking && !closed && leadsNasdaq({ date: upNext.date, session: upNext.hour || "", source: upNext.source }, nqNext, today) ? nqNext : undefined;
+  // 0104: the feed's timed session against Nasdaq's other session on the same day, with every recent report (at least
+  // 3 measured) moving on Nasdaq's: Nasdaq's session leads (expected, the company hasn't said), the feed's is named.
+  // A company date never gets here (`source`), and a Nasdaq listing on another day isn't this rule (0099/0078).
+  const leadable = !!upNext && upNext === nextE && !upNext.source && !pending && !duePending && !checking && !closed && !projected && !leadNq && upNext.date >= today
+    && (upNext.hour === "bmo" || upNext.hour === "amc") && (!nqNext || nqNext.date === upNext.date);
+  const sessionLead = leadable && contest && contest.date === upNext!.date && contest.feed === upNext!.hour && (!nqNext || nqNext.session === contest.nasdaq)
+    && nasdaqSessionLeads(contest.feed, contest.nasdaq, pastDates, closeOn) ? { h: contest.nasdaq as "bmo" | "amc", f: contest.feed as "bmo" | "amc" } : null;
+  // The verdict is recorded only on current evidence (Nasdaq's listing for that day and the price history), so a
+  // Nasdaq timeout never clears it; a session Nasdaq now agrees on, or a split history, does.
+  if (leadable && chart && (nqOnNext === "bmo" || nqOnNext === "amc")) {
+    const leads = await readLeads(env);
+    if (sessionLead || leadFor(leads, symbol, upNext!.date, upNext!.hour as string, today)) rememberLead(env, ctx, leads, symbol, upNext!.date, sessionLead, today);
+  }
   // Only when there's something a memo could change: a contest, or current evidence against one.
   if (seen.some((x) => x.clear || x.c?.x === "differs" || x.c?.x === "agree")) rememberContests(env, ctx, await memosOf(), seen, today);
   // 0091: an upcoming report with no session (DELL's date-only notice, a blank feed time) says when the company has
@@ -1173,6 +1225,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   } else if (upNext && nqNext && nqNext.date !== upNext.date && upNext.date <= today) {
     // 0078: the feed's day has come, Nasdaq lists another, the company hasn't said: no "reports today", no "expected".
     read.push(`${name}'s Q${upNext.quarter} report date isn't confirmed: our data feed put it on ${longDay(upNext.date)}, but Nasdaq's calendar lists ${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}, and no results are in our data yet.`);
+  } else if (upNext && sessionLead) {
+    // 0104: Nasdaq's session leads; the feed's is named as the disagreement, and nothing reads as the company's word.
+    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${WHEN_LONG[sessionLead.h]} (expected; the company hasn't said): that's when Nasdaq's calendar lists it, and the stock's moves after each of its last reports fit that time. Our data feed says ${WHEN_LONG[sessionLead.f]}.`);
   } else if (upNext) {
     const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; the company hasn't said)" : ""}` : nqNext ? "" : usual ? `(time not announced; going by its last reports, it usually reports ${WHEN_LONG[usual]})` : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
@@ -1205,6 +1260,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       : duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
       : upNext && leadNq ? { date: leadNq.date, session: leadNq.session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, hs: "n", feedDay: upNext.date }
+      : upNext && sessionLead ? { date: upNext.date, session: sessionLead.h, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, hs: "n", feedSession: sessionLead.f }
       : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...((upNext.hs === "n" || upNext.hs === "h") && upNext.hour && !upNext.source ? { hs: upNext.hs as "n" | "h" } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}), ...(usual ? { usual } : {}), ...(call ? { call } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
@@ -1650,6 +1706,8 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
   // 0062: the cached 0015 window (no new upstream calls). A session Nasdaq lists differently on the same day isn't
   // stated in the summary.
   const nqWin = await nasdaqWindow(today, ctx, false).catch(() => null);
+  // 0104: the sheet's session verdicts, so a session Nasdaq leads on reads the same as on the calendar and the sheet.
+  const leads = syms.length ? await readLeads(env) : null;
   const items: IcsItem[] = [];
   results.forEach((r, i) => {
     if (r.status !== "fulfilled") return;
@@ -1658,10 +1716,11 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
       if (e.date < today) continue;
       const feedH = (e.hour || "") as Session;
       const c = nqWin && !e.source ? crossOne(sym, e.date, feedH, nqWin) : null;
+      const sl = !e.source && !closedDay(e.date) ? leadFor(leads, sym, e.date, feedH, today, c) : null;
       const contestedH = c?.x === "differs" && c.xd === e.date && !!c.xh;
       // 0099: the feed's timeless projection against Nasdaq's timed listing elsewhere: Nasdaq's day, still tentative.
       const lead = c?.x === "differs" && c.xd && !closedDay(e.date) && leadsNasdaq({ date: e.date, session: feedH, source: e.source }, { date: c.xd, session: c.xh ?? "" }, today) ? { date: c.xd, session: c.xh! } : null;
-      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: lead?.date ?? e.date, session: lead ? "" : contestedH ? "" : feedH, quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}), ...(lead || isProjected({ date: e.date, session: e.hour || "", source: e.source }, today) ? { projected: true } : {}) });
+      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: lead?.date ?? e.date, session: lead ? "" : sl ? sl.h : contestedH ? "" : feedH, ...(sl && !lead ? { expected: true } : {}), quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}), ...(lead || isProjected({ date: e.date, session: e.hour || "", source: e.source }, today) ? { projected: true } : {}) });
     }
   });
   items.sort((a, b) => a.date.localeCompare(b.date));
