@@ -21,6 +21,7 @@ import { handleSupport, type KvLike } from "./support";
 import { epsIn, estimateCurrency, isUsd, readEstimate } from "../shared/currency";
 import { currencyBreak, dropsPb, sanitizeMetric, withoutOff } from "../shared/currencyBreak";
 import { companyCurrencyPairs, periodEnd, rateOn } from "../shared/adrPairs";
+import { ADS_SHARES, onAdsBasis } from "../shared/adsBasis";
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove, usualSession } from "../shared/reaction";
@@ -38,7 +39,7 @@ import { leadRows, leadsNasdaq } from "../shared/leadDay";
 import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
-import { FIGURES_CHECK_MAX, needsFiguresCheck, needsPastCheck, nqReports, phantomReport, settleFiguresRow, settlePastRow } from "../shared/pastRows";
+import { FIGURES_CHECK_MAX, needsFiguresCheck, needsPastCheck, nqReports, phantomReport, settleFiguresRow, settlePastRow, PAST_LOOKBACK_DAYS, type NqReport } from "../shared/pastRows";
 import { oneReportOneRow, SAME_REPORT_DAYS } from "../shared/oneRow";
 import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, CALENDAR_NEXT, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
@@ -563,6 +564,10 @@ const nqSurpriseReq = (s: string) => CAL(`nq:surprise:${s}`);
 const nqSurpriseFail = (s: string) => CAL(`nq:surprise:fail:v1:${s}`);
 /** At most this many symbols are fetched fresh per request (pooled, short timeout); the rest wait for a later read. */
 const PAST_FETCH_MAX = 8;
+/** 0103: up to this many ADRs whose row may be per share are fetched ahead of the rest (others take leftover slots). */
+const ADS_FETCH_MAX = 2;
+/** 0103: at most this many ADRs are checked per request (one cache read each). */
+const ADS_CHECK_MAX = 4;
 /** 0076: neighbouring symbols checked per request for a past row moving into the range (one cache read each). */
 const MOVE_IN_MAX = 4;
 /** 0080: neighbouring rows with suspect figures checked per request (cache only). */
@@ -573,11 +578,29 @@ const PAD_FIGURES_MAX = 3;
  * (NIO). Never fails the calendar: a symbol whose history can't be read keeps its row as it was.
  * `fetchFresh: false` (share cards) reads the cache only.
  */
+/** 0103: a past ADR row with both figures in the company's currency, within the lookback. */
+const adsRowToCheck = (e: EarningsEvent, today: string) =>
+  e.s in ADS_SHARES && e.eA != null && e.eE != null && e.ec !== "USD" && e.d < today && e.d >= addDays(today, -PAST_LOOKBACK_DAYS);
+
+/** 0103: the row on the ADS basis when Nasdaq's dollar pair for the same report (±3 days) says so, at the universe's
+ *  refreshed rate (the basis is a 2–8× question, so the day's rate doesn't matter). No pair or rate: unchanged. */
+function adsRow(e: EarningsEvent, reports: NqReport[] | null): EarningsEvent {
+  const nq = reports?.find((r) => Math.abs(daysApart(r.date, e.d)) <= 3);
+  const usdPer = USD_PER[e.ec ?? (U[e.s] as { ec?: string } | undefined)?.ec ?? ""];
+  return nq && usdPer ? onAdsBasis(e.s, e, nq, 1 / usdPer) : e;
+}
+/** Dollars per unit of each currency, from any universe entry refreshed in it (JD's and LI's CNY rate serves BIDU too). */
+const USD_PER: Record<string, number> = Object.fromEntries(Object.values(U as Record<string, { fx?: number; mcCur?: string }>)
+  .filter((v) => v.mcCur && v.fx && v.fx > 0).map((v) => [v.mcCur as string, v.fx as number]));
+
 async function settlePast(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true, figuresMax = FIGURES_CHECK_MAX): Promise<EarningsEvent[]> {
   // 0080: plus up to `figuresMax` suspect rows with figures (`nx`), biggest first, so the reads stay bounded.
   const suspects = new Set([...new Set(events.filter((e) => needsFiguresCheck(e, today)).map((e) => e.s))]
     .sort((x, y) => (U[y]?.mc ?? 0) - (U[x]?.mc ?? 0) || x.localeCompare(y)).slice(0, figuresMax));
-  const syms = [...new Set([...events.filter((e) => needsPastCheck(e, today)).map((e) => e.s), ...suspects])];
+  // 0103: ADRs with a past row with figures, so a per-share row can be put on the ADS basis (a handful of names).
+  // At most ADS_CHECK_MAX names (newest rows first): each costs a cache read on every past-range request.
+  const adrs = new Set([...events.filter((e) => adsRowToCheck(e, today))].sort((a, b) => b.d.localeCompare(a.d)).map((e) => e.s).filter((s, i, a) => a.indexOf(s) === i).slice(0, ADS_CHECK_MAX));
+  const syms = [...new Set([...events.filter((e) => needsPastCheck(e, today)).map((e) => e.s), ...suspects, ...adrs])];
   if (!syms.length) return events;
   const reports = new Map<string, ReturnType<typeof nqReports> | null>();
   const misses: string[] = [];
@@ -588,7 +611,10 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
   if (fetchFresh && misses.length) {
     // A symbol whose read failed lately isn't asked again for 15 minutes: a Nasdaq outage must not cost 12 calls a read.
     const failed = await Promise.all(misses.map((s) => readJson<number>(nqSurpriseFail(s))));
-    const take = misses.filter((_, i) => failed[i] == null).slice(0, PAST_FETCH_MAX);
+    const ok = misses.filter((_, i) => failed[i] == null);
+    // 0103: up to ADS_FETCH_MAX ADRs go first (cached 12 h, about one call per name per colo); the rest share what is left.
+    const adrFirst = ok.filter((s) => adrs.has(s)).slice(0, ADS_FETCH_MAX);
+    const take = [...adrFirst, ...ok.filter((s) => !adrFirst.includes(s))].slice(0, PAST_FETCH_MAX);
     // One try each, no 429 retries (as fetchNasdaqDay): a second opinion must never spend the request's subrequests.
     const got = await pool(take, 4, async (s) => {
       const r = await fetch(`https://api.nasdaq.com/api/company/${s}/earnings-surprise`, { headers: UA, signal: AbortSignal.timeout(2500) } as RequestInit);
@@ -609,9 +635,11 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
   // Nasdaq's figures are dollars: fill only rows whose figures are dollars too (untracked rows are shown in dollars).
   const usd = dollarFigures;
   return events.map((e) => {
-    const out = needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today)
+    let out = needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today)
       : suspects.has(e.s) && needsFiguresCheck(e, today) ? settleFiguresRow(e, reports.get(e.s) ?? null, today)
       : e;
+    // 0103: after the suspect check too, so a surviving `nx` row is on the same basis as the sheet.
+    if (adrs.has(out.s) && adsRowToCheck(out, today)) out = adsRow(out, reports.get(out.s) ?? null);
     if (out.nx == null) return out;
     const { nx: _nx, ...rest } = out; // the day caches keep `nx` for the sheet; responses don't need it
     return rest;
@@ -1132,7 +1160,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     if (top && calRow && calRow.eE != null && calRow.eA != null && !(calRow.ec && calRow.ec !== currency)) {
       // A just-reported row has no Nasdaq actual to test, so no rate is needed (and Yahoo isn't asked).
       const perUsd = top.epsA == null ? null : await fxPerUsd(currency, periodEnd(top.period) ?? top.date, symbol, ctx);
-      const next = companyCurrencyPairs(history, calRow, currency, perUsd, (h) => judgeReaction(h, null, reit));
+      const next = companyCurrencyPairs(history, calRow, currency, perUsd, (h) => judgeReaction(h, null, reit), symbol);
       next.forEach((h, i) => { if (h !== history[i]) keep(h, h.cur ? null : fhActual.get(history[i]) ?? null); });
       history.splice(0, history.length, ...next);
     }

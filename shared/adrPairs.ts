@@ -7,6 +7,7 @@
 import type { Reaction } from "./types";
 import type { Currency } from "./currency";
 import { daysApart } from "./pending";
+import { adsScale } from "./adsBasis";
 
 /** Nasdaq's newest dollar actual must be within this of the calendar's actual converted to dollars. */
 export const ADR_FX_MAX = 0.03;
@@ -63,21 +64,25 @@ export function rateOn(t: number[], c: number[], day: string): number | null {
 /**
  * The sheet's history with the calendar's pair on the calendar's report (in `cur`, judged by `judge`), and Nasdaq's
  * other dollar pairs marked "basis differs" (`why: "fx"`) unless its newest actual matches the company's at `perUsd`. No calendar
- * pair in the company's currency (a cold cache, a row the calendar shows in dollars): history unchanged.
+ * pair in the company's currency (a cold cache, a row the calendar shows in dollars): history unchanged. With `sym`, a
+ * row on the per-share basis is first put on the ADS basis (0103, `onAdsBasis`).
  */
 export function companyCurrencyPairs(
   history: Reaction[], row: CalendarPair | null, cur: Currency, perUsd: number | null,
-  judge: (h: Reaction) => Reaction,
+  judge: (h: Reaction) => Reaction, sym?: string,
 ): Reaction[] {
   if (!row || !fin(row.eE) || !fin(row.eA) || (row.ec && row.ec !== cur)) return history;
   const at = sameReportRow(history, row.d);
   if (at < 0) return history;
   const nq = history[at];
+  // 0103: a row the feed gave per ordinary share goes on the ADS basis Nasdaq and the company use (both figures agree).
+  const n = sym ? adsScale(sym, row, { est: nq.epsE, eps: nq.epsA }, perUsd) : 1;
+  const eE = row.eE * n, eA = row.eA * n;
   const { basis: _b, why: _w, ...rest } = nq;
-  const surprisePct = row.eE !== 0 ? ((row.eA - row.eE) / Math.abs(row.eE)) * 100 : null;
-  const own = { ...judge({ ...rest, epsE: row.eE, epsA: row.eA, surprisePct }), cur };
+  const surprisePct = eE !== 0 ? ((eA - eE) / Math.abs(eE)) * 100 : null;
+  const own = { ...judge({ ...rest, epsE: eE, epsA: eA, surprisePct }), cur };
   // The just-reported row (0039) has no Nasdaq figure yet: nothing to test, so the older pairs stand until it lists.
-  const agrees = nq.epsA == null || nasdaqMatchesCompany(nq.epsA, row.eA, perUsd);
+  const agrees = nq.epsA == null || nasdaqMatchesCompany(nq.epsA, eA, perUsd);
   return history.map((h, i) => i === at ? own
     : agrees || h.cur || h.epsA == null || h.basis ? h
     : { ...h, surprisePct: null, basis: "differs" as const, why: "fx" as const });
