@@ -564,8 +564,10 @@ const nqSurpriseReq = (s: string) => CAL(`nq:surprise:${s}`);
 const nqSurpriseFail = (s: string) => CAL(`nq:surprise:fail:v1:${s}`);
 /** At most this many symbols are fetched fresh per request (pooled, short timeout); the rest wait for a later read. */
 const PAST_FETCH_MAX = 8;
-/** 0103: of those, at most this many go to ADRs whose row may be per share. */
+/** 0103: up to this many ADRs whose row may be per share are fetched ahead of the rest (others take leftover slots). */
 const ADS_FETCH_MAX = 2;
+/** 0103: at most this many ADRs are checked per request (one cache read each). */
+const ADS_CHECK_MAX = 4;
 /** 0076: neighbouring symbols checked per request for a past row moving into the range (one cache read each). */
 const MOVE_IN_MAX = 4;
 /** 0080: neighbouring rows with suspect figures checked per request (cache only). */
@@ -596,7 +598,8 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
   const suspects = new Set([...new Set(events.filter((e) => needsFiguresCheck(e, today)).map((e) => e.s))]
     .sort((x, y) => (U[y]?.mc ?? 0) - (U[x]?.mc ?? 0) || x.localeCompare(y)).slice(0, figuresMax));
   // 0103: ADRs with a past row with figures, so a per-share row can be put on the ADS basis (a handful of names).
-  const adrs = new Set(events.filter((e) => adsRowToCheck(e, today)).map((e) => e.s));
+  // At most ADS_CHECK_MAX names (newest rows first): each costs a cache read on every past-range request.
+  const adrs = new Set([...events.filter((e) => adsRowToCheck(e, today))].sort((a, b) => b.d.localeCompare(a.d)).map((e) => e.s).filter((s, i, a) => a.indexOf(s) === i).slice(0, ADS_CHECK_MAX));
   const syms = [...new Set([...events.filter((e) => needsPastCheck(e, today)).map((e) => e.s), ...suspects, ...adrs])];
   if (!syms.length) return events;
   const reports = new Map<string, ReturnType<typeof nqReports> | null>();
@@ -609,7 +612,7 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
     // A symbol whose read failed lately isn't asked again for 15 minutes: a Nasdaq outage must not cost 12 calls a read.
     const failed = await Promise.all(misses.map((s) => readJson<number>(nqSurpriseFail(s))));
     const ok = misses.filter((_, i) => failed[i] == null);
-    // 0103: up to ADS_FETCH_MAX ADRs first (cached 12 h, so about one call per name per colo), then the rest.
+    // 0103: up to ADS_FETCH_MAX ADRs go first (cached 12 h, about one call per name per colo); the rest share what is left.
     const adrFirst = ok.filter((s) => adrs.has(s)).slice(0, ADS_FETCH_MAX);
     const take = [...adrFirst, ...ok.filter((s) => !adrFirst.includes(s))].slice(0, PAST_FETCH_MAX);
     // One try each, no 429 retries (as fetchNasdaqDay): a second opinion must never spend the request's subrequests.
@@ -632,10 +635,11 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
   // Nasdaq's figures are dollars: fill only rows whose figures are dollars too (untracked rows are shown in dollars).
   const usd = dollarFigures;
   return events.map((e) => {
-    const out = needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today)
+    let out = needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today)
       : suspects.has(e.s) && needsFiguresCheck(e, today) ? settleFiguresRow(e, reports.get(e.s) ?? null, today)
-      : adrs.has(e.s) && adsRowToCheck(e, today) ? adsRow(e, reports.get(e.s) ?? null)
       : e;
+    // 0103: after the suspect check too, so a surviving `nx` row is on the same basis as the sheet.
+    if (adrs.has(out.s) && adsRowToCheck(out, today)) out = adsRow(out, reports.get(out.s) ?? null);
     if (out.nx == null) return out;
     const { nx: _nx, ...rest } = out; // the day caches keep `nx` for the sheet; responses don't need it
     return rest;

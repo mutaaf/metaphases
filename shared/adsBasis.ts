@@ -20,8 +20,11 @@ export const ADS_SHARES: Readonly<Record<string, number>> = {
   BABA: 8, // Alibaba: eight ordinary shares
 };
 
-/** After scaling, the actual must be within this factor of Nasdaq's (JD per ADS is 12% off; per share ~1.8×). */
+/** Once scaled, each figure must be within this factor of Nasdaq's, and as given at least ratio / this away
+ *  (JD per ADS is 12% off; per share ~1.8–2×). */
 export const ADS_NEAR = 1.5;
+/** Nasdaq figures under this many dollars are left alone: cent rounding near breakeven (LI, XPEV) can't decide a basis. */
+export const ADS_MIN_USD = 0.1;
 
 const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
@@ -37,18 +40,20 @@ export interface DollarPair { est?: number | null; eps?: number | null }
 /**
  * Shares per ADS to multiply the row's per-share figures by (`n`), or 1 to leave the row as it is. `row` is in the
  * company's currency; `nq` is Nasdaq's dollar pair for the same report; `perUsd` is units of currency per dollar.
- * Needs both pairs complete: the ratio must bring the actual within ADS_NEAR of Nasdaq's, and both the actual and the
- * estimate must sit nearer Nasdaq's once scaled than as they are.
+ * Needs both pairs complete and Nasdaq's at least ADS_MIN_USD: the estimate and the actual must each sit about the
+ * ratio away from Nasdaq's as given (≥ n / ADS_NEAR) and within ADS_NEAR of it once scaled. Anything else: 1.
  */
 export function adsScale(sym: string, row: OwnPair | null | undefined, nq: DollarPair | null | undefined, perUsd: number | null | undefined): number {
   const n = ADS_SHARES[sym];
   if (!n || n < 2 || !row || !nq || row.ec === "USD") return 1;
   if (!fin(perUsd) || perUsd <= 0 || !fin(row.eA) || !fin(row.eE) || !fin(nq.eps) || !fin(nq.est)) return 1;
+  if (Math.abs(nq.eps) < ADS_MIN_USD || Math.abs(nq.est) < ADS_MIN_USD) return 1;
   const usd = (v: number) => v / perUsd;
   const aRaw = gap(nq.eps, usd(row.eA)), aAds = gap(nq.eps, usd(row.eA * n));
   const eRaw = gap(nq.est, usd(row.eE)), eAds = gap(nq.est, usd(row.eE * n));
   if (aRaw == null || aAds == null || eRaw == null || eAds == null) return 1;
-  return aAds < aRaw && eAds < eRaw && aAds <= Math.log(ADS_NEAR) ? n : 1;
+  const far = Math.log(n / ADS_NEAR), near = Math.log(ADS_NEAR);
+  return aRaw >= far && eRaw >= far && aAds <= near && eAds <= near ? n : 1;
 }
 
 /** The row on the ADS basis when `adsScale` says so (estimate and actual together), else the row itself. */

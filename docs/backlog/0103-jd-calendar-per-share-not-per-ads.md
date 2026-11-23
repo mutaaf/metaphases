@@ -17,14 +17,20 @@ instead. A per-share row sits about the ADS ratio away from Nasdaq's per-ADS pai
 a per-ADS row sits near 1×. `shared/adsBasis.ts`:
 - `ADS_SHARES` is a published table (20-F cover pages): JD 2, LI 2, XPEV 2, TME 2, PDD 4, NTES 5, BIDU 8, BABA 8. It
   holds only companies that headline per ADS. TM, SONY, HMC, TSM and NVO headline per share and are never scaled.
-- `adsScale` scales only when both the estimate and the actual sit nearer Nasdaq once scaled, and the scaled actual is
-  within 1.5× of Nasdaq's. Two independent signals, per LESSONS 2026-11-21. Any figure, rate or Nasdaq row missing,
-  a sign change or a dollar row (`ec: "USD"`) leaves the row unchanged.
-- Calendar: `settlePast` reads Nasdaq's `earnings-surprise` for past ADR rows with figures, up to 2 ADRs first within
-  the existing 8-fetch budget (cached 12 h), and applies it at the universe's CNY rate.
+- `adsScale` scales only when the estimate and the actual each sit at least n/1.5 away from Nasdaq's as given and
+  within 1.5× once scaled, with Nasdaq's figures at least $0.10 (cent rounding near breakeven, LI/XPEV, can't decide
+  it). Two independent signals, per LESSONS 2026-11-21. Any figure, rate or Nasdaq row missing, a sign change or a
+  dollar row (`ec: "USD"`) leaves the row unchanged, and so does a mixed row (one figure per share, one per ADS).
+- Calendar: `settlePast` reads Nasdaq's `earnings-surprise` for past ADR rows with figures (at most 4 names, newest
+  rows first; up to 2 fetched ahead of the rest in the 8-fetch budget, cached 12 h), at the universe's CNY rate, and
+  after the suspect (`nx`) check too.
 - Sheet: `companyCurrencyPairs(…, symbol)` applies the same check to the cached calendar row at the quarter-end rate,
   so `/t/JD` and the calendar show the same CN¥6.035 → CN¥5.88 (−2.6%).
 - No cache key bump: the fix runs on every read, so the day caches that hold the per-share row are corrected as served.
+Follow-ups (not built, from the self-review): an aliased home-listing row (9618.HK, 2015.HK) is probably per share
+by construction, so JD's *next* estimate can still read about half the per-ADS figure on the calendar, sheet `next`,
+ICS and story card. And a stored pre-report estimate (`pr: "s"`) on the other basis leaves a mixed row that is shown as
+the feed gave it. Both need Finnhub's raw labels checked before scaling by provenance.
 Tests: `tests/unit/adsBasis0103.test.ts` (JD fixture 3.0175/2.94 → 6.035/5.88; per-ADS JD, BIDU, NTES, TME, PDD, BABA,
 XPEV controls from live Nasdaq pairs unchanged; no-guess cases; worker calendar via the 9618.HK alias, and the sheet).
 

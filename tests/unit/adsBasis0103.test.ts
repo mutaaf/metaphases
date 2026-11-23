@@ -50,6 +50,16 @@ describe("adsScale (0103)", () => {
     // Scaled, but still far from Nasdaq (more than 1.5×): not shown as the ADS figure.
     expect(adsScale("JD", { eE: 1, eA: 1 }, jdNq, 6.71)).toBe(1);
   });
+  it("near breakeven, cent rounding can't double a per-ADS row (LI, XPEV: review of #185)", () => {
+    expect(adsScale("LI", { eE: 0.1, eA: 0.21 }, { est: 0.03, eps: 0.05 }, 6.67)).toBe(1);
+    expect(adsScale("XPEV", { eE: -0.1, eA: -0.12 }, { est: -0.03, eps: -0.03 }, 6.67)).toBe(1);
+    // A per-ADS row only modestly under Nasdaq (1.3×, JD's old estimate) is not "about 2× off".
+    expect(adsScale("JD", { eE: 4.5237, eA: 4.5237 }, { est: 0.89, eps: 0.89 }, 6.71)).toBe(1);
+  });
+  it("the universe keeps a CNY rate, so the calendar can run the check", async () => {
+    const U = (await import("../../data/universe.json", { with: { type: "json" } })).default as Record<string, { fx?: number; mcCur?: string }>;
+    expect(Object.values(U).some((v) => v.mcCur === "CNY" && (v.fx ?? 0) > 0.1 && (v.fx ?? 0) < 0.2)).toBe(true);
+  });
   it("the table is whole numbers of shares, 2 or more", () => {
     for (const n of Object.values(ADS_SHARES)) expect(Number.isInteger(n) && n >= 2).toBe(true);
     expect(ADS_SHARES.JD).toBe(2);
@@ -140,6 +150,17 @@ describe("worker (0103)", () => {
     expect(jd.eA).toBeCloseTo(5.88, 6);
     const bidu = r.events.find((e: any) => e.s === "BIDU");
     expect(bidu).toMatchObject({ eE: 6.4888, eA: 6.78 });
+  });
+
+  it("/api/calendar: a suspect (nx) JD row in the day cache that survives the figures check is per ADS too", async () => {
+    calRows = [];
+    nqSurprise = { JD: [nqRow("Sep 2026", "11/17/2026", 0.77, "0.89")] };
+    for (const d of ["2026-11-16", "2026-11-18", "2026-11-19", "2026-11-20"]) calDay(d, []);
+    calDay("2026-11-17", [{ s: "JD", d: "2026-11-17", h: "bmo", q: 3, y: 2026, eE: 3.0175, eA: 2.94, t: 1, nx: 1 }]);
+    const r = await get("/api/calendar?from=2026-11-16&to=2026-11-20");
+    const jd = r.events.find((e: any) => e.s === "JD");
+    expect(jd.eA).toBeCloseTo(5.88, 6);
+    expect(jd.eE).toBeCloseTo(6.035, 6);
   });
 
   it("/api/calendar: no Nasdaq pair for JD, the row is left as the feed gave it (no guessing)", async () => {
