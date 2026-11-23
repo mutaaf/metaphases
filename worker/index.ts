@@ -477,7 +477,9 @@ function rememberLead(env: Env, ctx: ExecutionContext, memos: SessionLeads | nul
     const n = (await readJson<number>(countKey)) ?? 0;
     if (n >= SL_WRITES_PER_DAY) return;
     // Last writer wins: merge onto the newest copy, so another company's verdict usually survives.
-    const latest = await kv.get(SL_KEY).then((v) => (v ? (JSON.parse(v) as SessionLeads) : null)).catch(() => memos);
+    const latest = await kv.get(SL_KEY).then((v) => (v ? (JSON.parse(v) as SessionLeads) : null)).catch(() => undefined);
+    // Review: a failed read never writes the local copy over other companies' verdicts.
+    if (latest === undefined) return;
     const merged = noteLead(latest, s, d, lead, today);
     if (!merged) return;
     try {
@@ -1188,15 +1190,23 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // 0104: the feed's timed session against Nasdaq's other session on the same day, with every recent report (at least
   // 3 measured) moving on Nasdaq's: Nasdaq's session leads (expected, the company hasn't said), the feed's is named.
   // A company date never gets here (`source`), and a Nasdaq listing on another day isn't this rule (0099/0078).
-  const leadable = !!upNext && upNext === nextE && !upNext.source && !pending && !duePending && !checking && !closed && !projected && !leadNq && upNext.date >= today
+  // Only for a day still ahead: on the report day the 0039/0083 states follow the feed's session, so the time goes
+  // back to "unconfirmed" there rather than headline a session that may already have passed.
+  const leadable = !!upNext && upNext === nextE && !upNext.source && !pending && !duePending && !checking && !closed && !projected && !leadNq && upNext.date > today
     && (upNext.hour === "bmo" || upNext.hour === "amc") && (!nqNext || nqNext.date === upNext.date);
-  const sessionLead = leadable && contest && contest.date === upNext!.date && contest.feed === upNext!.hour && (!nqNext || nqNext.session === contest.nasdaq)
-    && nasdaqSessionLeads(contest.feed, contest.nasdaq, pastDates, closeOn) ? { h: contest.nasdaq as "bmo" | "amc", f: contest.feed as "bmo" | "amc" } : null;
-  // The verdict is recorded only on current evidence (Nasdaq's listing for that day and the price history), so a
-  // Nasdaq timeout never clears it; a session Nasdaq now agrees on, or a split history, does.
-  if (leadable && chart && (nqOnNext === "bmo" || nqOnNext === "amc")) {
+  // Review: only Nasdaq's live listing for that day counts as current evidence (never 0060's cached contest): a blank
+  // session, or no listing, there drops the verdict, as the calendar's cross-check would.
+  const nqLoaded = !!upNext && (!!nqNextDay || !!nqWin?.loaded.includes(upNext.date));
+  const liveContest = leadable && nqLoaded && isContested(upNext!.hour, nqOnNext);
+  const leadNow = liveContest && nasdaqSessionLeads(upNext!.hour, nqOnNext, pastDates, closeOn) ? { h: nqOnNext as "bmo" | "amc", f: upNext!.hour as "bmo" | "amc" } : null;
+  let sessionLead: { h: "bmo" | "amc"; f: "bmo" | "amc" } | null = leadNow;
+  if (leadable) {
     const leads = await readLeads(env);
-    if (sessionLead || leadFor(leads, symbol, upNext!.date, upNext!.hour as string, today)) rememberLead(env, ctx, leads, symbol, upNext!.date, sessionLead, today);
+    const known = leadFor(leads, symbol, upNext!.date, upNext!.hour as string, today);
+    // Recorded (or dropped) only on current evidence: Nasdaq's day loaded and, for a live contest, the price history.
+    if (nqLoaded && (!liveContest || chart) && (leadNow || known)) rememberLead(env, ctx, leads, symbol, upNext!.date, leadNow, today);
+    // Nasdaq's day couldn't be read, or the price history is down mid-contest: the shared verdict stands, as on the calendar.
+    if (!leadNow && known && (!nqLoaded || (liveContest && !chart && nqOnNext === known.h))) sessionLead = { h: known.h, f: known.f };
   }
   // Only when there's something a memo could change: a contest, or current evidence against one.
   if (seen.some((x) => x.clear || x.c?.x === "differs" || x.c?.x === "agree")) rememberContests(env, ctx, await memosOf(), seen, today);
@@ -1227,7 +1237,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     read.push(`${name}'s Q${upNext.quarter} report date isn't confirmed: our data feed put it on ${longDay(upNext.date)}, but Nasdaq's calendar lists ${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}, and no results are in our data yet.`);
   } else if (upNext && sessionLead) {
     // 0104: Nasdaq's session leads; the feed's is named as the disagreement, and nothing reads as the company's word.
-    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${WHEN_LONG[sessionLead.h]} (expected; the company hasn't said): that's when Nasdaq's calendar lists it, and the stock's moves after each of its last reports fit that time. Our data feed says ${WHEN_LONG[sessionLead.f]}.`);
+    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${WHEN_LONG[sessionLead.h]} (expected; the company hasn't said): that's when Nasdaq's calendar lists it, and the stock's moves after its recent reports all fit that time. Our data feed says ${WHEN_LONG[sessionLead.f]}.`);
   } else if (upNext) {
     const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; the company hasn't said)" : ""}` : nqNext ? "" : usual ? `(time not announced; going by its last reports, it usually reports ${WHEN_LONG[usual]})` : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
@@ -1797,7 +1807,7 @@ async function storyCard(kind: string, req: Request, env: Env, ctx: ExecutionCon
           symbol: sym, name, does: whatTheyDo(name, d.profile?.industry),
           // 0007: a projected date is "expected around", with no session glyph.
           // 0099: Nasdaq's day leading over the feed's projection is never drawn as settled.
-          when: isDated(d.next) ? (d.next.feedDay ? `${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (date not confirmed)` : d.next.projected && !d.next.nasdaq ? `expected around ${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (not yet confirmed)` : whenPlain(d.next.date, shownSession(d.next), day)) : d.next ? "date not confirmed yet" : "date not announced yet",
+          when: isDated(d.next) ? (d.next.feedDay ? `${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (date not confirmed)` : d.next.projected && !d.next.nasdaq ? `expected around ${new Date(d.next.date + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (not yet confirmed)` : `${whenPlain(d.next.date, shownSession(d.next), day)}${d.next.hs === "n" && shownSession(d.next) ? " (expected)" : ""}`) : d.next ? "date not confirmed yet" : "date not announced yet",
           // 0062: a session the two calendars contest is drawn as unknown.
           session: isDated(d.next) && ((d.next.projected && !d.next.nasdaq) || d.next.feedDay) ? "" : shownSession(d.next), epsE: d.next?.epsBasis ? null : d.next?.epsE ?? null, cur: d.next?.currency, move: d.expectedMove, grade: d.compass.grade,
           beats: d.beatRate?.beats ?? null, total: d.beatRate?.total ?? null, ...(reportedCard(d, day) ?? {}),

@@ -129,11 +129,13 @@ let cache: MemCache, kv: MemKv, env: any;
 let waits: Promise<unknown>[] = [];
 const ctx = { waitUntil: (p: Promise<unknown>) => { waits.push(p); }, passThroughOnException() {} } as any;
 let feedSym = SYM;
+let nasdaqDown = false, yahooDown = false;
 
 function stub(chart: { timestamp: number[]; close: number[] }) {
   vi.stubGlobal("fetch", vi.fn(async (u: string) => {
     const url = new URL(u);
-    if (url.hostname === "api.nasdaq.com" && url.pathname === "/api/calendar/earnings") return new Response(JSON.stringify({ data: { rows: [] } }));
+    if (url.hostname === "api.nasdaq.com" && url.pathname === "/api/calendar/earnings") return nasdaqDown ? new Response("no", { status: 503 }) : new Response(JSON.stringify({ data: { rows: [] } }));
+    if (url.hostname.endsWith("finance.yahoo.com") && yahooDown) return new Response("busy", { status: 503 });
     if (url.hostname === "api.nasdaq.com") return new Response(JSON.stringify({ data: { earningsSurpriseTable: { rows: nqRows } } }));
     if (url.hostname.endsWith("finance.yahoo.com")) return new Response(JSON.stringify({ chart: { result: [{ timestamp: chart.timestamp, indicators: { quote: [{ open: chart.close, high: chart.close, low: chart.close, close: chart.close }] } }] } }));
     if (url.pathname.endsWith("/calendar/earnings")) {
@@ -146,7 +148,7 @@ function stub(chart: { timestamp: number[]; close: number[] }) {
   }));
 }
 beforeEach(() => {
-  waits = []; feedSym = SYM;
+  waits = []; feedSym = SYM; nasdaqDown = false; yahooDown = false;
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-11-23T15:00:00Z"));
   cache = new MemCache(); kv = new MemKv();
@@ -231,4 +233,68 @@ describe("0104 through the worker", () => {
     expect(e.hs).toBeUndefined();
     expect(e.fh).toBeUndefined();
   });
+
+  // Self-review: the sheet and the calendar read the same evidence.
+  const verdict = () => kv.store.set("sl:v1", JSON.stringify({ [SYM]: { d: DAY, h: "bmo", f: "amc", at: "2026-11-22" } }));
+  for (const [label, listing] of [["lists the day with no time", { [SYM]: "" }], ["no longer lists the company", { OTHER: "bmo" }]] as const) {
+    it(`Nasdaq ${label}: no lead from a cached contest, and the verdict is dropped`, async () => {
+      verdict();
+      cache.store.set(CAL(`ms:v1:${SYM}`), JSON.stringify({ date: DAY, feed: "amc", nasdaq: "bmo" }));
+      cache.store.set(CAL(`nq:x:v1:${DAY}`), JSON.stringify(listing));
+      stub(closes(BMO_DAY, BMO_NEXT));
+      const t: any = await get(`/api/ticker/${SYM}`);
+      expect(t.next.feedSession).toBeUndefined();
+      expect(t.next.hs).toBeUndefined();
+      expect(JSON.parse(kv.store.get("sl:v1")!)).toEqual({});
+    });
+  }
+
+  it("Nasdaq's day can't be read: the shared verdict leads the sheet, as it does the calendar", async () => {
+    verdict();
+    nasdaqDown = true;
+    stub(closes(BMO_DAY, BMO_NEXT));
+    const t: any = await get(`/api/ticker/${SYM}`);
+    expect(t.next).toMatchObject({ session: "bmo", hs: "n", feedSession: "amc" });
+    expect(JSON.parse(kv.store.get("sl:v1")!)[SYM].at).toBe("2026-11-22"); // not re-stamped or dropped on no evidence
+  });
+
+  it("the price history is down mid-contest: the shared verdict still leads, and isn't dropped", async () => {
+    verdict();
+    yahooDown = true;
+    stub(closes(BMO_DAY, BMO_NEXT));
+    nasdaqSays("bmo");
+    const t: any = await get(`/api/ticker/${SYM}`);
+    expect(t.next).toMatchObject({ session: "bmo", hs: "n", feedSession: "amc" });
+    expect(JSON.parse(kv.store.get("sl:v1")!)[SYM]).toBeDefined();
+  });
+
+  it("on the report day itself the time goes back to unconfirmed, on the sheet and the calendar", async () => {
+    vi.setSystemTime(new Date(`${DAY}T13:00:00Z`));
+    kv.store.set("sl:v1", JSON.stringify({ [SYM]: { d: DAY, h: "bmo", f: "amc", at: "2026-12-02" } }));
+    stub(closes(BMO_DAY, BMO_NEXT));
+    nasdaqSays("bmo");
+    const t: any = await get(`/api/ticker/${SYM}`);
+    expect(t.next?.feedSession).toBeUndefined();
+    const c: any = await get(`/api/calendar?from=${DAY}&to=${DAY}`);
+    const e = c.events.find((x: any) => x.s === SYM);
+    expect(e?.fh).toBeUndefined();
+  });
+
+  it("a failed KV read never writes over other companies' verdicts; no KV at all degrades to the unflagged rule", async () => {
+    kv.store.set("sl:v1", JSON.stringify({ OTHR: { d: DAY, h: "amc", f: "bmo", at: "2026-11-23" } }));
+    (globalThis as any).caches.default.store.set(CAL("sl:local:v1"), JSON.stringify({ m: null }));
+    const get0 = kv.get.bind(kv);
+    kv.get = async (k: string) => { throw new Error("kv down " + k); };
+    stub(closes(BMO_DAY, BMO_NEXT));
+    nasdaqSays("bmo");
+    const t: any = await get(`/api/ticker/${SYM}`);
+    expect(t.next).toMatchObject({ session: "bmo", feedSession: "amc" }); // the live verdict still shows
+    kv.get = get0;
+    expect(JSON.parse(kv.store.get("sl:v1")!)).toEqual({ OTHR: { d: DAY, h: "amc", f: "bmo", at: "2026-11-23" } });
+    delete env.SUPPORT;
+    goCold();
+    const c: any = await get(`/api/calendar?from=${DAY}&to=${DAY}`);
+    expect(c.events.find((x: any) => x.s === SYM)?.fh).toBeUndefined();
+  });
 });
+

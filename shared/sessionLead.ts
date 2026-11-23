@@ -28,12 +28,12 @@ export function nasdaqSessionLeads(feed: string | undefined, nasdaq: string | un
 /** One sheet verdict: on the feed's day `d`, Nasdaq's session `h` leads over the feed's `f`. `at` = NY day last seen. */
 export interface SessionLeadMemo { d: string; h: "bmo" | "amc"; f: "bmo" | "amc"; at: string }
 export type SessionLeads = Record<string, SessionLeadMemo>;
-/** A verdict is kept this many days after the sheet last confirmed it (and never past its report day). */
+/** A verdict is kept this many days after the sheet last confirmed it (and only while its report day is still ahead). */
 export const LEAD_MEMO_DAYS = 7;
 const RESTAMP_DAYS = 3;
 
 const dayNum = (d: string) => Date.parse(d + "T12:00:00Z") / 86400000;
-const fresh = (m: SessionLeadMemo, today: string) => dayNum(today) - dayNum(m.at) <= LEAD_MEMO_DAYS && m.d >= today;
+const fresh = (m: SessionLeadMemo, today: string) => dayNum(today) - dayNum(m.at) <= LEAD_MEMO_DAYS && m.d > today;
 
 /**
  * Fold a sheet's verdict for `s` into the record: `lead` notes (or re-stamps) it; null drops a memo for that same
