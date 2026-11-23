@@ -573,11 +573,12 @@ const ADS_MEMO = CAL("cal:ads:v1");
 const ADS_MEMO_TTL = PAST_LOOKBACK_DAYS * 86400;
 const readAdsMemo = async (): Promise<AdsMemo> => (await readJson<AdsMemo>(ADS_MEMO)) ?? {};
 /** Read-merge-write (LESSONS 2026-11-05): another request's newer entries survive. */
-function commitAdsMemo(ctx: ExecutionContext, updates: AdsMemo, today: string) {
+function commitAdsMemo(ctx: ExecutionContext, seen: AdsMemo, updates: AdsMemo, today: string) {
   if (!Object.keys(updates).length) return;
   ctx.waitUntil((async () => {
+    // The copy this request read counts too, so a failed re-read never writes back fewer entries than it saw.
     const latest = await readJson<AdsMemo>(ADS_MEMO);
-    await putJson(ADS_MEMO, mergeAdsMemo(latest, updates, addDays(today, -PAST_LOOKBACK_DAYS)), ADS_MEMO_TTL);
+    await putJson(ADS_MEMO, mergeAdsMemo({ ...seen, ...(latest ?? {}) }, updates, addDays(today, -PAST_LOOKBACK_DAYS)), ADS_MEMO_TTL);
   })().catch(() => {}));
 }
 /** 0076: neighbouring symbols checked per request for a past row moving into the range (one cache read each). */
@@ -596,12 +597,13 @@ const adsRowToCheck = (e: EarningsEvent, today: string) =>
 
 /** 0103: the row on the ADS basis when Nasdaq's dollar pair for the same report (±3 days) says so, at the universe's
  *  refreshed rate (the basis is a 2–8× question, so the day's rate doesn't matter). No pair or rate: unchanged.
- *  `sure`: Nasdaq dates the report within a day of the row and both its figures are in, so the decision is remembered. */
+ *  `sure`: Nasdaq dates the report on this very day and both its figures are in, so the decision is remembered. A
+ *  twin a day off is never remembered (review of #188): restored, it would show the report on the wrong day. */
 function adsRow(e: EarningsEvent, reports: NqReport[] | null): { row: EarningsEvent; sure: boolean } {
   const nq = reports?.find((r) => Math.abs(daysApart(r.date, e.d)) <= 3);
   const usdPer = USD_PER[e.ec ?? (U[e.s] as { ec?: string } | undefined)?.ec ?? ""];
   if (!nq || !usdPer) return { row: e, sure: false };
-  const sure = Math.abs(daysApart(nq.date, e.d)) <= 1 && nq.eps != null && nq.est != null;
+  const sure = nq.date === e.d && nq.eps != null && nq.est != null;
   const row = onAdsBasis(e.s, e, nq, 1 / usdPer);
   // 0041: Nasdaq dates the report on this very day, so a neighbouring twin (another basis, another day) never outranks it.
   return { row: nq.date === e.d && !row.nd ? { ...row, nd: 1 } : row, sure };
@@ -674,8 +676,8 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
     return rest;
   });
   if (Object.keys(learned).length) {
+    if (fetchFresh) commitAdsMemo(ctx, { ...ads }, learned, today);
     Object.assign(ads, learned); // this request's restore step sees them too
-    if (fetchFresh) commitAdsMemo(ctx, learned, today);
   }
   return settled;
 }
@@ -1354,20 +1356,21 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
  *  Nasdaq's). Cache only, read in order and stopping at the first row with figures: only non-dollar sheets ask. The
  *  last good copy only for the day itself, so a cold sheet costs at most 4 cache reads (the 50-per-request cap). */
 async function calendarRowNear(symbol: string, day: string): Promise<{ d: string; eE: number | null; eA: number | null; ec?: string } | null> {
-  for (const d of [day, addDays(day, -1), addDays(day, 1)]) {
-    try {
-      const hit = (await caches.default.match(CAL_DAY(d))) ?? (d === day ? await caches.default.match(CAL(`cal:stale:v3:${d}`)) : undefined);
-      const e = hit ? ((await hit.json()) as EarningsEvent[]).find((x) => x.s === symbol && x.eA != null) : undefined;
-      if (e) return { d, eE: e.eE ?? null, eA: e.eA ?? null, ...(e.ec ? { ec: e.ec } : {}) };
-    } catch { /* an unreadable day says nothing */ }
-  }
-  // 0103: the calendar's remembered row for an ADR it confirmed (the day cache may hold no row for it at all).
+  // 0103: the report the calendar confirmed on Nasdaq's day comes first: a twin cached next door (another basis, a
+  // day off) must never stand in for it on the sheet (review of #188).
   if (symbol in ADS_SHARES) {
     const memo = await readAdsMemo();
     for (const d of [day, addDays(day, -1), addDays(day, 1)]) {
       const r = memo[adsMemoKey(symbol, d)]?.row;
       if (r && r.eA != null) return { d, eE: r.eE ?? null, eA: r.eA ?? null, ...(r.ec ? { ec: r.ec } : {}) };
     }
+  }
+  for (const d of [day, addDays(day, -1), addDays(day, 1)]) {
+    try {
+      const hit = (await caches.default.match(CAL_DAY(d))) ?? (d === day ? await caches.default.match(CAL(`cal:stale:v3:${d}`)) : undefined);
+      const e = hit ? ((await hit.json()) as EarningsEvent[]).find((x) => x.s === symbol && x.eA != null) : undefined;
+      if (e) return { d, eE: e.eE ?? null, eA: e.eA ?? null, ...(e.ec ? { ec: e.ec } : {}) };
+    } catch { /* an unreadable day says nothing */ }
   }
   return null;
 }

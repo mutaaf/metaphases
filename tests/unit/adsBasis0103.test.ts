@@ -296,3 +296,51 @@ describe("ADS memo helpers (0103 bounce)", () => {
     expect((adsMemoEntry({ ...row, eE: 3.0175, eA: 2.94 }, { ...row, nx: 1 } as any) as any).row.nx).toBeUndefined();
   });
 });
+
+// ── Review of #188: a twin a day off is never remembered, restored or read by the sheet ──────────────────────────
+describe("0103 bounce review: the twin next door", () => {
+  const store = () => (globalThis as any).caches.default.store as Map<string, string>;
+  const k = (key: string) => `https://cache.metaphases.internal/${encodeURIComponent(key)}`;
+  const confirmed = { s: "JD", d: "2026-11-17", h: "bmo", q: 3, y: 2026, eE: 3.0175, eA: 2.94, rE: 3e11, rA: 2.99e11, t: 1 };
+  const twin = { s: "JD", d: "2026-11-18", h: "bmo", q: 3, y: 2026, eE: 4.5237, eA: 5.86608, rE: 3e11, rA: 2.99e11, t: 1 };
+  const seed = () => {
+    calRows = [];
+    nqSurprise = { JD: [nqRow("Sep 2026", "11/17/2026", 0.77, "0.89"), nqRow("Jun 2026", "8/13/2026", 0.83, "0.77")] };
+    for (const d of ["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-16", "2026-11-19", "2026-11-20", "2026-11-23", "2026-11-24", "2026-11-25"]) calDay(d, []);
+    calDay("2026-11-17", [confirmed]);
+    calDay("2026-11-18", [twin]);
+  };
+
+  it("a range holding only the twin's day never shows JD on that day with the twin's figures", async () => {
+    seed();
+    await get("/api/calendar?from=2026-11-16&to=2026-11-22");
+    const memo = JSON.parse(store().get(k("cal:ads:v1")) ?? "{}");
+    expect(Object.keys(memo)).toEqual(["JD|2026-11-17"]);
+    for (const range of ["2026-11-18&to=2026-11-22", "2026-11-18&to=2026-11-18"]) {
+      const jd = (await get(`/api/calendar?from=${range}`)).events.filter((e: any) => e.s === "JD");
+      expect(jd, range).toEqual([]);
+    }
+  });
+
+  it("when the feed drops both rows, the confirmed report comes back, not the twin", async () => {
+    seed();
+    await get("/api/calendar?from=2026-11-16&to=2026-11-22");
+    calDay("2026-11-17", []);
+    calDay("2026-11-18", []);
+    const jd = (await get("/api/calendar?from=2026-11-16&to=2026-11-22")).events.filter((e: any) => e.s === "JD");
+    expect(jd).toHaveLength(1);
+    expect(jd[0].d).toBe("2026-11-17");
+    expect(jd[0].eA).toBeCloseTo(5.88, 6);
+  });
+
+  it("the sheet reads the confirmed report, not a twin cached next door, after the report's day is evicted", async () => {
+    seed();
+    await get("/api/calendar?from=2026-11-16&to=2026-11-22");
+    store().delete(k("cal:v3:2026-11-17"));
+    store().delete(k("cal:stale:v3:2026-11-17"));
+    const r = await get("/api/ticker/JD");
+    expect(r.history[0].cur).toBe("CNY");
+    expect(r.history[0].epsA).toBeCloseTo(5.88, 6);
+    expect(r.history[0].surprisePct).toBeCloseTo(-2.57, 1);
+  });
+});

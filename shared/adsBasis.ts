@@ -89,6 +89,7 @@ export function fromAdsMemo(e: EarningsEvent, memo: AdsMemo | null | undefined):
 
 /** A decision worth remembering: both figures as given, and the row as shown (without the day cache's `nx`). */
 export function adsMemoEntry(given: EarningsEvent, shown: EarningsEvent): AdsMemoEntry | null {
+  if (!shown.nd) return null; // only a report on Nasdaq's own day is remembered (a twin a day off never is)
   if (!fin(given.eE) || !fin(given.eA) || !fin(shown.eE) || !fin(shown.eA) || given.eA === 0) return null;
   const n = Math.round(shown.eA / given.eA);
   const { nx: _nx, ...row } = shown;
@@ -110,7 +111,7 @@ export function restoreAdsReports(events: EarningsEvent[], memo: AdsMemo | null 
   if (!memo) return events;
   const have = new Set(events.filter((e) => e.d >= from && e.d <= to).map((e) => e.s));
   const add = Object.values(memo).map((m) => m.row)
-    .filter((r) => r && r.s in ADS_SHARES && r.d >= from && r.d <= to && !have.has(r.s) && loaded(r.d))
+    .filter((r) => r && r.nd && r.s in ADS_SHARES && r.d >= from && r.d <= to && !have.has(r.s) && loaded(r.d))
     .sort((a, b) => a.d.localeCompare(b.d) || a.s.localeCompare(b.s));
   const seen = new Set<string>();
   const uniq = add.filter((r) => (seen.has(r.s) ? false : (seen.add(r.s), true)));
