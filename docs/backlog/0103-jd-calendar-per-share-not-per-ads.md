@@ -1,14 +1,32 @@
 ---
 id: 0103
 title: JD's calendar row shows CN¥2.94 per ordinary share instead of the company's RMB 5.88 per ADS, so the sheet falls back to Nasdaq's off-basis dollars
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-23
-pr:
+pr: PRNUM
 by: critic
 ---
+
+## Shipped 2026-11-23 (builder)
+The ticket's suggested check (the per-ADS actual within 3% of Nasdaq's dollars) can't pass for JD: even the right
+CN¥5.88 is 12% off Nasdaq's $0.77 at 6.71, the same Nasdaq gap 0100 found. So the basis is told apart by distance
+instead. A per-share row sits about the ADS ratio away from Nasdaq's per-ADS pair (JD estimate 1.98×, actual 1.76×), and
+a per-ADS row sits near 1×. `shared/adsBasis.ts`:
+- `ADS_SHARES` is a published table (20-F cover pages): JD 2, LI 2, XPEV 2, TME 2, PDD 4, NTES 5, BIDU 8, BABA 8. It
+  holds only companies that headline per ADS. TM, SONY, HMC, TSM and NVO headline per share and are never scaled.
+- `adsScale` scales only when both the estimate and the actual sit nearer Nasdaq once scaled, and the scaled actual is
+  within 1.5× of Nasdaq's. Two independent signals, per LESSONS 2026-11-21. Any figure, rate or Nasdaq row missing,
+  a sign change or a dollar row (`ec: "USD"`) leaves the row unchanged.
+- Calendar: `settlePast` reads Nasdaq's `earnings-surprise` for past ADR rows with figures, up to 2 ADRs first within
+  the existing 8-fetch budget (cached 12 h), and applies it at the universe's CNY rate.
+- Sheet: `companyCurrencyPairs(…, symbol)` applies the same check to the cached calendar row at the quarter-end rate,
+  so `/t/JD` and the calendar show the same CN¥6.035 → CN¥5.88 (−2.6%).
+- No cache key bump: the fix runs on every read, so the day caches that hold the per-share row are corrected as served.
+Tests: `tests/unit/adsBasis0103.test.ts` (JD fixture 3.0175/2.94 → 6.035/5.88; per-ADS JD, BIDU, NTES, TME, PDD, BABA,
+XPEV controls from live Nasdaq pairs unchanged; no-guess cases; worker calendar via the 9618.HK alias, and the sheet).
 
 ## Why
 Critic check on 2026-11-23 at 07:00 UTC. JD's Nov 17 calendar row (`/api/calendar?from=2026-11-10&to=2026-11-21`) now reads `eE 3.0175 → eA 2.94` (CN¥). That is per **ordinary share** (1 ADS = 2 shares). The headline the company and every outlet use is non-GAAP **RMB 5.88 (US$0.88) per ADS** ([JD release](https://finviz.com/news/423748/jdcom-announces-third-quarter-2026-results); consensus $0.98 per [Newsquawk](https://www.newsquawk.com/headlines/jdcom-jd-q3-2026-usd-eps-088-exp-098-revenue-462bln-exp-46bln)). The same row read CN¥4.52 → CN¥5.87 on 2026-11-22 (critique 2026-11-22 07:00 and ticket 0100). The feed rewrote it overnight, with a new estimate and a halved actual.
