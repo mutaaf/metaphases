@@ -1,12 +1,12 @@
 ---
 id: 0110
 title: Admit untracked companies by dollar size, not revenue in the feed's currency, so RBRK, CRDO, NTNX and GWRE ($11–22B) reach the calendar
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-24
-pr:
+pr: 192
 by: builder
 ---
 

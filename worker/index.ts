@@ -28,6 +28,7 @@ import { contestedSession, isContested, pastSession, projectedSession, reactionM
 import { applyPreReport, fillMovedFigures, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, sameActual, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
+import { admitUntracked, capUsd, foldCaps, nasdaqDayCaps, type NqCaps } from "../shared/untrackedGate";
 import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
 import { dayShareText } from "../shared/dayShare";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, passedQuarter, skippedQuarter } from "../shared/pending";
@@ -103,7 +104,6 @@ const addDays = (s: string, n: number) => { const d = new Date(s + "T12:00:00Z")
 const todayNY = () => new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
 
 // ── /api/calendar ───────────────────────────────────────────────────────
-const BIG_REVENUE = 1e9; // untracked companies still appear if they're this large
 
 const CAL = (key: string) => new Request(`https://cache.metaphases.internal/${encodeURIComponent(key)}`);
 /** How long a day's list stays fresh: settled history 6 h, the next two weeks 30 min, far-ahead dates 6 h (they rarely move). */
@@ -116,15 +116,20 @@ const ALIAS = aliasMap(U as Universe);
 /** Tracked names the range feed is known to drop; their `symbol=` rows fill the gap (0024). */
 const SUPP_SYMBOLS = supplementSymbols(U as Universe);
 
-function toEvents(rows: any[]): EarningsEvent[] {
+/**
+ * The feed's rows as calendar events. 0110: an untracked company is admitted by Nasdaq's dollar market cap when a
+ * loaded Nasdaq day lists it (`caps`), else by revenue as before; a company-dated one (override) always.
+ */
+function toEvents(rows: any[], caps: NqCaps = {}, today = iso(todayNY())): EarningsEvent[] {
   const out: EarningsEvent[] = [];
+  const ov = activeOverrides(OVERRIDES, today);
   const native = new Set<string>((rows ?? []).map((e) => e.symbol));
   for (const e of rows ?? []) {
     const alias = ALIAS[e.symbol];
     if (alias && native.has(alias)) continue; // the US row wins over its home listing
     const sym = alias ?? e.symbol;
     const tracked = sym in U;
-    if (!tracked && !((e.revenueEstimate ?? 0) >= BIG_REVENUE || (e.revenueActual ?? 0) >= BIG_REVENUE)) continue;
+    if (!tracked && !admitUntracked(Math.max(e.revenueEstimate ?? 0, e.revenueActual ?? 0), capUsd(caps, sym), sym in ov)) continue;
     if (!tracked && /[.\-]/.test(sym)) continue; // skip foreign share classes without logos
     out.push({ s: sym, d: e.date, h: (e.hour || "") as Session, q: e.quarter, y: e.year, eE: shareEps(sym, e.epsEstimate), eA: shareEps(sym, e.epsActual), rE: e.revenueEstimate, rA: e.revenueActual, t: tracked ? 1 : 0 });
   }
@@ -174,10 +179,10 @@ const touchesSupp = (from: string, to: string, today: string) => to >= addDays(t
 /** One day's processed events. v3 (0058): judged rows carry Nasdaq's actual (`nA`), so settled days re-read it. The last-good copy moves too, or a fallback would serve the old mixed pairs. */
 const CAL_DAY = (day: string) => CAL(`cal:v3:${day}`);
 
-async function putDay(day: string, events: EarningsEvent[], today: string, ctx: ExecutionContext) {
+async function putDay(day: string, events: EarningsEvent[], today: string, ctx: ExecutionContext, ttl = calTtl(day, today)) {
   const body = JSON.stringify(events);
   ctx.waitUntil(Promise.all([
-    caches.default.put(CAL_DAY(day), new Response(body, { headers: { "Cache-Control": `public, max-age=${calTtl(day, today)}`, "Content-Type": "application/json" } })),
+    caches.default.put(CAL_DAY(day), new Response(body, { headers: { "Cache-Control": `public, max-age=${ttl}`, "Content-Type": "application/json" } })),
     caches.default.put(CAL(`cal:stale:v3:${day}`), new Response(body, { headers: { "Cache-Control": "public, max-age=604800" } })),
   ]));
 }
@@ -310,6 +315,8 @@ const keepNq = (s: string, cap: number, h: Session) => keepNasdaq(s in U, cap, h
 /** The folded window, read in one cache lookup (written once every day in it has loaded). */
 const NQX_IDX = (today: string) => CAL(`nq:x:idx:v1:${today}`);
 const NQX_DAY = (day: string) => CAL(`nq:x:v1:${day}`);
+/** 0110: the same day's untracked listings → dollar cap (millions), written beside it, so the calendar can admit by size. */
+const NQX_CAP = (day: string) => CAL(`nq:x:cap:v1:${day}`);
 const NQX_FAIL = CAL("nq:x:fail:v1");
 const NQX_LOCK = CAL("nq:x:lock:v1");
 const NQX_PER_BUILD = 2;
@@ -321,13 +328,24 @@ const putJson = (req: Request, val: unknown, ttl: number) =>
   caches.default.put(req, new Response(JSON.stringify(val), { headers: { "Cache-Control": `public, max-age=${ttl}`, "Content-Type": "application/json" } })).catch(() => {});
 
 /** One Nasdaq day as symbol → session. No 429 retries (this is optional data); a malformed answer is a failure, an empty day (`rows: null`) is not. */
-async function fetchNasdaqDay(day: string, ms = 2500): Promise<NqDay> {
+/** 0110: plus the day's untracked dollar caps (`c`), from the same call. */
+async function fetchNasdaqDayFull(day: string, ms = 2500): Promise<{ h: NqDay; c: NqCaps }> {
   const r = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, { headers: UA, signal: AbortSignal.timeout(ms) } as RequestInit);
   if (!r.ok) throw new Error(`api.nasdaq.com ${r.status}`);
   const body = (await r.json()) as any;
   if (!body?.data || typeof body.data !== "object" || !("rows" in body.data)) throw new Error("nasdaq day calendar malformed");
-  return nasdaqDaySessions(body, keepNq);
+  return { h: nasdaqDaySessions(body, keepNq), c: nasdaqDayCaps(body, (s) => s in U) };
 }
+/**
+ * Cache a fetched day. Caps outlive the sessions (review of #192): a day's list is rebuilt after it passes out of
+ * the window (the report itself), and a $10B company admitted by size must not drop back to the revenue gate then.
+ * An empty map never overwrites a fuller one's place for long (it is the same day's answer, an hour).
+ */
+const NQX_CAP_TTL = 45 * 86400;
+const storeNqDay = (day: string, v: { h: NqDay; c: NqCaps }) => {
+  const ttl = Object.keys(v.h).length ? 21600 : 3600;
+  return Promise.all([putJson(NQX_DAY(day), v.h, ttl), putJson(NQX_CAP(day), v.c, Object.keys(v.c).length ? NQX_CAP_TTL : 3600)]);
+};
 
 /** How far ahead a next report's Nasdaq day is read on demand (later days rarely carry a session). */
 const NQ_ON_DEMAND_REACH = 45;
@@ -345,9 +363,9 @@ async function nasdaqDayOnDemand(day: string, today: string, ctx: ExecutionConte
   const failed = (await readJson<Record<string, number>>(NQX_FAIL)) ?? {};
   if (failed[day] > Date.now()) return null;
   try {
-    const v = await fetchNasdaqDay(day);
-    ctx.waitUntil(putJson(NQX_DAY(day), v, Object.keys(v).length ? 21600 : 3600));
-    return v;
+    const v = await fetchNasdaqDayFull(day);
+    ctx.waitUntil(storeNqDay(day, v));
+    return v.h;
   } catch (e) {
     // 0059: a slow answer (over the sheet's 2.5 s) isn't remembered as a failure, so the 4 s background fill can
     // still load that day; a refusal or a malformed answer is.
@@ -391,10 +409,10 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
     const take = missing.filter((d) => !(failed[d] > now)).sort((a, b) => first(a) - first(b) || a.localeCompare(b)).slice(0, NQX_PER_BUILD);
     // 0059: the fill runs after the response (its 4 s timeout never delays the calendar); the next read has the days.
     if (take.length) ctx.waitUntil((async () => {
-      const got = await pool(take, 2, (d) => fetchNasdaqDay(d, NQX_BUILD_TIMEOUT));
+      const got = await pool(take, 2, (d) => fetchNasdaqDayFull(d, NQX_BUILD_TIMEOUT));
       const fresh: Record<string, number> = {};
       await Promise.all(got.map(async (r, i) => {
-        if (r.status === "fulfilled") await putJson(NQX_DAY(take[i]), r.value, Object.keys(r.value).length ? 21600 : 3600);
+        if (r.status === "fulfilled") await storeNqDay(take[i], r.value);
         else fresh[take[i]] = now + 15 * 60_000;
       }));
       // Re-read and merge, so another request's remembered failure survives (0047).
@@ -490,9 +508,29 @@ function rememberLead(env: Env, ctx: ExecutionContext, memos: SessionLeads | nul
   })().catch(() => {}));
 }
 
-async function fetchCalendarDay(day: string, env: Env): Promise<EarningsEvent[]> {
+async function fetchCalendarDay(day: string, env: Env, caps: NqCaps = {}): Promise<EarningsEvent[]> {
   const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${day}&to=${day}&token=${env.FINNHUB_API_KEY}`);
-  return toEvents(data.earningsCalendar);
+  return toEvents(data.earningsCalendar, caps);
+}
+
+/** 0110: a day written before the Nasdaq window had loaded is kept this long, so a $10B+ company isn't missed for 30 min. */
+const CAL_TTL_UNSIZED = 300;
+/**
+ * 0110: Nasdaq's untracked dollar caps (cache only: the window and on-demand reads fetch them), folded over the 0015
+ * window and `days`. `complete` is false while some window day has no cap map yet and isn't a remembered failure
+ * (a company's Nasdaq day can differ from the feed's, so the whole window counts; a Nasdaq outage never keeps the
+ * short lifetime going).
+ */
+async function nasdaqCaps(days: string[], today: string): Promise<{ caps: NqCaps; complete: boolean }> {
+  const win = windowDays(today);
+  const want = [...new Set([...win, ...days])];
+  const [got, failed] = await Promise.all([
+    Promise.all(want.map((d) => readJson<NqCaps>(NQX_CAP(d)))),
+    readJson<Record<string, number>>(NQX_FAIL),
+  ]);
+  const now = Date.now();
+  const complete = want.every((d, i) => got[i] != null || !win.includes(d) || (failed?.[d] ?? 0) > now);
+  return { caps: foldCaps(got), complete };
 }
 
 /**
@@ -511,6 +549,8 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
   }));
   if (!missing.length) return out;
   const from = days[Math.min(...missing)], to = days[Math.max(...missing)];
+  const sized = await nasdaqCaps(missing.map((i) => days[i]), today).catch(() => ({ caps: {} as NqCaps, complete: false }));
+  const ttl = (d: string) => (sized.complete || !windowDays(today).includes(d) ? calTtl(d, today) : Math.min(CAL_TTL_UNSIZED, calTtl(d, today)));
   let byDay: Map<string, EarningsEvent[]> | null = null;
   let rangeError: unknown = null;
   try {
@@ -518,7 +558,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
     const rows = data.earningsCalendar ?? [];
     if (rows.length < RANGE_CAP || from === to) {
       byDay = new Map();
-      for (const e of toEvents(rows)) (byDay.get(e.d) ?? byDay.set(e.d, []).get(e.d)!).push(e);
+      for (const e of toEvents(rows, sized.caps, today)) (byDay.get(e.d) ?? byDay.set(e.d, []).get(e.d)!).push(e);
     }
   } catch (e) {
     // A failed range call (429 after retries, upstream down) must not fan out into per-day retries:
@@ -530,7 +570,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
     const d = days[i];
     try {
       const ev = await preReportDay(d, await load(), today, ctx);
-      putDay(d, ev, today, ctx);
+      putDay(d, ev, today, ctx, ttl(d));
       out[i] = { status: "fulfilled", value: ev };
     } catch (reason) {
       health.failed = true;
@@ -545,7 +585,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
     await Promise.all(missing.map((i) => settle(i, async () => m.get(days[i]) ?? [])));
   } else {
     // Truncated busy week: day by day, at most 2 in flight (3 weeks in parallel stays ≤ 6 calls at once).
-    await pool(missing, 2, (i) => settle(i, () => fetchCalendarDay(days[i], env)));
+    await pool(missing, 2, (i) => settle(i, () => fetchCalendarDay(days[i], env, sized.caps)));
   }
   return out;
 }
