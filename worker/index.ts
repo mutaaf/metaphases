@@ -180,7 +180,10 @@ async function readSuppShared(env: Env, ctx: ExecutionContext, today: string): P
   if (await readJson<number>(SUPP_KV_SEEN)) return local;
   const shared = await readSuppKv(env);
   const adds = !!shared && Object.keys(shared).some((s) => !local[s] || fetchedAt(shared[s]) > fetchedAt(local[s]));
-  ctx.waitUntil(putJson(SUPP_KV_SEEN, 1, adds ? SUPP_KV_READ_S : SUPP_KV_IDLE_S));
+  // Back off only when KV holds exactly this colo's symbols and nothing newer (a name whose `symbol=` call keeps failing).
+  // An empty or still-filling copy (right after a deploy, every colo cold) is read again in a minute (0111 bounce).
+  const idle = !!shared && !adds && unfetched(shared, SUPP_SYMBOLS) <= unfetched(local, SUPP_SYMBOLS);
+  ctx.waitUntil(putJson(SUPP_KV_SEEN, 1, idle ? SUPP_KV_IDLE_S : SUPP_KV_READ_S));
   if (!shared || !adds) return local;
   const merged = keepListed(mergeShared(today, local, shared));
   // Read-merge-write (0047), so a concurrent refresh on this colo keeps its entries.

@@ -15,8 +15,13 @@ const SUPP = supplementSymbols(U);
 class MemCache {
   store = new Map<string, string>();
   async match(req: Request) { const v = this.store.get(req.url); return v === undefined ? undefined : new Response(v); }
-  async put(req: Request, res: Response) { this.store.set(req.url, await res.text()); }
+  async put(req: Request, res: Response) {
+    if (req.url.includes("supp%3Akv%3Aseen")) seenTtl[this.name] = res.headers.get("Cache-Control") ?? "";
+    this.store.set(req.url, await res.text());
+  }
+  constructor(public name = "") {}
 }
+const seenTtl: Record<string, string> = {};
 class MemKv {
   store = new Map<string, string>();
   puts: string[] = [];
@@ -36,7 +41,7 @@ const BNS_ROW = { symbol: "BNS.TO", date: "2026-12-02", hour: "amc", quarter: 4,
 let finnhubCalls = 0;
 
 const colos: Record<string, MemCache> = {};
-const on = (colo: string) => { (globalThis as any).caches = { default: (colos[colo] ??= new MemCache()) }; };
+const on = (colo: string) => { (globalThis as any).caches = { default: (colos[colo] ??= new MemCache(colo)) }; };
 const unlockSupp = (colo: string) => colos[colo].store.delete(CAL("cal:supp:lock:v1"));
 /** Another request already took this minute's refresh: the per-request budget is spent. */
 const budgetSpent = (colo: string) => colos[colo].store.set(CAL("cal:supp:lock:v1"), "1");
@@ -154,6 +159,22 @@ describe("0111: the supplement is one document every colo reads", () => {
     colos.YYZ.store.delete(CAL("supp:kv:seen:v1")); // the marker's minute has passed
     await get(RANGE);
     expect(kv.gets).toBe(2);
+  });
+
+  it("right after a deploy (KV empty, every colo cold): a colo that read the empty copy picks it up a minute after another colo fills it", async () => {
+    on("YYZ");
+    budgetSpent("YYZ");
+    expect(syms(await get(RANGE))).not.toContain("BNS"); // nothing anywhere yet
+    await warmColo("CMH"); // CMH fills KV
+    on("YYZ");
+    vi.setSystemTime(new Date(Date.now() + 61_000));
+    // The cache honours max-age in production; the mock doesn't, so expire the marker as a 60 s TTL would.
+    expect(Number(/max-age=(\d+)/.exec(seenTtl.YYZ ?? "")?.[1])).toBe(60);
+    colos.YYZ.store.delete(CAL("supp:kv:seen:v1"));
+    budgetSpent("YYZ");
+    const r = await get(RANGE);
+    expect(syms(r)).toContain("BNS");
+    expect(r.pending).toBeUndefined();
   });
 
   it("no KV binding (local dev): the per-colo supplement works as before", async () => {
