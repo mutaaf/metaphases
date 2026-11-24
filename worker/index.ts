@@ -336,10 +336,15 @@ async function fetchNasdaqDayFull(day: string, ms = 2500): Promise<{ h: NqDay; c
   if (!body?.data || typeof body.data !== "object" || !("rows" in body.data)) throw new Error("nasdaq day calendar malformed");
   return { h: nasdaqDaySessions(body, keepNq), c: nasdaqDayCaps(body, (s) => s in U) };
 }
-/** Cache a fetched day: sessions and caps, with the same lifetime. */
+/**
+ * Cache a fetched day. Caps outlive the sessions (review of #192): a day's list is rebuilt after it passes out of
+ * the window (the report itself), and a $10B company admitted by size must not drop back to the revenue gate then.
+ * An empty map never overwrites a fuller one's place for long (it is the same day's answer, an hour).
+ */
+const NQX_CAP_TTL = 45 * 86400;
 const storeNqDay = (day: string, v: { h: NqDay; c: NqCaps }) => {
   const ttl = Object.keys(v.h).length ? 21600 : 3600;
-  return Promise.all([putJson(NQX_DAY(day), v.h, ttl), putJson(NQX_CAP(day), v.c, ttl)]);
+  return Promise.all([putJson(NQX_DAY(day), v.h, ttl), putJson(NQX_CAP(day), v.c, Object.keys(v.c).length ? NQX_CAP_TTL : 3600)]);
 };
 
 /** How far ahead a next report's Nasdaq day is read on demand (later days rarely carry a session). */
@@ -512,13 +517,19 @@ async function fetchCalendarDay(day: string, env: Env, caps: NqCaps = {}): Promi
 const CAL_TTL_UNSIZED = 300;
 /**
  * 0110: Nasdaq's untracked dollar caps (cache only: the window and on-demand reads fetch them), folded over the 0015
- * window and `days`. `complete` is false when a window day among `days` has no cap map yet.
+ * window and `days`. `complete` is false while some window day has no cap map yet and isn't a remembered failure
+ * (a company's Nasdaq day can differ from the feed's, so the whole window counts; a Nasdaq outage never keeps the
+ * short lifetime going).
  */
 async function nasdaqCaps(days: string[], today: string): Promise<{ caps: NqCaps; complete: boolean }> {
   const win = windowDays(today);
   const want = [...new Set([...win, ...days])];
-  const got = await Promise.all(want.map((d) => readJson<NqCaps>(NQX_CAP(d))));
-  const complete = want.every((d, i) => got[i] != null || !win.includes(d) || !days.includes(d));
+  const [got, failed] = await Promise.all([
+    Promise.all(want.map((d) => readJson<NqCaps>(NQX_CAP(d)))),
+    readJson<Record<string, number>>(NQX_FAIL),
+  ]);
+  const now = Date.now();
+  const complete = want.every((d, i) => got[i] != null || !win.includes(d) || (failed?.[d] ?? 0) > now);
   return { caps: foldCaps(got), complete };
 }
 

@@ -79,18 +79,20 @@ const NQ: Record<string, { symbol: string; time: string; marketCap: string }[]> 
   ],
 };
 let finnhubRange = 0;
+let nasdaqDown = false;
 const store = () => (globalThis as any).caches.default.store as Map<string, unknown>;
 const unlock = () => { for (const k of [...store().keys()]) if (k.includes("nq%3Ax%3Alock")) store().delete(k); };
 
 describe("0110 on the worker", () => {
   beforeEach(() => {
-    waits = []; finnhubRange = 0;
+    waits = []; finnhubRange = 0; nasdaqDown = false;
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-24T19:00:00Z"));
     (globalThis as any).caches = { default: new MemCache() };
     vi.stubGlobal("fetch", vi.fn(async (u: string) => {
       const url = new URL(u);
       if (url.hostname === "api.nasdaq.com" && url.pathname === "/api/calendar/earnings") {
+        if (nasdaqDown) return new Response("nope", { status: 503 });
         const rows = NQ[url.searchParams.get("date")!] ?? [{ symbol: "FILLER", time: "time-not-supplied", marketCap: "$5,000,000,000" }];
         return new Response(JSON.stringify({ data: { asOf: "", headers: {}, rows: rows.map((r) => ({ name: r.symbol, epsForecast: "", ...r })) } }));
       }
@@ -151,7 +153,36 @@ describe("0110 on the worker", () => {
     expect(calls).toBeLessThanOrEqual(2);
     const r = await warm();
     expect(syms(r).has("RBRK")).toBe(true);
-    // Every refresh is still one range call per week of the range (two weeks here).
-    expect(finnhubRange - calls).toBeLessThanOrEqual(2 * (windowDays(TODAY).length + 1));
+    // Once sized, the days keep their 30 minutes: five minutes on, no new range call.
+    const sized = finnhubRange;
+    later(301);
+    await call(RANGE);
+    expect(finnhubRange).toBe(sized);
+    // And when they expire, the refresh is one range call per week of the range (two here).
+    later(1800);
+    await call(RANGE);
+    expect(finnhubRange - sized).toBe(2);
+  });
+
+  it("the day after the report, RBRK is still on Nov 30 (the caps outlive the window)", async () => {
+    await warm();
+    vi.setSystemTime(new Date("2026-12-01T19:00:00Z"));
+    const r = await call("/api/calendar?from=2026-11-30&to=2026-11-30");
+    expect(r.events.filter((e: EarningsEvent) => e.s === "RBRK")).toEqual([expect.objectContaining({ d: "2026-11-30" })]);
+    expect(syms(r).has("QQSM")).toBe(false);
+  });
+
+  it("with Nasdaq down, days keep their normal lifetime (no extra range calls) and the revenue gate stands", async () => {
+    nasdaqDown = true;
+    for (let i = 0; i < windowDays(TODAY).length; i++) { unlock(); await call(RANGE); } // every day tried and failed
+    later(301); // the last pass wrote its days before its own failures were remembered: one more short cycle
+    await call(RANGE);
+    const n = finnhubRange;
+    later(301);
+    unlock();
+    const r = await call(RANGE);
+    expect(finnhubRange).toBe(n);
+    expect(syms(r).has("QQSM")).toBe(true);
+    expect(syms(r).has("RBRK")).toBe(false);
   });
 });
