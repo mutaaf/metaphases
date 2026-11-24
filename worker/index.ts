@@ -38,7 +38,7 @@ import { applyLeads, leadFor, LEAD_MEMO_DAYS, nasdaqSessionLeads, noteLead, type
 import { applyMemos, contestsIn, dayStanding, memoCross, noteContests, windowCovered, XMEMO_DAYS, type XMemos } from "../shared/contestMemo";
 import { leadRows, leadsNasdaq } from "../shared/leadDay";
 import { buildIndex, companyDayFill, crossCheck, crossOne, keepNasdaq, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
-import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
+import { aliasMap, commitSupp, dropUnscaled, fetchedAt, homeListing, mergeShared, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
 import { FIGURES_CHECK_MAX, needsFiguresCheck, needsPastCheck, nqReports, phantomReport, settleFiguresRow, settlePastRow, PAST_LOOKBACK_DAYS, type NqReport } from "../shared/pastRows";
 import { oneReportOneRow, SAME_REPORT_DAYS } from "../shared/oneRow";
@@ -146,14 +146,72 @@ async function readSupp(): Promise<SuppDoc> {
   try { const hit = await caches.default.match(SUPP_KEY); return hit ? dropUnscaled((await hit.json()) as SuppDoc) : {}; } catch { return {}; }
 }
 
-/**
- * The supplement document, refreshing at most a few stale symbols (pooled, 2 at a time), and at most once a
- * minute per colo (a short-lived lock in the cache, taken before any call). A failed symbol keeps its last
- * good rows. `refresh: false` (a failed range call this request, or the share-card path) only reads the
- * cache: a rate limit must never turn into more calls.
- */
+// ── 0111: one supplement every colo reads ──
+// The document above is per colo (caches.default). Reads land on different colos (CMH, YYZ), and a cold one refills
+// it four symbols a minute, so for ~15 minutes it served ranges without the rows only the supplement has (BNS, TD):
+// the same range gave different rows read to read. A copy in KV (the 0083 pattern) seeds a cold colo in one read.
+const SUPP_KV = "supp:v1";
+const SUPP_KV_TTL = 7 * 86400;
+/** A colo whose copy is incomplete reads KV at most once per this many seconds (the marker sits in its own cache), and
+ *  backs off to SUPP_KV_IDLE_S once KV has nothing it lacks (a symbol whose `symbol=` call keeps failing). */
+const SUPP_KV_SEEN = CAL("supp:kv:seen:v1");
+const SUPP_KV_READ_S = 60;
+const SUPP_KV_IDLE_S = 900;
+/** Beyond growing KV's symbol set, a colo pushes newer entries only when KV's newest fetch is this old: a condition
+ *  every colo reads off the shared copy itself, so the whole account writes a few times a day, not per colo. */
+const SUPP_KV_STALE_MS = 6 * 3600_000;
+/** KV's free tier (1,000 writes a day) is shared with the support inbox and the 0083/0104 memos. */
+const SUPP_KV_WRITES_PER_DAY = 24; // a one-time fill of an empty copy takes ~18 (four symbols a minute)
+const keepListed = (d: SuppDoc): SuppDoc => { const k = new Set(SUPP_SYMBOLS); return Object.fromEntries(Object.entries(d).filter(([s]) => k.has(s))); };
+async function readSuppKv(env: Env): Promise<SuppDoc | null> {
+  if (!env.SUPPORT) return null;
+  try {
+    const v = await env.SUPPORT.get(SUPP_KV, { cacheTtl: 60 });
+    const d = v ? JSON.parse(v) : null;
+    return d && typeof d === "object" && !Array.isArray(d) ? keepListed(dropUnscaled(d as SuppDoc)) : null;
+  } catch { return null; }
+}
+const writeSuppLocal = (d: SuppDoc) => caches.default.put(SUPP_KEY, new Response(JSON.stringify(d), { headers: { "Cache-Control": "public, max-age=604800", "Content-Type": "application/json" } }));
+
+/** This colo's supplement, completed from the shared copy when it is missing symbols (never any upstream call). */
+async function readSuppShared(env: Env, ctx: ExecutionContext, today: string): Promise<SuppDoc> {
+  const local = await readSupp();
+  if (!env.SUPPORT || !unfetched(local, SUPP_SYMBOLS)) return local;
+  if (await readJson<number>(SUPP_KV_SEEN)) return local;
+  const shared = await readSuppKv(env);
+  const adds = !!shared && Object.keys(shared).some((s) => !local[s] || fetchedAt(shared[s]) > fetchedAt(local[s]));
+  ctx.waitUntil(putJson(SUPP_KV_SEEN, 1, adds ? SUPP_KV_READ_S : SUPP_KV_IDLE_S));
+  if (!shared || !adds) return local;
+  const merged = keepListed(mergeShared(today, local, shared));
+  // Read-merge-write (0047), so a concurrent refresh on this colo keeps its entries.
+  ctx.waitUntil(readSupp().then((latest) => writeSuppLocal(keepListed(mergeShared(today, merged, latest)))).catch(() => {}));
+  return merged;
+}
+
+/** Push this colo's entries to the shared copy: whenever it adds symbols KV lacks, else only once KV's newest fetch is stale. */
+function shareSupp(env: Env, ctx: ExecutionContext, doc: SuppDoc, today: string): void {
+  const kv = env.SUPPORT;
+  if (!kv) return;
+  ctx.waitUntil((async () => {
+    const countKey = CAL(`supp:kv:n:v1:${today}`);
+    const n = (await readJson<number>(countKey)) ?? 0;
+    if (n >= SUPP_KV_WRITES_PER_DAY) return;
+    const raw = await kv.get(SUPP_KV).catch(() => undefined);
+    if (raw === undefined) return; // a failed read never overwrites other colos' entries
+    let latest: SuppDoc = {};
+    try { latest = raw ? keepListed(dropUnscaled(JSON.parse(raw) as SuppDoc)) : {}; } catch { latest = {}; } // corrupt: rewrite it
+    const merged = keepListed(mergeShared(today, latest, doc));
+    const grows = Object.keys(merged).some((s) => !latest[s]);
+    const newest = Math.max(0, ...Object.values(latest).map(fetchedAt));
+    const newer = Object.keys(merged).some((s) => latest[s] && fetchedAt(merged[s]) > fetchedAt(latest[s]));
+    if (!grows && !(newer && Date.now() - newest > SUPP_KV_STALE_MS)) return;
+    try { await kv.put(SUPP_KV, JSON.stringify(merged), { expirationTtl: SUPP_KV_TTL }); } catch { return; }
+    await putJson(countKey, n + 1, 86400);
+  })().catch(() => {}));
+}
+
 async function supplement(env: Env, ctx: ExecutionContext, today: string, refresh: boolean): Promise<SuppDoc> {
-  const doc = await readSupp();
+  const doc = await readSuppShared(env, ctx, today);
   let due = refresh ? staleSymbols(doc, SUPP_SYMBOLS, Date.now()) : [];
   if (due.length) {
     try {
@@ -168,10 +226,11 @@ async function supplement(env: Env, ctx: ExecutionContext, today: string, refres
   got.forEach((r, i) => { if (r.status === "fulfilled") updates[due[i]] = refreshEntry(doc[due[i]], r.value, today, Date.now()); });
   if (!Object.keys(updates).length) return doc;
   // Read-merge-write (0047): never overwrite another refresh's progress with this request's older copy.
-  const write = (d: SuppDoc) => caches.default.put(SUPP_KEY, new Response(JSON.stringify(d), { headers: { "Cache-Control": "public, max-age=604800", "Content-Type": "application/json" } }));
-  const done = commitSupp({ read: readSupp, write }, doc, updates, SUPP_SYMBOLS);
+  const done = commitSupp({ read: readSupp, write: writeSuppLocal }, doc, updates, SUPP_SYMBOLS);
   ctx.waitUntil(done.catch(() => {}));
-  return { ...doc, ...updates };
+  const next = { ...doc, ...updates };
+  shareSupp(env, ctx, next, today); // 0111
+  return next;
 }
 
 const touchesSupp = (from: string, to: string, today: string) => to >= addDays(today, -SUPP_BACK) && from <= addDays(today, SUPP_AHEAD);
@@ -1662,7 +1721,7 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
   if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
     const label = new Date(day + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
     try {
-      const withSupp = mergeSupplement(await calendarDay(day, env, ctx), await readSupp(), day, day, () => true); // cache only (0024)
+      const withSupp = mergeSupplement(await calendarDay(day, env, ctx), await readSuppShared(env, ctx, iso(todayNY())), day, day, () => true); // no Finnhub calls (0024); may read KV (0111)
       const today = iso(todayNY());
       // 0072 (and 0064): a projection that never happened, or one on a holiday, isn't counted. Cache only here.
       const moved = flagClosed(applyToEvents(withSupp, OVERRIDES, day, day, today, (s) => s in U));

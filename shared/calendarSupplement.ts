@@ -13,7 +13,8 @@ export type Universe = Record<string, UniverseEntry>;
 
 /** One symbol's upcoming rows from `symbol=`, already shaped as calendar events. */
 /** `u: 1` once its EPS is in the tracked share's unit (0046); older BRK.B entries hold Class A figures. */
-export interface SuppEntry { at: number; rows: EarningsEvent[]; u?: 1 }
+/** `f` (0111): the real fetch time; `at` is jittered for refresh scheduling, so documents from other colos compare by `f`. */
+export interface SuppEntry { at: number; rows: EarningsEvent[]; u?: 1; f?: number }
 export type SuppDoc = Record<string, SuppEntry>;
 
 /** How long one symbol's `symbol=` answer is trusted before it's refreshed (12 h, per the ticket). */
@@ -69,7 +70,7 @@ export function refreshEntry(prev: SuppEntry | undefined, fresh: EarningsEvent[]
   const dates = new Set(fresh.map((r) => r.d));
   const kept = (prev?.rows ?? []).filter((r) => r.d < today && r.d >= cut && !dates.has(r.d));
   // `kept` comes from `prev`, so it's only in the new unit when `prev` was (dropUnscaled removes the rest).
-  return { at: now - Math.floor(jitter * 3600 * 1000), rows: [...kept, ...fresh].sort((a, b) => a.d.localeCompare(b.d)), u: 1 };
+  return { at: now - Math.floor(jitter * 3600 * 1000), rows: [...kept, ...fresh].sort((a, b) => a.d.localeCompare(b.d)), u: 1, f: now };
 }
 
 /** A cached doc without entries written before 0046's share-class scaling, so they are fetched again first. */
@@ -132,6 +133,27 @@ export function mergeSupplement(events: EarningsEvent[], doc: SuppDoc, from: str
 export function mergeDocs(...docs: SuppDoc[]): SuppDoc {
   const out: SuppDoc = {};
   for (const d of docs) for (const [s, e] of Object.entries(d ?? {})) if (!out[s] || e.at >= out[s].at) out[s] = e;
+  return out;
+}
+
+/** When an entry was really fetched (older entries carry only the jittered `at`). */
+export const fetchedAt = (e: SuppEntry) => e.f ?? e.at;
+
+/**
+ * 0111: documents from different colos, merged. Per symbol the later *fetch* wins (not the jittered `at`), and it keeps
+ * the other entry's rows dated before `today` that it lacks: `symbol=` returns future dates only, so a colo that
+ * fetched a name fresh has no record of a report that just happened, and must not erase another colo's.
+ */
+export function mergeShared(today: string, ...docs: SuppDoc[]): SuppDoc {
+  const out: SuppDoc = {};
+  for (const d of docs) for (const [s, e] of Object.entries(d ?? {})) {
+    const prev = out[s];
+    if (!prev) { out[s] = e; continue; }
+    const [win, lose] = fetchedAt(e) >= fetchedAt(prev) ? [e, prev] : [prev, e];
+    const dates = new Set(win.rows.map((r) => r.d));
+    const past = lose.rows.filter((r) => r.d < today && !dates.has(r.d));
+    out[s] = past.length ? { ...win, rows: [...past, ...win.rows].sort((a, b) => a.d.localeCompare(b.d)) } : win;
+  }
   return out;
 }
 

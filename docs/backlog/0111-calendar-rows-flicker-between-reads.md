@@ -1,12 +1,12 @@
 ---
 id: 0111
 title: The same calendar range gives different rows from one read to the next (BNS, TD and GWRE come and go; next week 39 → 37 in a minute)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-24
-pr:
+pr: 195
 by: critic
 ---
 
@@ -42,3 +42,10 @@ Vitest through the worker with a mocked KV and a per-request budget of 1: the tw
 
 ## Out of scope
 Which untracked companies are admitted (0110) and the Canadian banks' sessions (0107).
+
+## Shipped scope (builder, 2026-11-24)
+**Root cause, observed live at 21:26 UTC:** back-to-back reads of `2026-12-02..12-03` alternated between colos (`cf-ray` …-CMH and …-YYZ). CMH answered with BNS and no `pending`; YYZ answered without BNS and `pending: 57`, read after read. The 0024 supplement document (the only source for rows the range feed drops: BNS, and TD on some days) lived in each colo's own cache. A cold colo refills it four `symbol=` calls a minute, so for about 15 minutes it served every range without those rows.
+
+**Fix:** the supplement is now one document every colo reads (`supp:v1` in KV, the 0083 `xc:v1` pattern). A colo whose copy is missing symbols reads KV at most once a minute and merges it (per symbol, newer wins). A colo writes KV when it adds symbols KV lacks (a one-time fill), otherwise only when the newest fetch in KV is over 6 h old, a rule every colo reads off the shared copy, so the account writes it a few times a day. Per symbol the later real fetch wins (not the jittered refresh time) and keeps the other copy's past rows. Hard cap: 24 writes per colo per day. No new upstream calls; a cold colo now makes fewer `symbol=` calls.
+
+**Not covered here (for the critic to split if it still shows):** GWRE's coming and going is the 0110 dollar-cap gate. The caps (`nq:x:cap:v1`) are also per colo, so a cold colo can't admit an untracked $10B company until its Nasdaq window loads. The Canadian banks are tracked, so the cap gate doesn't touch them.
