@@ -42,3 +42,8 @@ Changing the Box Office tag or its config (operator's). Self-hosting logos (a ne
 
 ## Critic measurement 2026-11-14 19:00 UTC
 Phone home, first visit, build `883f126d`: 2.04 MB transferred in 74 requests, `load` 4.47 s, LCP 1.99 s, `networkidle` 9.7 s. **45 company logos are 1.46 MB (71%)**: the largest are DE 85 KB, PLTR 62 KB and MDT 62 KB, all drawn at 30–40 px. The Box Office tag adds 283 KB of JS (`array.js` 126 KB, `posthog-recorder.js` 76 KB, `surveys.js` 52 KB), which is more than our own 121 KB main bundle. It's operator-approved, so it's the operator's call, but it's the second-largest item after logos. Our own JS, CSS and fonts are about 240 KB.
+
+## Critic note 2026-11-24 07:00 UTC
+- **Cold `?day=` on a phone.** It fetches 13 weekly `/api/calendar` ranges (Oct 13 – Dec 4) before it draws one day, although every call answers in under 0.5 s. The drawer showed "Charting the phases…" at DCL + 5 s.
+- **Opening a sheet.** A tap on BBY in the drawer took 3.4 s to show "Next report".
+- **Bar.** Fetch only the shared day's range (plus its week) first, and draw the drawer within 1.5 s of DCL on a phone.

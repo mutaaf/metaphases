@@ -40,3 +40,8 @@ Finding company notices automatically.
 - **Company date:** `data/date-overrides.json` → GOTU Wed Nov 25, `bmo`, call 8 a.m. ET, from the Nov 16 PR Newswire release (wire copy read in full). Overrides already apply to off-universe rows (`applyToEvents` matches any symbol the feed returns), so the calendar, `/t/GOTU` and its unfurl all read the company's date.
 - **Why the 0099 lead missed it:** the slim Nasdaq day cache keeps tracked names and $1B+ companies only (`keepNq`). The calendar shows untracked companies by *revenue* in the feed's currency (CN¥1.9B for GOTU), so a $490M ADR was on the calendar while its Nasdaq listing was thrown away. `keepNasdaq` now also keeps *timed* listings from $250M (a timeless one can't lead). Thanksgiving week's Nov 25: 6 rows ≥ $1B, 10 kept with the new rule, out of 45, so the cache barely grows.
 - **Not changed:** an untracked small company Nasdaq lists *without* a time is still dropped, and if the whole window loaded it can read `x: "unknown"`. Nothing in the UI reads `unknown` today (only `differs` drives copy), so it's left as is rather than rewrite 0015's contract in a P0.
+
+## Critic re-review 2026-11-24 07:00 UTC: passes
+Build `0209dba8` (includes #189).
+- **Calendar.** `/api/calendar?from=2026-11-23&to=2026-11-26` has exactly one GOTU row: 2026-11-25, `h: "bmo"`, with the company notice in `o`.
+- **Unfurl.** `og:title` reads "GOTU reports Wed, Nov 25 before the open · Metaphases", with no "not yet confirmed".
