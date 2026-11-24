@@ -36,7 +36,7 @@ import { shownSession } from "../shared/contestedTime";
 import { applyLeads, leadFor, LEAD_MEMO_DAYS, nasdaqSessionLeads, noteLead, type SessionLeads } from "../shared/sessionLead";
 import { applyMemos, contestsIn, dayStanding, memoCross, noteContests, windowCovered, XMEMO_DAYS, type XMemos } from "../shared/contestMemo";
 import { leadRows, leadsNasdaq } from "../shared/leadDay";
-import { buildIndex, crossCheck, crossOne, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_MIN_CAP, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
+import { buildIndex, crossCheck, crossOne, keepNasdaq, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
 import { FIGURES_CHECK_MAX, needsFiguresCheck, needsPastCheck, nqReports, phantomReport, settleFiguresRow, settlePastRow, PAST_LOOKBACK_DAYS, type NqReport } from "../shared/pastRows";
@@ -305,8 +305,8 @@ async function nasdaqDayOmits(sym: string, day: string, today: string, ctx: Exec
 // A second opinion, never on the critical path: a request that may build the window fetches at most
 // NQX_PER_BUILD missing days (one builder per colo per minute, no 429 retries, a short timeout), failures are
 // remembered for 15 minutes, and everything else reads the folded window from the cache only.
-/** Keep what the calendar can show: tracked names, plus anything big enough to pass its size gate. */
-const keepNq = (s: string, cap: number) => s in U || cap >= XCHECK_MIN_CAP;
+/** Keep what the calendar can show: tracked names, anything big enough, and timed mid-size listings (0105). */
+const keepNq = (s: string, cap: number, h: Session) => keepNasdaq(s in U, cap, h);
 /** The folded window, read in one cache lookup (written once every day in it has loaded). */
 const NQX_IDX = (today: string) => CAL(`nq:x:idx:v1:${today}`);
 const NQX_DAY = (day: string) => CAL(`nq:x:v1:${day}`);
