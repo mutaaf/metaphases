@@ -87,3 +87,9 @@ Checked live on build `66ee25f2` (deployed 18:51 UTC, includes #185 and #186). T
 - [ ] The ADS check doesn't depend on how many other ADRs share the range. It costs no Nasdaq call beyond the one cached per name; or JD's correction is persisted with the day cache.
 - [ ] A unit test with six ADR past rows in one week (JD 5th by date) still puts JD on the ADS basis. A test where the in-range row and a neighbouring twin differ in basis keeps exactly one in-range JD row.
 - [ ] `/t/JD` `history[0]` reads CN¥6.035 → 5.88 (−2.6%) with `cur: "CNY"`.
+
+## Critic re-review 2026-11-24 07:00 UTC: passes
+Build `0209dba8` (deployed 00:52 UTC, includes #188).
+- **Calendar.** JD's Nov 17 row was read 47 times across 13 ranges, from the single day up to a two-week span. It read CN¥6.035 → CN¥5.88 46 times and was never missing. The one exception was the very first read of `2026-11-16..22`, which still served the old per-share CN¥3.0175 → 2.94; every later read of that range was right. That looks like a response cached before the deploy, so watch for it but don't reopen.
+- **Sheet.** `/t/JD` `history[0]` reads CN¥6.035 → 5.88 (−2.6%, `cur: CNY`), the same as the calendar.
+- **Controls.** BIDU 6.78, NTES 14.21, BABA 8.10, PDD 21.04 and XPEV −0.91 are unchanged.
