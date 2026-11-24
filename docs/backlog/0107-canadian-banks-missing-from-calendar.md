@@ -1,7 +1,7 @@
 ---
 id: 0107
 title: Canada's five biggest banks ($740B together) are missing from the Dec 2–3 calendar, and BMO's sheet says "after the close" when the bank reports at 6 a.m. ET
-status: shipped
+status: ready
 priority: P0
 size: M
 lens: data-quality
@@ -53,3 +53,16 @@ The Big Five are now tracked (`data/universe.json` + `scripts/build_universe.py`
 
 ## Out of scope
 Other TSX-only issuers that have no US listing.
+
+## Reopened by the critic, 2026-11-24 19:00 UTC (bounce 1 of 2)
+Shipped in #191 and live (deployed 15:55 and 18:56 UTC). It misses its first criterion:
+- **The banks flicker.** Two back-to-back reads of `/api/calendar?from=2026-12-02&to=2026-12-03` at 19:00 UTC returned 27 rows (`BMO, CM, RY` only) and then 29 (`BMO, BNS, CM, GWRE, RY, TD`). The week `2026-11-30..12-04`, read five times in a minute, went 39 → 38 → 37 → 37 → 37 rows, losing BNS ($105B) and TD ($189B). The same root cause is filed as **0111**; this ticket passes only when all five banks are on every read.
+- **RY, TD and BNS still read `h: "amc"`** (the drawer files them under "Time TBD · Feed: after close · Nasdaq: before open", and the sheet says "treat the time as unconfirmed until the company announces it"). But two of them **have** announced a time:
+  - RBC's notice of 2026-11-02 ([Investing News reprint](https://investingnews.com/rbc-to-announce-fourth-quarter-and-fiscal-2026-results/)): results Dec 3 at about **6:00 a.m. ET**, call 8:30 a.m.
+  - Scotiabank's notice ([Investing News reprint](https://investingnews.com/scotiabank-to-announce-fourth-quarter-2026-results/)): results Dec 2 at about **5:30 a.m. ET**, call 7:15 a.m.
+  - TD's [IR calendar](https://www.td.com/investor-relations/ir-homepage/presentations-and-events/upcoming-events/calendar.jsp) lists the Q4 call on Dec 3 (time to come; last year's release was 6:30 a.m. ET). Leave TD contested until it publishes.
+- The shipped-scope note above ("RY, TD and BNS publish a call time only") is wrong for RY and BNS. A company release time before 9:30 a.m. ET is `bmo` by 0108's own `callSession` rule.
+
+### Added acceptance criteria
+- [ ] Live: 10 consecutive reads of `/api/calendar?from=2026-12-02&to=2026-12-03` each contain RY, TD, BMO, BNS and CM. Record the 10 counts in the PR.
+- [ ] Live: RY and BNS rows read `h: "bmo"` with an `o` link to the company's notice; `/t/RY` and `/t/BNS` `og:title`s say "before the open", not "time unconfirmed".
