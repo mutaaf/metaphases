@@ -20,6 +20,9 @@ const feed = [
 ];
 const WANT: Record<string, string> = { MDT: "bmo", SJM: "bmo", ADSK: "", DELL: "" };
 const SYMS = Object.keys(WANT);
+// 0108: the session shown. ADSK's 2 p.m. PT (5 p.m. ET) and DELL's 3:30 p.m. CT (4:30 p.m. ET) calls come after the
+// close, so the results do too: the company's own notice settles it (no "expected").
+const SHOWN: Record<string, string> = { MDT: "bmo", SJM: "bmo", ADSK: "amc", DELL: "amc" };
 const SOURCE: Record<string, string> = {
   MDT: "https://news.medtronic.com/2026-11-04-Medtronic-to-announce-financial-results-for-its-second-quarter-of-fiscal-year-2027",
   SJM: "https://finviz.com/news/414274/the-jm-smucker-co-to-report-second-quarter-earnings",
@@ -39,7 +42,7 @@ describe("0079 MDT, SJM, ADSK and DELL on their announced date", () => {
     it(`${s}: Finnhub's row keeps its estimates and takes the company's source`, () => {
       const row = feed.find((r) => r.symbol === s)!;
       const out = applyToRows(s, [row], FILE, today);
-      expect(out).toEqual([expect.objectContaining({ date: "2026-11-24", hour: WANT[s], epsEstimate: row.epsEstimate, source: SOURCE[s] })]);
+      expect(out).toEqual([expect.objectContaining({ date: "2026-11-24", hour: SHOWN[s], epsEstimate: row.epsEstimate, source: SOURCE[s] })]);
       const next = { date: out[0].date, session: out[0].hour, quarter: row.quarter, year: 2027, epsE: row.epsEstimate, revE: null, confirmed: out[0].source };
       const title = tickerShareTitle(s, s, next, undefined);
       expect(title).toMatch(/Nov 24/);
@@ -68,8 +71,8 @@ describe("0079 the companies' date through the worker", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-17T15:00:00Z"));
     const cache = new MemCache();
-    // Nasdaq's day calendar says after hours for all four. The company's word wins: its bmo for MDT/SJM, and no
-    // session at all for ADSK/DELL, whose notices name none (Nasdaq's guess never sits beside "Confirmed").
+    // Nasdaq's day calendar says after hours for all four. The company's word wins: its bmo for MDT/SJM, and the
+    // after-close session its call time settles for ADSK/DELL (0108), never marked as Nasdaq's.
     cache.store.set(`https://cache.metaphases.internal/${encodeURIComponent("nq:x:v1:2026-11-24")}`, JSON.stringify({ MDT: "amc", SJM: "amc", ADSK: "amc", DELL: "amc" }));
     (globalThis as any).caches = { default: cache };
     vi.stubGlobal("fetch", vi.fn(async (u: string) => {
@@ -91,7 +94,7 @@ describe("0079 the companies' date through the worker", () => {
       for (const s of SYMS) {
         const rows = r.events.filter((e: any) => e.s === s);
         expect(rows, s).toHaveLength(1);
-        expect(rows[0]).toMatchObject({ d: "2026-11-24", h: WANT[s], o: SOURCE[s] });
+        expect(rows[0]).toMatchObject({ d: "2026-11-24", h: SHOWN[s], o: SOURCE[s] });
         expect(rows[0].c).toBeUndefined();
         expect(rows[0].hs).toBeUndefined();
       }
@@ -101,7 +104,7 @@ describe("0079 the companies' date through the worker", () => {
   for (const s of SYMS) {
     it(`/api/ticker/${s}: next is Nov 24, the company's session, confirmed, not projected`, async () => {
       const r = await get(`/api/ticker/${s}`);
-      expect(r.next).toMatchObject({ date: "2026-11-24", session: WANT[s], confirmed: SOURCE[s] });
+      expect(r.next).toMatchObject({ date: "2026-11-24", session: SHOWN[s], confirmed: SOURCE[s] });
       expect(r.next.projected).toBeUndefined();
       expect(r.next.hs).toBeUndefined();
     });

@@ -33,3 +33,27 @@ test("a habit the moves settle reads as a habit, with the company's call time; n
   await expect(page.locator(".next-card").getByTestId("nc-session")).not.toContainText("usually");
   await expect(page.locator(".next-card").getByTestId("nc-call")).toHaveText("Earnings call 2 p.m. PT, per the company's notice");
 });
+
+// 0108: a call time outside market hours settles the session, so the sheet says "After close" once, with the call
+// time under it, never "Time not announced" beside the company's own call time. Nasdaq's time reads as expected.
+test("a company date settled by its call time reads one consistent time line; Nasdaq's reads expected", async ({ page }) => {
+  await page.route("**/api/ticker/DELL", sheetFor("DELL", { session: "amc", call: "3:30 p.m. CT" }));
+  await page.route("**/api/ticker/DE", async (r) => {
+    const body = JSON.parse(fx("ticker-NVDA.json").replaceAll('"NVDA"', '"DE"'));
+    body.next = { ...body.next, date: "2026-11-25", session: "bmo", hs: "n", quarter: 4, year: 2026, confirmed: "https://example.com/notice", call: "9 a.m. CT" };
+    delete body.next.projected; delete body.next.nasdaq;
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/DELL");
+  const card = page.locator(".next-card");
+  await expect(card.getByTestId("nc-session")).toContainText("After close");
+  await expect(card.getByTestId("nc-session")).not.toContainText(/not announced|TBD|expected/);
+  await expect(card.getByTestId("nc-call")).toHaveText("Earnings call 3:30 p.m. CT, per the company's notice");
+  await expect(card.locator(".nc-phase .phase")).toHaveClass(/phase-amc/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: test.info().outputPath("call-time-sheet.png") });
+
+  await page.goto("./t/DE");
+  await expect(page.locator(".next-card").getByTestId("nc-session")).toContainText("Before open (expected)");
+  await expect(page.locator(".next-card").getByTestId("nc-session")).not.toContainText(/not announced|TBD/);
+});

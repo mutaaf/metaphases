@@ -1,12 +1,12 @@
 ---
 id: 0108
 title: Dell, Autodesk, Deere and Marvell read "time not announced" though their own notices give the time, and Nasdaq times them too
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-24
-pr:
+pr: 193
 by: critic
 ---
 

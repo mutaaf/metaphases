@@ -73,14 +73,16 @@ describe("0093 Macy's date through the worker", () => {
       const inRange = "2026-12-02" >= from && "2026-12-02" <= to;
       expect(rows).toHaveLength(inRange ? 1 : 0);
       if (!inRange) return;
-      expect(rows[0]).toMatchObject({ d: "2026-12-02", h: "", o: SOURCE, eA: null, rA: null });
+      expect(rows[0]).toMatchObject({ d: "2026-12-02", h: "bmo", o: SOURCE, eA: null, rA: null }); // 0108: its 8 a.m. ET call
+      expect(rows[0].hs).toBeUndefined();
       expect(rows[0].x).toBeUndefined();
     });
   }
 
   it("/api/ticker/M: next is the company's day, confirmed, with its call time and no contest", async () => {
     const r = await get("/api/ticker/M");
-    expect(r.next).toMatchObject({ date: "2026-12-02", session: "", confirmed: SOURCE });
+    expect(r.next).toMatchObject({ date: "2026-12-02", session: "bmo", confirmed: SOURCE }); // 0108: its 8 a.m. ET call
+    expect(r.next.hs).toBeUndefined();
     expect(r.next.projected).toBeUndefined();
     expect(r.next.nasdaq).toBeUndefined();
     expect(r.next.status).toBeUndefined();

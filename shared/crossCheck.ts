@@ -119,12 +119,25 @@ export function crossOne(s: string, d: string, h: Session, w: NqWindow): Cross |
 export function crossCheck(events: EarningsEvent[], w: NqWindow): EarningsEvent[] {
   if (!w.loaded.length) return events;
   return events.map((e) => {
-    if (e.o || e.c || e.eA != null || e.rA != null) return e; // company-dated, closed-day or already reported: the date is settled
+    if (e.c || e.eA != null || e.rA != null) return e; // closed-day or already reported: the date is settled
+    if (e.o) return e.h ? e : companyDayFill(e, w); // company-dated: the date is settled; only a blank session is filled (0108)
     if (e.od || e.nd || e.fd) return e; // 0072/0076: the past check already settled where this row stands
     const c = crossOne(e.s, e.d, e.h, w);
     if (!c) return e;
     return { ...e, h: c.h ?? e.h, ...(c.h ? { hs: "n" as const } : {}), x: c.x, ...(c.xd ? { xd: c.xd } : {}), ...(c.xh ? { xh: c.xh } : {}) };
   });
+}
+
+/**
+ * 0108: a company-dated row whose company named no session (and whose call time doesn't settle one) takes Nasdaq's
+ * timed listing for that same day, marked expected (`hs: "n"`). The date is the company's, so nothing is compared:
+ * no `x`, and a listing on another day or without a time changes nothing.
+ */
+export function companyDayFill(e: EarningsEvent, w: NqWindow): EarningsEvent {
+  // A day still ahead only: on the report day, Nasdaq's guess would set when results are due (0039's "figures pending").
+  if (e.d <= w.from || !w.loaded.includes(e.d)) return e;
+  const h = (w.idx[e.s] ?? []).find((l) => l.d === e.d)?.h;
+  return h ? { ...e, h, hs: "n" as const } : e;
 }
 
 /** Weekdays from `today` through the window's last day. */
