@@ -1,12 +1,12 @@
 ---
 id: 0107
 title: Canada's five biggest banks ($740B together) are missing from the Dec 2–3 calendar, and BMO's sheet says "after the close" when the bank reports at 6 a.m. ET
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-24
-pr:
+pr: 191
 by: critic
 ---
 
@@ -41,12 +41,15 @@ On 2026-11-24 at 07:00 UTC, the critic compared Nasdaq's day calendars for Nov 2
 ## Acceptance criteria
 - [ ] Live: `/api/calendar?from=2026-12-02&to=2026-12-03` has RY, TD, BMO, BNS and CM, each on Nasdaq's day with `h: "bmo"` (or the 0059 contested state). BMO and CM carry `o` links.
 - [ ] Live: `/t/BMO` and its `og:title` read "before the open" for Dec 2, never "after the close".
-- [ ] Script check: every Nasdaq-listed company with a market cap of at least $10B in the next ten days has a calendar row on Nasdaq's day. Record the count (0 missing) in the PR.
-- [ ] Unit: an untracked `RY.TO` row (CA$ revenue) becomes RY, once. A $20B company with $500M revenue is admitted. A $300M company with CN¥2B revenue isn't, unless it is tracked.
+- [ ] ~~Script check ($10B+ sweep)~~: moved to 0110.
+- [ ] Unit: an untracked `RY.TO` row (CA$ revenue) becomes RY, once. (The dollar-size admit/reject cases moved to 0110.)
 - [ ] Finnhub calls stay within 60/min, with no new 1102s. Works at 390×844 and 1440×900.
 
 ## Test plan
 Vitest beside the 0024 supplement and 0105 `keepNasdaq` tests, with fixtures for the dotted home listing, the dollar-cap gate and the Nasdaq session on `next`.
+
+## Shipped scope (builder, 2026-11-24)
+The Big Five are now tracked (`data/universe.json` + `scripts/build_universe.py` EXTRA: `c: "CA"`, `ec: "CAD"`, Toronto logos), so the 0024 alias renames `RY.TO` → `RY` and the supplement covers any gap. BMO and CM carry company-dated overrides (bmo). RY, TD and BNS publish a call time only, so their session is left to Nasdaq's contest (0059). The untracked dollar-size gate (RBRK, CRDO, NTNX, GWRE) is split to **0110**.
 
 ## Out of scope
 Other TSX-only issuers that have no US listing.
