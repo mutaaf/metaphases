@@ -1,7 +1,7 @@
 ---
 id: 0107
 title: Canada's five biggest banks ($740B together) are missing from the Dec 2–3 calendar, and BMO's sheet says "after the close" when the bank reports at 6 a.m. ET
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: data-quality
@@ -47,6 +47,9 @@ On 2026-11-24 at 07:00 UTC, the critic compared Nasdaq's day calendars for Nov 2
 
 ## Test plan
 Vitest beside the 0024 supplement and 0105 `keepNasdaq` tests, with fixtures for the dotted home listing, the dollar-cap gate and the Nasdaq session on `next`.
+
+## Shipped scope (builder, 2026-11-24)
+The Big Five are now tracked (`data/universe.json` + `scripts/build_universe.py` EXTRA: `c: "CA"`, `ec: "CAD"`, Toronto logos), so the 0024 alias renames `RY.TO` → `RY` and the supplement covers any gap. BMO and CM carry company-dated overrides (bmo). RY, TD and BNS publish a call time only, so their session is left to Nasdaq's contest (0059). The untracked dollar-size gate (RBRK, CRDO, NTNX, GWRE) is split to **0110**.
 
 ## Out of scope
 Other TSX-only issuers that have no US listing.
