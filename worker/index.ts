@@ -37,7 +37,7 @@ import { shownSession } from "../shared/contestedTime";
 import { applyLeads, leadFor, LEAD_MEMO_DAYS, nasdaqSessionLeads, noteLead, type SessionLeads } from "../shared/sessionLead";
 import { applyMemos, contestsIn, dayStanding, memoCross, noteContests, windowCovered, XMEMO_DAYS, type XMemos } from "../shared/contestMemo";
 import { leadRows, leadsNasdaq } from "../shared/leadDay";
-import { buildIndex, crossCheck, crossOne, keepNasdaq, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
+import { buildIndex, companyDayFill, crossCheck, crossOne, keepNasdaq, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, homeListing, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
 import { FIGURES_CHECK_MAX, needsFiguresCheck, needsPastCheck, nqReports, phantomReport, settleFiguresRow, settlePastRow, PAST_LOOKBACK_DAYS, type NqReport } from "../shared/pastRows";
@@ -988,7 +988,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) { nextE.hour = c.h; nextE.hs = "n"; } } // 0050: Nasdaq's, not the company's
   // 0108: a company date whose company named no session (nor a call time that settles one) takes Nasdaq's timed
   // listing for that same day, expected, as the calendar's crossCheck does. One shared, cached call per day.
-  if (nextE?.source && !nextE.hour && nextE.epsActual == null && nextE.revenueActual == null) {
+  // Only for a day still ahead and inside the calendar's window, as `companyDayFill`: on the report day the 0039 states
+  // would take Nasdaq's guess as the time results are due (review of #193).
+  if (nextE?.source && !nextE.hour && nextE.epsActual == null && nextE.revenueActual == null && nextE.date > today && nextE.date <= windowEnd(today)) {
     const h = (await nasdaqDayOnDemand(nextE.date, today, ctx))?.[symbol];
     if (h) { nextE.hour = h; nextE.hs = "n"; }
   }
@@ -1847,13 +1849,16 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
     const sym = syms[i];
     for (const e of applyToRows(sym, r.value?.earningsCalendar ?? [], OVERRIDES, today)) {
       if (e.date < today) continue;
-      const feedH = (e.hour || "") as Session;
+      let feedH = (e.hour || "") as Session;
+      // 0108: a company date with no session (nor one its call time settles) takes Nasdaq's timed listing that day, expected.
+      const nqFill = nqWin && e.source && !feedH && e.date > today ? companyDayFill({ s: sym, d: e.date, h: "" } as EarningsEvent, nqWin).h : "";
+      if (nqFill) feedH = nqFill;
       const c = nqWin && !e.source ? crossOne(sym, e.date, feedH, nqWin) : null;
       const sl = !e.source && !closedDay(e.date) ? leadFor(leads, sym, e.date, feedH, today, c) : null;
       const contestedH = c?.x === "differs" && c.xd === e.date && !!c.xh;
       // 0099: the feed's timeless projection against Nasdaq's timed listing elsewhere: Nasdaq's day, still tentative.
       const lead = c?.x === "differs" && c.xd && !closedDay(e.date) && leadsNasdaq({ date: e.date, session: feedH, source: e.source }, { date: c.xd, session: c.xh ?? "" }, today) ? { date: c.xd, session: c.xh! } : null;
-      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: lead?.date ?? e.date, session: lead ? "" : sl ? sl.h : contestedH ? "" : feedH, ...(sl && !lead ? { expected: true } : {}), quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}), ...(lead || isProjected({ date: e.date, session: e.hour || "", source: e.source }, today) ? { projected: true } : {}) });
+      items.push({ symbol: sym, name: U[sym]?.n ?? sym, date: lead?.date ?? e.date, session: lead ? "" : sl ? sl.h : contestedH ? "" : feedH, ...((sl || nqFill) && !lead ? { expected: true } : {}), quarter: e.quarter, year: e.year, epsE: shareEps(sym, e.epsEstimate ?? null), cur: U[sym]?.ec, url: `${SITE}${BASE}/t/${sym}`, ...(!e.source && closedDay(e.date) ? { closed: closedDay(e.date)! } : {}), ...(lead || isProjected({ date: e.date, session: e.hour || "", source: e.source }, today) ? { projected: true } : {}) });
     }
   });
   items.sort((a, b) => a.date.localeCompare(b.date));

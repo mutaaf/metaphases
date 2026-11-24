@@ -133,8 +133,9 @@ export function crossCheck(events: EarningsEvent[], w: NqWindow): EarningsEvent[
  * timed listing for that same day, marked expected (`hs: "n"`). The date is the company's, so nothing is compared:
  * no `x`, and a listing on another day or without a time changes nothing.
  */
-function companyDayFill(e: EarningsEvent, w: NqWindow): EarningsEvent {
-  if (!w.loaded.includes(e.d)) return e;
+export function companyDayFill(e: EarningsEvent, w: NqWindow): EarningsEvent {
+  // A day still ahead only: on the report day, Nasdaq's guess would set when results are due (0039's "figures pending").
+  if (e.d <= w.from || !w.loaded.includes(e.d)) return e;
   const h = (w.idx[e.s] ?? []).find((l) => l.d === e.d)?.h;
   return h ? { ...e, h, hs: "n" as const } : e;
 }

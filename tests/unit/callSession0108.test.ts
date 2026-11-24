@@ -24,6 +24,7 @@ describe("callSession", () => {
     expect(callSession("7:30 a.m. CT")).toBe("bmo"); // 8:30 ET
     expect(callSession("9:29 a.m. ET")).toBe("bmo");
     expect(callSession("12:30 a.m. ET")).toBe("bmo");
+    expect(callSession("12 a.m. ET")).toBe("bmo");
   });
 
   it("never guesses a session for a call during market hours", () => {
@@ -98,6 +99,8 @@ describe("crossCheck: a company date with no session takes Nasdaq's timed listin
     expect(crossCheck([row("DE", "2026-11-25", "bmo")], w)[0]).toEqual(row("DE", "2026-11-25", "bmo"));
     expect(crossCheck([row("X", "2026-11-25")], w)[0]).toEqual(row("X", "2026-11-25"));
     expect(crossCheck([row("Y", "2026-11-25")], w)[0]).toEqual(row("Y", "2026-11-25"));
+    // The report day itself: Nasdaq's guess would decide when results are "due" (0039), so it isn't filled (review of #193).
+    expect(crossCheck([row("DE", TODAY)], win({ [TODAY]: { DE: "bmo" } }))[0]).toEqual(row("DE", TODAY));
     // Figures in: settled, left alone.
     const done = row("DE", "2026-11-25", "", { eA: 4.1 });
     expect(crossCheck([done], win({ "2026-11-25": { DE: "bmo" } }))[0]).toEqual(done);
