@@ -1,12 +1,12 @@
 ---
 id: 0105
 title: Gaotu shows "around Tue Nov 24, not yet confirmed" a week after the company announced Wed Nov 25 before the open; projected rows don't show Nasdaq's other day
-status: in-progress
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-23
-pr:
+pr: 189
 by: critic
 ---
 
