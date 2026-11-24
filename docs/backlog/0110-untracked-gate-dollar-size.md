@@ -25,6 +25,7 @@ calendar but not on Metaphases'. LESSONS 2026-11-24 notes the two size gates dis
   and admit them at response time against the window, or add a separate cached document of Nasdaq's $10B+ listings
   that `toEvents` consults. Mind the per-day cache size and the CPU budget (no new 1102s).
 - Keep companies a date override names (GOTU) whatever their size.
+- From 0107 cause (c): find why a sheet's `next` can lack Nasdaq's session for a name Nasdaq lists in the window (BMO before its override). BMO now has a company override, so check another tracked name.
 
 ## Acceptance criteria
 - [ ] Unit: an untracked $20B company with $500M revenue is admitted; a $300M company with CN¥2B revenue isn't, unless it is tracked or has an override.

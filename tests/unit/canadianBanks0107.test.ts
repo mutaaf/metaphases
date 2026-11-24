@@ -24,7 +24,9 @@ describe("0107 the Big Five are tracked", () => {
   for (const s of BANKS) {
     it(`${s}: in the universe as a Canadian CAD reporter with a dollar market value, aliased from ${s}.TO`, () => {
       expect(U[s]).toMatchObject({ c: "CA", ec: "CAD", mcCur: "CAD" });
-      expect(U[s].mc).toBeGreaterThan(50_000);
+      const e = U[s] as typeof U[string] & { mcL: number; fx: number };
+      expect(e.mc).toBe(Math.round(e.mcL * e.fx)); // USD millions, never the CAD figure
+      expect(e.mc).toBeGreaterThan(50_000);
       expect(aliasMap(U)[`${s}.TO`]).toBe(s);
       expect(supplementSymbols(U)).toContain(s);
     });
@@ -112,7 +114,7 @@ describe("0107 on the worker", () => {
     expect(by.BMO).toMatchObject({ d: "2026-12-02", h: "bmo", o: BMO_SRC });
     expect(by.CM).toMatchObject({ d: "2026-12-03", h: "bmo", o: CM_SRC });
     // RY, TD, BNS: the feed says amc, Nasdaq pre-market, no company session: contested, never a bare "amc".
-    for (const s of ["RY", "TD", "BNS"]) expect(by[s].h === "amc" && !by[s].x).toBe(false);
+    for (const s of ["RY", "TD", "BNS"]) expect(by[s]).toMatchObject({ x: "differs", xh: "bmo" });
   });
 
   it("/t/BMO: Wed Dec 2 before the open, never after the close", async () => {
