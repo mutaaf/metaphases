@@ -1,7 +1,7 @@
 ---
 id: 0105
 title: Gaotu shows "around Tue Nov 24, not yet confirmed" a week after the company announced Wed Nov 25 before the open; projected rows don't show Nasdaq's other day
-status: ready
+status: in-progress
 priority: P0
 size: S
 lens: data-quality
@@ -35,3 +35,8 @@ Vitest beside the 0099 tests (Nasdaq day leads), plus the date-overrides validat
 
 ## Out of scope
 Finding company notices automatically.
+
+## Builder notes (2026-11-24)
+- **Company date:** `data/date-overrides.json` → GOTU Wed Nov 25, `bmo`, call 8 a.m. ET, from the Nov 16 PR Newswire release (wire copy read in full). Overrides already apply to off-universe rows (`applyToEvents` matches any symbol the feed returns), so the calendar, `/t/GOTU` and its unfurl all read the company's date.
+- **Why the 0099 lead missed it:** the slim Nasdaq day cache keeps tracked names and $1B+ companies only (`keepNq`). The calendar shows untracked companies by *revenue* in the feed's currency (CN¥1.9B for GOTU), so a $490M ADR was on the calendar while its Nasdaq listing was thrown away. `keepNasdaq` now also keeps *timed* listings from $250M (a timeless one can't lead). Thanksgiving week's Nov 25: 6 rows ≥ $1B, 10 kept with the new rule, out of 45, so the cache barely grows.
+- **Not changed:** an untracked small company Nasdaq lists *without* a time is still dropped, and if the whole window loaded it can read `x: "unknown"`. Nothing in the UI reads `unknown` today (only `differs` drives copy), so it's left as is rather than rewrite 0015's contract in a P0.

@@ -13,6 +13,16 @@ export const XCHECK_REACH = 31;
 export const XCHECK_PAST_DAYS = 7;
 /** Untracked Nasdaq rows are kept only for companies at least this large (the calendar's other gate is revenue). */
 export const XCHECK_MIN_CAP = 1e9;
+/**
+ * 0105: an untracked Nasdaq row with a session is kept down to this size. The calendar shows untracked companies by
+ * revenue (in the feed's currency), not market cap, so a $490M ADR like Gaotu (GOTU) is on the calendar while its
+ * Nasdaq listing was dropped, and the 0099 lead never saw it. Only timed rows: a timeless one can't lead.
+ */
+export const XCHECK_TIMED_MIN_CAP = 2.5e8;
+
+/** Which Nasdaq rows the slim day cache keeps: tracked names, anything large, and timed listings of mid-size companies (0105). */
+export const keepNasdaq = (tracked: boolean, marketCap: number, session: Session) =>
+  tracked || marketCap >= XCHECK_MIN_CAP || ((session === "bmo" || session === "amc") && marketCap >= XCHECK_TIMED_MIN_CAP);
 
 /** One Nasdaq day, slimmed for the cache: symbol → session ("" = Nasdaq didn't say). */
 export type NqDay = Record<string, Session>;
@@ -31,12 +41,13 @@ const money = (v: unknown) => {
  * universe, or anything large); the full day is ~1,300 rows in peak weeks and we use a fraction of it.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function nasdaqDaySessions(body: any, keep: (sym: string, marketCap: number) => boolean = () => true): NqDay {
+export function nasdaqDaySessions(body: any, keep: (sym: string, marketCap: number, session: Session) => boolean = () => true): NqDay {
   const out: NqDay = {};
   for (const r of body?.data?.rows ?? []) {
     const sym = typeof r?.symbol === "string" ? r.symbol.trim().toUpperCase().replace("/", ".") : "";
-    if (!sym || !keep(sym, money(r?.marketCap))) continue;
-    out[sym] = SESSION[r?.time] ?? "";
+    const h = SESSION[r?.time] ?? "";
+    if (!sym || !keep(sym, money(r?.marketCap), h)) continue;
+    out[sym] = h;
   }
   return out;
 }
