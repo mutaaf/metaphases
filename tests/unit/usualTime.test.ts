@@ -110,23 +110,36 @@ describe("share title and description: announced, habit, unknown (0091)", () => 
 });
 
 describe("/api/ticker: a company date with no session (0091)", () => {
-  it("DELL: usual amc, the notice's call time, and The Read says it's a habit", async () => {
-    stub("DELL", { date: "2026-11-24", hour: "" }, closes(AMC_DAY, AMC_NEXT));
-    const r = await sheet("DELL");
-    expect(r.next).toMatchObject({ date: "2026-11-24", session: "", usual: "amc", call: "3:30 p.m. CT" });
+  // 0108: Dell's and Autodesk's calls come after the close, which settles the session; Deere's 9 a.m. CT (10 a.m. ET)
+  // call is in market hours, so it settles nothing, and with Nasdaq not timing it the 0091 habit decides.
+  it("DE: usual amc, the notice's call time, and The Read says it's a habit", async () => {
+    stub("DE", { date: "2026-11-25", hour: "" }, closes(AMC_DAY, AMC_NEXT));
+    const r = await sheet("DE");
+    expect(r.next).toMatchObject({ date: "2026-11-25", session: "", usual: "amc", call: "9 a.m. CT" });
     expect(r.read.join(" ")).toMatch(/time not announced; going by its last reports, it usually reports after the close/);
     // The unfurl is built from this same response (shareMeta → tickerShareTitle / tickerShareDesc).
-    expect(tickerShareTitle("DELL", "Dell Technologies", r.next, r.justReported)).toBe("DELL reports Tue, Nov 24, time not announced (usually after the close) · Metaphases");
-    expect(tickerShareDesc("Dell Technologies", r)).toMatch(/^Dell Technologies — Tue, Nov 24, time not announced \(usually after the close/);
+    expect(tickerShareTitle("DE", "Deere", r.next, r.justReported)).toBe("DE reports Wed, Nov 25, time not announced (usually after the close) · Metaphases");
+    expect(tickerShareDesc("Deere", r)).toMatch(/^Deere — Wed, Nov 25, time not announced \(usually after the close/);
   });
 
-  it("ADSK, moves split 2–2: no habit (Time TBD), the call time still shown", async () => {
-    stub("ADSK", { date: "2026-11-24", hour: "" }, closes(SPLIT_DAY, SPLIT_NEXT));
-    const r = await sheet("ADSK");
+  it("DE, moves split 2–2: no habit (Time TBD), the call time still shown", async () => {
+    stub("DE", { date: "2026-11-25", hour: "" }, closes(SPLIT_DAY, SPLIT_NEXT));
+    const r = await sheet("DE");
     expect(r.next.session).toBe("");
     expect(r.next.usual).toBeUndefined();
-    expect(r.next.call).toBe("2 p.m. PT");
+    expect(r.next.call).toBe("9 a.m. CT");
     expect(r.read.join(" ")).toMatch(/\(time not yet confirmed\)/);
+  });
+
+  it("DELL (0108): its 3:30 p.m. CT call settles after the close; never 'time not announced', no habit label", async () => {
+    stub("DELL", { date: "2026-11-24", hour: "" }, closes(SPLIT_DAY, SPLIT_NEXT));
+    const r = await sheet("DELL");
+    expect(r.next).toMatchObject({ date: "2026-11-24", session: "amc", call: "3:30 p.m. CT" });
+    expect(r.next.usual).toBeUndefined();
+    expect(r.next.hs).toBeUndefined();
+    expect(r.read.join(" ")).not.toMatch(/not announced|not yet confirmed/);
+    const title = tickerShareTitle("DELL", "Dell Technologies", r.next, r.justReported);
+    expect(title).toBe("DELL reports Tue, Nov 24 after the close · Metaphases");
   });
 
   it("a feed row with its own session: no habit label, whatever the moves say", async () => {

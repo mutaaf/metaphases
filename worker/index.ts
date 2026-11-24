@@ -29,7 +29,7 @@ import { applyPreReport, fillMovedFigures, isReit, judgeReaction, matchQuarters,
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { admitUntracked, capUsd, foldCaps, nasdaqDayCaps, type NqCaps } from "../shared/untrackedGate";
-import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, type DateOverrides } from "../shared/dateOverrides";
+import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, overrideSession, type DateOverrides } from "../shared/dateOverrides";
 import { dayShareText } from "../shared/dayShare";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, passedQuarter, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
@@ -986,6 +986,12 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const fhNextHour = nextE?.hour as string | undefined;
   const nqOnNext = nextE && !nextE.source ? nqNextHour ?? (nqWin?.loaded.includes(nextE.date) ? nqWin.idx[symbol]?.find((l) => l.d === nextE.date)?.h : undefined) : undefined;
   if (nqWin && nextE && !nextE.hour) { const c = crossOne(symbol, nextE.date, "", nqWin); if (c?.h) { nextE.hour = c.h; nextE.hs = "n"; } } // 0050: Nasdaq's, not the company's
+  // 0108: a company date whose company named no session (nor a call time that settles one) takes Nasdaq's timed
+  // listing for that same day, expected, as the calendar's crossCheck does. One shared, cached call per day.
+  if (nextE?.source && !nextE.hour && nextE.epsActual == null && nextE.revenueActual == null) {
+    const h = (await nasdaqDayOnDemand(nextE.date, today, ctx))?.[symbol];
+    if (h) { nextE.hour = h; nextE.hs = "n"; }
+  }
   // Past prints: Nasdaq gives the report dates (newest first).
   const rows: any[] = nasdaq?.data?.earningsSurpriseTable?.rows ?? [];
   const barDates = chart ? chart.t.map(nyDate) : []; // computed once per build
@@ -1379,7 +1385,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
       : upNext && leadNq ? { date: leadNq.date, session: leadNq.session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, hs: "n", feedDay: upNext.date }
       : upNext && sessionLead ? { date: upNext.date, session: sessionLead.h, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, hs: "n", feedSession: sessionLead.f }
-      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...((upNext.hs === "n" || upNext.hs === "h") && upNext.hour && !upNext.source ? { hs: upNext.hs as "n" | "h" } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}), ...(usual ? { usual } : {}), ...(call ? { call } : {}) } : null,
+      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...((upNext.hs === "n" || (upNext.hs === "h" && !upNext.source)) && upNext.hour ? { hs: upNext.hs as "n" | "h" } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}), ...(usual ? { usual } : {}), ...(call ? { call } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     ...(contest && chart ? { moveSession: { feed: contest.feed, nasdaq: contest.nasdaq, session: habit } } : {}),
@@ -1483,7 +1489,7 @@ function projectedTimed(row: any, today: string): boolean {
  */
 function sessionlessDated(symbol: string, today: string): boolean {
   const o = activeOverrides(OVERRIDES, today)[symbol];
-  return !!o && !o.hour && o.date < today;
+  return !!o && !overrideSession(o) && o.date < today;
 }
 
 /**

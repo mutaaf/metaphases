@@ -35,10 +35,14 @@ describe("0050 crossCheck marks a session it filled from Nasdaq", () => {
     const [e] = crossCheck([ev("QQPA", "2026-11-18", "bmo")], win({ "2026-11-18": { QQPA: "bmo" } }));
     expect(e.hs).toBeUndefined();
   });
-  it("a company-dated row is never filled or marked", () => {
-    const [e] = crossCheck([ev("QQPA", "2026-11-18", "", { o: "https://example.com/r" })], win({ "2026-11-18": { QQPA: "amc" } }));
-    expect(e).toMatchObject({ h: "" });
+  it("a company-dated row keeps the company's session and is never marked; a blank one takes Nasdaq's that day, expected (0108)", () => {
+    const [e] = crossCheck([ev("QQPA", "2026-11-18", "bmo", { o: "https://example.com/r" })], win({ "2026-11-18": { QQPA: "amc" } }));
+    expect(e).toMatchObject({ h: "bmo" });
     expect(e.hs).toBeUndefined();
+    expect(e.x).toBeUndefined();
+    const [f] = crossCheck([ev("QQPA", "2026-11-18", "", { o: "https://example.com/r" })], win({ "2026-11-18": { QQPA: "amc" } }));
+    expect(f).toMatchObject({ h: "amc", hs: "n" });
+    expect(f.x).toBeUndefined();
   });
 });
 

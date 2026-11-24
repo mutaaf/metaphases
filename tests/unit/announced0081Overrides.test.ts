@@ -25,6 +25,9 @@ const WANT: Record<string, { date: string; hour: string; quarter: number; year: 
   PATH: { date: "2026-12-03", hour: "amc", quarter: 3, year: 2027 },
 };
 const SYMS = Object.keys(WANT);
+// 0108: the session shown. Neither INTU nor DE names one (nor a call time that settles one: DE's 10 a.m. ET call is in
+// market hours, INTU's entry has no `call`), so Nasdaq's timed listing for the company's own day fills it, expected.
+const SHOWN: Record<string, { h: string; hs?: "n" }> = { PDD: { h: "bmo" }, INTU: { h: "amc", hs: "n" }, DE: { h: "bmo", hs: "n" }, PATH: { h: "amc" } };
 const SOURCE: Record<string, string> = {
   PDD: "https://www.quiverquant.com/news/PDD+Holdings+to+Report+Third+Quarter+2026+Financial+Results+on+November+19",
   INTU: "https://investors.intuit.com/",
@@ -93,7 +96,7 @@ describe("0081 the companies' dates through the worker", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-17T21:00:00Z"));
     const cache = new MemCache();
-    // Nasdaq's day calendar disagrees on sessions; the company's word (or its silence) wins.
+    // Nasdaq's day calendar: the company's stated session wins; its silence takes Nasdaq's timed listing, expected (0108).
     cache.store.set(`https://cache.metaphases.internal/${encodeURIComponent("nq:x:v1:2026-11-19")}`, JSON.stringify({ PDD: "bmo", INTU: "amc" }));
     cache.store.set(`https://cache.metaphases.internal/${encodeURIComponent("nq:x:v1:2026-11-25")}`, JSON.stringify({ DE: "bmo" }));
     (globalThis as any).caches = { default: cache };
@@ -120,9 +123,10 @@ describe("0081 the companies' dates through the worker", () => {
         const inRange = WANT[s].date >= from && WANT[s].date <= to;
         expect(rows, s).toHaveLength(inRange ? 1 : 0);
         if (!inRange) continue;
-        expect(rows[0]).toMatchObject({ d: WANT[s].date, h: WANT[s].hour, o: SOURCE[s], eA: null, rA: null });
+        expect(rows[0]).toMatchObject({ d: WANT[s].date, h: SHOWN[s].h, o: SOURCE[s], eA: null, rA: null });
         expect(rows[0].c).toBeUndefined();
-        expect(rows[0].hs).toBeUndefined();
+        expect(rows[0].hs).toBe(SHOWN[s].hs);
+        expect(rows[0].x).toBeUndefined();
       }
     });
   }
@@ -130,7 +134,8 @@ describe("0081 the companies' dates through the worker", () => {
   for (const s of SYMS) {
     it(`/api/ticker/${s}: next is the company's date and session, confirmed`, async () => {
       const r = await get(`/api/ticker/${s}`);
-      expect(r.next).toMatchObject({ date: WANT[s].date, session: WANT[s].hour, confirmed: SOURCE[s] });
+      expect(r.next).toMatchObject({ date: WANT[s].date, session: SHOWN[s].h, confirmed: SOURCE[s] });
+      expect(r.next.hs).toBe(SHOWN[s].hs);
       expect(r.next.projected).toBeUndefined();
       expect(r.next.nasdaq).toBeUndefined();
       expect(r.next.status).toBeUndefined();

@@ -37,9 +37,9 @@ describe("0045 company dates in data/date-overrides.json", () => {
     const out = applyToRows("HMC", [{ symbol: "HMC", date: "2026-11-05", hour: "", quarter: 2, year: 2027, epsEstimate: 27.43 }], FILE, today);
     expect(out).toEqual([expect.objectContaining({ date: "2026-11-10", hour: "bmo" })]);
   });
-  it("MRVL: Tue Dec 1 (Marvell, Nov 6), not Thanksgiving; no session, since the release names only the call time (0063)", () => {
+  it("MRVL: Tue Dec 1 (Marvell, Nov 6), not Thanksgiving; after the close, since its 1:30 p.m. PT call is after it (0063, 0108)", () => {
     const out = applyToRows("MRVL", [{ symbol: "MRVL", date: "2026-11-26", hour: "", quarter: 3, year: 2027, epsEstimate: 1.1138 }], FILE, "2026-11-13");
-    expect(out).toEqual([expect.objectContaining({ date: "2026-12-01", hour: "", quarter: 3, year: 2027, epsEstimate: 1.1138 })]);
+    expect(out).toEqual([expect.objectContaining({ date: "2026-12-01", hour: "amc", quarter: 3, year: 2027, epsEstimate: 1.1138 })]);
     expect(FILE.MRVL?.hour).toBeUndefined();
   });
   it("TSN: Mon Nov 16 before the open, not after the close", () => {
@@ -114,7 +114,7 @@ describe("0063 MRVL's company date through the worker", () => {
     const r = await get("/api/calendar?from=2026-11-23&to=2026-12-04");
     const rows = r.events.filter((e: any) => e.s === "MRVL");
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ d: "2026-12-01", h: "", o: FILE.MRVL?.source });
+    expect(rows[0]).toMatchObject({ d: "2026-12-01", h: "amc", o: FILE.MRVL?.source }); // 0108: the call time's session
     expect(rows[0].c).toBeUndefined();
   });
 

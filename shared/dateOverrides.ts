@@ -12,7 +12,8 @@ export interface DateOverride {
   year: number;
   source: string; // https URL of the company's announcement (or a wire copy of it)
   checked: string; // YYYY-MM-DD the source was last read
-  /** 0091: the conference-call time as the notice gives it ("3:30 p.m. CT"). Shown under the date; never a session. */
+  /** 0091: the conference-call time as the notice gives it ("3:30 p.m. CT"). Shown under the date. 0108: a call outside
+   * market hours also settles the session when `hour` is left out (`callSession`). */
   call?: string;
   note?: string;
 }
@@ -30,6 +31,26 @@ const gap = (a: string, b: string) => Math.abs(dayNum(a) - dayNum(b));
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 /** 0091: a call time as a notice gives it: "4:30 p.m. ET", "9 a.m. CT". */
 export const CALL = /^(1[0-2]|[1-9])(:[0-5]\d)? (a\.m\.|p\.m\.) (ET|CT|MT|PT)$/;
+
+const ZONE_TO_ET: Record<string, number> = { ET: 0, CT: 1, MT: 2, PT: 3 };
+
+/**
+ * 0108: the session a company's call time settles. Results come out before the call, so a call before 9:30 a.m. ET
+ * means before the open, and one at 4:00 p.m. ET or later means after the close. A call during market hours says
+ * nothing about when the results came out: undefined, never a guessed `dmh`.
+ */
+export function callSession(call: string | undefined): "bmo" | "amc" | undefined {
+  const m = call ? CALL.exec(call) : null;
+  if (!m) return undefined;
+  const h12 = Number(m[1]) % 12;
+  const min = (h12 + (m[3] === "p.m." ? 12 : 0) + ZONE_TO_ET[m[4]]) * 60 + (m[2] ? Number(m[2].slice(1)) : 0);
+  if (min < 9 * 60 + 30) return "bmo";
+  if (min >= 16 * 60) return "amc";
+  return undefined;
+}
+
+/** 0108: a company date's session: its stated session, else the one its call time settles, else blank. */
+export const overrideSession = (o: DateOverride): Session => o.hour ?? callSession(o.call) ?? "";
 
 export function activeOverrides(all: DateOverrides, today: string): DateOverrides {
   const out: DateOverrides = {};
@@ -85,8 +106,8 @@ export function applyToEvents(events: EarningsEvent[], all: DateOverrides, from:
     const twin = est.get(s);
     const base = chosen && twin && chosen.eE == null && chosen.rE == null ? { ...chosen, ...pickEstimates(twin) } : chosen;
     out.push(base
-      ? { ...base, d: o.date, h: o.hour ?? "", o: o.source, ...(figuresFit(base.d, o, today) ? {} : { eA: null, rA: null }) }
-      : { s, d: o.date, h: o.hour ?? "", q: o.quarter, y: o.year, eE: null, eA: null, rE: null, rA: null, t: tracked(s) ? 1 : 0, o: o.source });
+      ? { ...base, d: o.date, h: overrideSession(o), o: o.source, ...(figuresFit(base.d, o, today) ? {} : { eA: null, rA: null }) }
+      : { s, d: o.date, h: overrideSession(o), q: o.quarter, y: o.year, eE: null, eA: null, rE: null, rA: null, t: tracked(s) ? 1 : 0, o: o.source });
   }
   return out;
 }
@@ -121,8 +142,8 @@ export function applyToRows(symbol: string, rows: any[], all: DateOverrides, tod
   const rest = rows.filter((r) => !mine.includes(r));
   const base = mine.find((r) => r.date === o.date) ?? mine.find((r) => r.epsActual != null && figuresFit(r.date, o, today)) ?? mine.find((r) => r.epsEstimate != null) ?? mine[0];
   const fixed = base
-    ? { ...base, date: o.date, hour: o.hour ?? "", source: o.source, ...(figuresFit(base.date, o, today) ? {} : { epsActual: null, revenueActual: null }) }
-    : { symbol, date: o.date, hour: o.hour ?? "", quarter: o.quarter, year: o.year, epsEstimate: null, epsActual: null, revenueEstimate: null, revenueActual: null, source: o.source };
+    ? { ...base, date: o.date, hour: overrideSession(o), source: o.source, ...(figuresFit(base.date, o, today) ? {} : { epsActual: null, revenueActual: null }) }
+    : { symbol, date: o.date, hour: overrideSession(o), quarter: o.quarter, year: o.year, epsEstimate: null, epsActual: null, revenueEstimate: null, revenueActual: null, source: o.source };
   return [...rest, fixed];
 }
 

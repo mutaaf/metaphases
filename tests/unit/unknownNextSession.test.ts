@@ -64,10 +64,11 @@ const sheet = async (sym: string) => {
 const past = (r: any) => r.history.filter((h: any) => REPORTS.includes(h.date));
 
 describe("/api/ticker: an unknown next session never blanks the past (0090)", () => {
-  it("DELL, company-dated with no session, no last report: past moves on the after-close day, typical move ≈ ±19%", async () => {
-    stub("DELL", { date: "2026-11-24", hour: "" }, closes(AMC_DAY, AMC_NEXT));
-    const r = await sheet("DELL");
-    expect(r.next).toMatchObject({ date: "2026-11-24", session: "" });
+  // 0108: DELL's after-close call now settles its session, so Deere (a 10 a.m. ET call, which settles nothing) is the case.
+  it("DE, company-dated with no session, no last report: past moves on the after-close day, typical move ≈ ±19%", async () => {
+    stub("DE", { date: "2026-11-25", hour: "" }, closes(AMC_DAY, AMC_NEXT));
+    const r = await sheet("DE");
+    expect(r.next).toMatchObject({ date: "2026-11-25", session: "" });
     const p = past(r);
     expect(p).toHaveLength(4);
     p.forEach((h: any, i: number) => { expect(h.session).toBe("amc"); expect(h.move).toBeCloseTo(AMC_NEXT[i], 4); });
