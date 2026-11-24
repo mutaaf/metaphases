@@ -160,6 +160,9 @@ const SUPP_KV_IDLE_S = 900;
 /** Beyond growing KV's symbol set, a colo pushes newer entries only when KV's newest fetch is this old: a condition
  *  every colo reads off the shared copy itself, so the whole account writes a few times a day, not per colo. */
 const SUPP_KV_STALE_MS = 6 * 3600_000;
+/** A colo with nothing to refresh offers its copy to KV at most this often (one KV read each time). */
+const SUPP_KV_CHK = CAL("supp:kv:chk:v1");
+const SUPP_KV_CHECK_S = 600;
 /** KV's free tier (1,000 writes a day) is shared with the support inbox and the 0083/0104 memos. */
 const SUPP_KV_WRITES_PER_DAY = 24; // a one-time fill of an empty copy takes ~18 (four symbols a minute)
 const keepListed = (d: SuppDoc): SuppDoc => { const k = new Set(SUPP_SYMBOLS); return Object.fromEntries(Object.entries(d).filter(([s]) => k.has(s))); };
@@ -216,13 +219,22 @@ function shareSupp(env: Env, ctx: ExecutionContext, doc: SuppDoc, today: string)
 async function supplement(env: Env, ctx: ExecutionContext, today: string, refresh: boolean): Promise<SuppDoc> {
   const doc = await readSuppShared(env, ctx, today);
   let due = refresh ? staleSymbols(doc, SUPP_SYMBOLS, Date.now()) : [];
+  const nothingDue = refresh && !due.length;
   if (due.length) {
     try {
       if (await caches.default.match(SUPP_LOCK)) due = [];
       else await caches.default.put(SUPP_LOCK, new Response("1", { headers: { "Cache-Control": `public, max-age=${SUPP_LOCK_S}` } }));
     } catch { due = []; }
   }
-  if (!due.length) return doc;
+  if (!due.length) {
+    // 0111: a warm colo with nothing due may hold symbols the shared copy lacks (it filled before KV existed, or KV
+    // expired): offer them at most every SUPP_KV_CHECK_S. shareSupp writes only if KV grows or is stale.
+    if (nothingDue && env.SUPPORT && !(await readJson<number>(SUPP_KV_CHK))) {
+      ctx.waitUntil(putJson(SUPP_KV_CHK, 1, SUPP_KV_CHECK_S));
+      shareSupp(env, ctx, doc, today);
+    }
+    return doc;
+  }
   const from = addDays(today, -SUPP_BACK), to = addDays(today, SUPP_AHEAD);
   const got = await pool(due, 2, async (s) => suppRows(s, (await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?symbol=${encodeURIComponent(s)}&from=${from}&to=${to}&token=${env.FINNHUB_API_KEY}`)).earningsCalendar, homeListing(U as Universe, s)));
   const updates: SuppDoc = {};

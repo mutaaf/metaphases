@@ -177,6 +177,23 @@ describe("0111: the supplement is one document every colo reads", () => {
     expect(r.pending).toBeUndefined();
   });
 
+  it("a fully warm colo with nothing due for refresh still fills an empty shared copy (within ~10 minutes, not 12 h)", async () => {
+    await warmColo("CMH");
+    kv.store.delete("supp:v1"); // as on the first deploy: CMH's copy predates KV
+    const puts = kv.puts.length;
+    vi.setSystemTime(new Date(Date.now() + 11 * 60_000)); // past the check marker; no entry is 12 h old
+    for (const k of [...colos.CMH.store.keys()]) if (k.includes("supp%3Akv%3Achk")) colos.CMH.store.delete(k);
+    unlockSupp("CMH");
+    await get(RANGE);
+    expect(kv.puts.length).toBe(puts + 1);
+    expect(Object.keys(JSON.parse(kv.store.get("supp:v1")!))).toContain("BNS");
+    // and a cold colo now gets the whole list in one read
+    on("YYZ"); budgetSpent("YYZ");
+    const r = await get(RANGE);
+    expect(r.pending).toBeUndefined();
+    expect(syms(r)).toContain("BNS");
+  });
+
   it("no KV binding (local dev): the per-colo supplement works as before", async () => {
     env.SUPPORT = undefined;
     const r = await warmColo("CMH");
