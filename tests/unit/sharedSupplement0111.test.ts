@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import universe from "../../data/universe.json" with { type: "json" };
-import { supplementSymbols, type Universe } from "../../shared/calendarSupplement";
+import { mergeShared, refreshEntry, supplementSymbols, type SuppDoc, type Universe } from "../../shared/calendarSupplement";
 import worker from "../../worker/index";
 
 // 0111 (critic 2026-11-24 19:00): the same calendar range gave different rows read to read. BNS and TD came and went
@@ -126,6 +126,25 @@ describe("0111: the supplement is one document every colo reads", () => {
     expect(kv.puts.filter((k) => k === "supp:v1").length - fill).toBeLessThanOrEqual(1);
   });
 
+  it("five colos refreshing all afternoon: the account writes the shared copy a handful of times, not per colo", async () => {
+    await warmColo("CMH");
+    const fill = kv.puts.filter((k) => k === "supp:v1").length;
+    for (const c of ["YYZ", "IAD", "ORD", "EWR", "ATL"]) { on(c); await get(RANGE); }
+    vi.setSystemTime(new Date(Date.now() + 13 * 3600_000)); // every entry stale, KV's newest fetch 13 h old
+    for (let i = 0; i < 60; i++) {
+      const c = ["CMH", "YYZ", "IAD", "ORD", "EWR", "ATL"][i % 6];
+      on(c); unlockSupp(c); vi.setSystemTime(new Date(Date.now() + 61_000)); await get(RANGE);
+    }
+    expect(kv.puts.filter((k) => k === "supp:v1").length - fill).toBeLessThanOrEqual(2);
+  });
+
+  it("corrupt KV: a cold colo serves what it has and the next refresh rewrites the copy", async () => {
+    kv.store.set("supp:v1", "{not json");
+    const r = await warmColo("YYZ");
+    expect(syms(r)).toContain("BNS");
+    expect(() => JSON.parse(kv.store.get("supp:v1")!)).not.toThrow();
+  });
+
   it("a cold colo reads KV at most about once a minute while its copy is incomplete", async () => {
     on("YYZ");
     budgetSpent("YYZ");
@@ -142,5 +161,22 @@ describe("0111: the supplement is one document every colo reads", () => {
     const r = await warmColo("CMH");
     expect(syms(r)).toContain("BNS");
     expect(kv.gets + kv.puts.length).toBe(0);
+  });
+});
+
+describe("0111: merging colos' documents", () => {
+  const ev = (d: string) => ({ s: "TD", d, h: "bmo" as const, q: 4, y: 2026, eE: 2.6, eA: d < "2026-12-04" ? 2.7 : null, rE: 1.5e10, rA: null, t: 1 as const });
+  it("the later fetch wins, but keeps the other's past report it no longer returns", () => {
+    const old: SuppDoc = { TD: refreshEntry(undefined, [ev("2026-12-03"), ev("2027-02-26")], "2026-12-02", 1_000, 0) };
+    const fresh: SuppDoc = { TD: refreshEntry(undefined, [ev("2027-02-26")], "2026-12-05", 9_000, 0) };
+    const m = mergeShared("2026-12-05", old, fresh);
+    expect(m.TD.rows.map((r) => r.d)).toEqual(["2026-12-03", "2027-02-26"]);
+    expect(m.TD.f).toBe(9_000);
+    expect(mergeShared("2026-12-05", fresh, old)).toEqual(m); // order doesn't matter
+  });
+  it("compares real fetch times, not the jittered refresh time", () => {
+    const early = refreshEntry(undefined, [ev("2027-02-20")], "2026-12-05", 5_000_000, 0); // at = 5,000,000
+    const late = refreshEntry(undefined, [ev("2027-02-26")], "2026-12-05", 6_000_000, 0.9); // at = 2,760,000, fetched later
+    expect(mergeShared("2026-12-05", { TD: early }, { TD: late }).TD.rows.map((r) => r.d)).toEqual(["2027-02-26"]);
   });
 });

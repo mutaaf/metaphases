@@ -22,7 +22,7 @@ class MemKv {
   puts = 0;
   async get(k: string) { return this.store.get(k) ?? null; }
   fail = 0;
-  async put(k: string, v: string) { if (this.fail > 0) { this.fail--; throw new Error("429"); } if (k === "xc:v1") this.puts++; this.store.set(k, v); } // 0111: the shared supplement writes too; this counts contest memos
+  async put(k: string, v: string) { if (this.fail > 0) { this.fail--; throw new Error("429"); } if (k !== "supp:v1") this.puts++; this.store.set(k, v); } // 0111: the shared supplement writes too; not a contest memo
 }
 let kv: MemKv;
 let env: any;
