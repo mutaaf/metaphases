@@ -1,12 +1,12 @@
 ---
 id: 0107
 title: Canada's five biggest banks ($740B together) are missing from the Dec 2–3 calendar, and BMO's sheet says "after the close" when the bank reports at 6 a.m. ET
-status: in-progress
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-24
-pr:
+pr: 191
 by: critic
 ---
 
