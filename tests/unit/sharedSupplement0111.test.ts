@@ -35,9 +35,10 @@ let env: any;
 let waits: Promise<unknown>[] = [];
 const ctx = { waitUntil: (p: Promise<unknown>) => { waits.push(p); }, passThroughOnException() {} } as any;
 
-// Finnhub as on 2026-11-24: the range feed has BMO (as BMO.TO) but not BNS; `symbol=BNS` lists BNS on Wed Dec 2.
+// Finnhub as on 2026-11-24: the range feed has BMO (as BMO.TO) but not TD; `symbol=TD` lists TD on Thu Dec 3.
+// (BNS was the example until it got a company-dated override in 0107 bounce 1, which places it without the supplement.)
 const FEED = [{ symbol: "BMO.TO", date: "2026-12-02", hour: "amc", quarter: 4, year: 2026, epsEstimate: 3.78, epsActual: null, revenueEstimate: 1e10, revenueActual: null }];
-const BNS_ROW = { symbol: "BNS.TO", date: "2026-12-02", hour: "amc", quarter: 4, year: 2026, epsEstimate: 2.2, epsActual: null, revenueEstimate: 1.05e10, revenueActual: null };
+const TD_ROW = { symbol: "TD.TO", date: "2026-12-03", hour: "amc", quarter: 4, year: 2026, epsEstimate: 2.6, epsActual: null, revenueEstimate: 1.59e10, revenueActual: null };
 let finnhubCalls = 0;
 
 const colos: Record<string, MemCache> = {};
@@ -60,7 +61,7 @@ beforeEach(() => {
     if (url.pathname.endsWith("/calendar/earnings")) {
       finnhubCalls++;
       const sym = url.searchParams.get("symbol");
-      if (sym) return new Response(JSON.stringify({ earningsCalendar: sym === "BNS" ? [BNS_ROW] : [] }));
+      if (sym) return new Response(JSON.stringify({ earningsCalendar: sym === "TD" ? [TD_ROW] : [] }));
       const from = url.searchParams.get("from")!, to = url.searchParams.get("to")!;
       return new Response(JSON.stringify({ earningsCalendar: FEED.filter((r) => r.date >= from && r.date <= to) }));
     }
@@ -89,13 +90,13 @@ const warmColo = async (colo: string) => {
 };
 
 describe("0111: the supplement is one document every colo reads", () => {
-  it("a warm colo has BNS from the supplement (the range feed has no BNS row)", async () => {
+  it("a warm colo has TD from the supplement (the range feed has no TD row)", async () => {
     const r = await warmColo("CMH");
     expect(r.pending).toBeUndefined();
-    expect(syms(r)).toEqual(expect.arrayContaining(["BMO", "BNS"]));
+    expect(syms(r)).toEqual(expect.arrayContaining(["BMO", "TD"]));
   });
 
-  it("a cold colo with its refresh budget spent returns the same rows, not fewer (BNS stays)", async () => {
+  it("a cold colo with its refresh budget spent returns the same rows, not fewer (TD stays)", async () => {
     const warm = await warmColo("CMH");
     on("YYZ");
     budgetSpent("YYZ");
@@ -146,7 +147,7 @@ describe("0111: the supplement is one document every colo reads", () => {
   it("corrupt KV: a cold colo serves what it has and the next refresh rewrites the copy", async () => {
     kv.store.set("supp:v1", "{not json");
     const r = await warmColo("YYZ");
-    expect(syms(r)).toContain("BNS");
+    expect(syms(r)).toContain("TD");
     expect(() => JSON.parse(kv.store.get("supp:v1")!)).not.toThrow();
   });
 
@@ -164,7 +165,7 @@ describe("0111: the supplement is one document every colo reads", () => {
   it("right after a deploy (KV empty, every colo cold): a colo that read the empty copy picks it up a minute after another colo fills it", async () => {
     on("YYZ");
     budgetSpent("YYZ");
-    expect(syms(await get(RANGE))).not.toContain("BNS"); // nothing anywhere yet
+    expect(syms(await get(RANGE))).not.toContain("TD"); // nothing anywhere yet
     await warmColo("CMH"); // CMH fills KV
     on("YYZ");
     vi.setSystemTime(new Date(Date.now() + 61_000));
@@ -173,7 +174,7 @@ describe("0111: the supplement is one document every colo reads", () => {
     colos.YYZ.store.delete(CAL("supp:kv:seen:v1"));
     budgetSpent("YYZ");
     const r = await get(RANGE);
-    expect(syms(r)).toContain("BNS");
+    expect(syms(r)).toContain("TD");
     expect(r.pending).toBeUndefined();
   });
 
@@ -186,18 +187,18 @@ describe("0111: the supplement is one document every colo reads", () => {
     unlockSupp("CMH");
     await get(RANGE);
     expect(kv.puts.length).toBe(puts + 1);
-    expect(Object.keys(JSON.parse(kv.store.get("supp:v1")!))).toContain("BNS");
+    expect(Object.keys(JSON.parse(kv.store.get("supp:v1")!))).toContain("TD");
     // and a cold colo now gets the whole list in one read
     on("YYZ"); budgetSpent("YYZ");
     const r = await get(RANGE);
     expect(r.pending).toBeUndefined();
-    expect(syms(r)).toContain("BNS");
+    expect(syms(r)).toContain("TD");
   });
 
   it("no KV binding (local dev): the per-colo supplement works as before", async () => {
     env.SUPPORT = undefined;
     const r = await warmColo("CMH");
-    expect(syms(r)).toContain("BNS");
+    expect(syms(r)).toContain("TD");
     expect(kv.gets + kv.puts.length).toBe(0);
   });
 });

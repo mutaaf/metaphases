@@ -18,6 +18,9 @@ const FILE = overridesFile as unknown as DateOverrides;
 const BANKS = ["RY", "TD", "BMO", "BNS", "CM"];
 const BMO_SRC = "https://www.bmo.com/ir/qtrinfo/1/2026-q4/Q4_26_Invite.pdf";
 const CM_SRC = "https://www.cibc.com/en/about-cibc/investor-relations/quarterly-results.html";
+// Bounce 1: RBC (Dec 3, about 6:00 a.m. ET) and Scotiabank (Dec 2, about 5:30 a.m. ET) also state a pre-open release.
+const RY_SRC = "https://investingnews.com/rbc-to-announce-fourth-quarter-and-fiscal-2026-results/";
+const BNS_SRC = "https://investingnews.com/scotiabank-to-announce-fourth-quarter-2026-results/";
 const TODAY = "2026-11-24";
 
 describe("0107 the Big Five are tracked", () => {
@@ -42,6 +45,13 @@ describe("0107 the Big Five are tracked", () => {
     expect(FILE.BMO).toMatchObject({ date: "2026-12-02", hour: "bmo", quarter: 4, year: 2026, source: BMO_SRC });
     expect(FILE.CM).toMatchObject({ date: "2026-12-03", hour: "bmo", quarter: 4, year: 2026, source: CM_SRC });
     expect(validateOverrides({ BMO: FILE.BMO, CM: FILE.CM }, TODAY)).toEqual([]);
+  });
+
+  it("RY and BNS carry the company's release time as a pre-open session; TD (no time yet) has no override", () => {
+    expect(FILE.RY).toMatchObject({ date: "2026-12-03", hour: "bmo", quarter: 4, year: 2026, source: RY_SRC });
+    expect(FILE.BNS).toMatchObject({ date: "2026-12-02", hour: "bmo", quarter: 4, year: 2026, source: BNS_SRC });
+    expect(validateOverrides({ RY: FILE.RY, BNS: FILE.BNS }, TODAY)).toEqual([]);
+    expect(FILE.TD).toBeUndefined();
   });
 });
 
@@ -113,8 +123,10 @@ describe("0107 on the worker", () => {
     const by = Object.fromEntries(r.events.map((e: EarningsEvent) => [e.s, e]));
     expect(by.BMO).toMatchObject({ d: "2026-12-02", h: "bmo", o: BMO_SRC });
     expect(by.CM).toMatchObject({ d: "2026-12-03", h: "bmo", o: CM_SRC });
-    // RY, TD, BNS: the feed says amc, Nasdaq pre-market, no company session: contested, never a bare "amc".
-    for (const s of ["RY", "TD", "BNS"]) expect(by[s]).toMatchObject({ x: "differs", xh: "bmo" });
+    expect(by.RY).toMatchObject({ d: "2026-12-03", h: "bmo", o: RY_SRC });
+    expect(by.BNS).toMatchObject({ d: "2026-12-02", h: "bmo", o: BNS_SRC });
+    // TD: the feed says amc, Nasdaq pre-market, no company time yet: contested, never a bare "amc".
+    expect(by.TD).toMatchObject({ x: "differs", xh: "bmo" });
   });
 
   it("/t/BMO: Wed Dec 2 before the open, never after the close", async () => {
@@ -125,4 +137,18 @@ describe("0107 on the worker", () => {
     expect(title).toMatch(/^BMO reports Wed, Dec 2 before the open/);
     expect(title).not.toMatch(/after the close/i);
   });
+
+  for (const [s, name, date, src, re] of [
+    ["RY", "Royal Bank of Canada", "2026-12-03", RY_SRC, /^RY reports Thu, Dec 3 before the open/],
+    ["BNS", "Bank of Nova Scotia", "2026-12-02", BNS_SRC, /^BNS reports Wed, Dec 2 before the open/],
+  ] as const) {
+    it(`/t/${s}: before the open on the company's date, not "time unconfirmed"`, async () => {
+      await warm();
+      const t = await call(`/api/ticker/${s}`);
+      expect(t.next).toMatchObject({ date, session: "bmo", confirmed: src });
+      const title = tickerShareTitle(s, name, t.next, t.justReported);
+      expect(title).toMatch(re);
+      expect(title).not.toMatch(/unconfirmed|after the close/i);
+    });
+  }
 });
