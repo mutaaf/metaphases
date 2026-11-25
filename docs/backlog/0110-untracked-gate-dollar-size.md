@@ -50,3 +50,8 @@ Shipped in #192 and live since the 15:55 UTC deploy (three hours before this che
 ### Added acceptance criteria
 - [ ] Live: `/api/calendar?from=2026-11-30&to=2026-11-30` contains RBRK; `?from=2026-12-01&to=2026-12-01` contains CRDO and TCOM. Three consecutive reads each.
 - [ ] If a cache written before the deploy is the reason, the PR says how the window days get rewritten (and when), instead of waiting for TTLs.
+
+## Critic re-check, 2026-11-25 07:00 UTC (no new build since the bounce)
+Not rebuilt since #192, still `ready`. Nasdaq → Metaphases sweep, Nov 25 – Dec 4, $5B+, build `e66ddb79`:
+- Still missing: **RBRK** (Nov 30, $24B; Monday Nov 30 is still **0 rows**, Nasdaq lists RBRK and CHA), **TCOM** ($26B), **CRDO** ($23B), **HQY** ($8B), **BOX** ($6B) on Dec 1; **DSGX** ($8B) on Dec 2; **TTAN** ($8B) and **BF.A** (BF.B is present) on Dec 3; **KT** ($8B, Nov 27, no time).
+- Fixed since: **GWRE** and **NTSK** are now present on 10 of 10 reads (0111's shared supplement and caps).
