@@ -36,7 +36,7 @@ import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surp
 import { shownSession } from "../shared/contestedTime";
 import { applyLeads, leadFor, LEAD_MEMO_DAYS, nasdaqSessionLeads, noteLead, type SessionLeads } from "../shared/sessionLead";
 import { applyMemos, contestsIn, dayStanding, memoCross, noteContests, windowCovered, XMEMO_DAYS, type XMemos } from "../shared/contestMemo";
-import { leadRows, leadsNasdaq } from "../shared/leadDay";
+import { leadIns, leadRows, leadsNasdaq } from "../shared/leadDay";
 import { buildIndex, companyDayFill, crossCheck, crossOne, keepNasdaq, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, fetchedAt, homeListing, mergeShared, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
@@ -803,7 +803,7 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
  * check (cache only), collapsed with the range's rows, and dropped again. A cold neighbour is simply not compared.
  * Call after settlePast: its `nd` mark decides between twins.
  */
-async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, today: string, ctx: ExecutionContext, memo?: AdsMemo): Promise<EarningsEvent[]> {
+async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, today: string, ctx: ExecutionContext, memo?: AdsMemo, seen?: { rows?: EarningsEvent[] }): Promise<EarningsEvent[]> {
   const inRange = (e: EarningsEvent) => e.d >= from && e.d <= to;
   const syms = new Set(fixed.filter(inRange).map((e) => e.s));
   // 0076: a past row may have moved out (dropped below) or may move in from a neighbour: MOVE_MAX_DAYS ≤ SAME_REPORT_DAYS,
@@ -821,6 +821,7 @@ async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, t
     return hit ? ((await hit.json().catch(() => [])) as EarningsEvent[]) : [];
   };
   const all = (await Promise.all(days.map(read))).flat();
+  if (seen) seen.rows = all; // 0112: the same neighbours, for leadInRange (no second read)
   // A neighbour's row counts if it's a twin of a row here, or (0076) a past row with no figures that may move here.
   // Those cost one cache read each in settlePast, so at most MOVE_IN_MAX symbols, biggest first.
   const movers = new Set(
@@ -841,6 +842,47 @@ async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, t
   pad = pad.filter((e) => inRange(e) || syms.has(e.s));
   if (!pad.length) return oneReportOneRow(fixed.filter(inRange));
   return oneReportOneRow([...fixed, ...pad]).filter(inRange);
+}
+
+/**
+ * 0112: the rows a neighbouring day's feed row contributes to this range through 0099's move (`leadIns`). Only
+ * companies Nasdaq (or a remembered contest, 0083) lists here with a session, that have no row here and no company
+ * date, are looked for, in the SAME_REPORT_DAYS neighbours `oneRowInRange` already read (`neighbours`; read here,
+ * cache only, when it didn't) plus the 0024 supplement's rows, so every row `leadRows` drops from its feed day's range
+ * can be found from Nasdaq's. A cold neighbour adds nothing: that day's one-day read is then what it was before 0112.
+ */
+async function leadInRange(fixed: EarningsEvent[], from: string, to: string, today: string, w: NqWindow | null, memos: XMemos | null, neighbours: EarningsEvent[] | undefined, supp: SuppDoc | null): Promise<EarningsEvent[]> {
+  const have = new Set(fixed.map((e) => e.s));
+  const live = activeOverrides(OVERRIDES, today);
+  const here = (d: string, h: string | undefined) => d >= from && d <= to && d >= today && (h === "bmo" || h === "amc");
+  const want = new Set<string>();
+  for (const [s, list] of Object.entries(w?.idx ?? {})) if (!have.has(s) && !(s in live) && list.some((l) => here(l.d, l.h))) want.add(s);
+  for (const [s, m] of Object.entries(memos ?? {})) if (!have.has(s) && !(s in live) && here(m.xd, m.xh)) want.add(s);
+  if (!want.size) return fixed;
+  const padFrom = addDays(from, -SAME_REPORT_DAYS), padTo = addDays(to, SAME_REPORT_DAYS);
+  let rows = neighbours;
+  if (!rows) {
+    const days: string[] = [];
+    for (let d = padFrom; d <= padTo; d = addDays(d, 1)) {
+      const wd = new Date(d + "T12:00:00Z").getUTCDay();
+      if ((d < from || d > to) && wd !== 0 && wd !== 6) days.push(d);
+    }
+    const read = async (d: string) => {
+      const hit = (await caches.default.match(CAL_DAY(d)).catch(() => undefined)) ?? (await caches.default.match(CAL(`cal:stale:v3:${d}`)).catch(() => undefined));
+      return hit ? ((await hit.json().catch(() => [])) as EarningsEvent[]) : [];
+    };
+    rows = (await Promise.all(days.map(read))).flat();
+  }
+  // Feed days still ahead only, as in leadRows (a passed one stays with the past check, 0072/0076).
+  const out = (e: EarningsEvent) => want.has(e.s) && e.d >= today && (e.d < from || e.d > to);
+  let cand = rows.filter(out);
+  const feedSyms = new Set(cand.map((e) => e.s));
+  if (supp) cand = cand.concat(mergeSupplement([], supp, padFrom, padTo, () => true).filter((e) => out(e) && !feedSyms.has(e.s)));
+  if (!cand.length) return fixed;
+  const flagged = flagClosed(cand);
+  const checked = applyMemos(w ? crossCheck(flagged, w) : flagged, memos, today, w);
+  const ins = leadIns(fixed, checked, from, to, today);
+  return ins.length ? [...fixed, ...ins] : fixed;
 }
 
 async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -866,10 +908,12 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
   results.forEach((r, i) => (r.status === "fulfilled" ? (events.push(...r.value), loaded.add(days[i])) : warnings.push(`Couldn't load ${days[i]} — showing the rest.`)));
   const today = iso(todayNY());
   let pending = 0;
+  let suppDoc: SuppDoc | null = null;
   if (touchesSupp(from, to, today)) {
     // After the range calls, never alongside them; and no new calls at all if any upstream call failed,
     // even one a stale copy covered (0024: a rate limit must not become more calls).
     const doc = await supplement(env, ctx, today, !health.failed && warnings.length === 0);
+    suppDoc = doc;
     events = mergeSupplement(events, doc, from, to, (d) => loaded.has(d));
     // Not fetched yet here (a cold cache): count them so an absent row never reads as "doesn't report".
     // A progress count, not a warning (0047): nothing failed, so the client mustn't say "busy" or retry.
@@ -881,7 +925,8 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
   const adsMemo = from < today && to >= addDays(today, -PAST_LOOKBACK_DAYS) ? await readAdsMemo() : undefined;
   if (from < today) fixed = await settlePast(fixed, today, ctx, true, FIGURES_CHECK_MAX, adsMemo).catch(() => fixed);
   // 0041: one report, one row (after the past check, whose `nd` mark picks the twin that happened).
-  fixed = await oneRowInRange(fixed, from, to, today, ctx, adsMemo).catch(() => oneReportOneRow(fixed.filter((e) => e.d >= from && e.d <= to)));
+  const near: { rows?: EarningsEvent[] } = {};
+  fixed = await oneRowInRange(fixed, from, to, today, ctx, adsMemo, near).catch(() => oneReportOneRow(fixed.filter((e) => e.d >= from && e.d <= to)));
   // 0103: a report Nasdaq confirmed is never missing because the feed (or the supplement) dropped it this time.
   if (adsMemo) fixed = restoreAdsReports(fixed, adsMemo, from, to, (d) => loaded.has(d));
   // 0015: only ranges that reach the next 14 days (or a month past them, for a projected date Nasdaq lists sooner).
@@ -901,6 +946,9 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     fixed = applyMemos(fixed, memos, today, w);
     // 0099: a timeless projection Nasdaq lists on another day with a session sits on Nasdaq's day, still unconfirmed.
     fixed = leadRows(fixed, from, to, today);
+    // 0112: and a neighbouring day's row that Nasdaq's day here leads onto this range (cache only), so a one-day read
+    // lists what every wider range does.
+    fixed = await leadInRange(fixed, from, to, today, w, memos, near.rows, suppDoc).catch(() => fixed);
     // 0104: a session the sheet settled (Nasdaq's, backed by every recent report) reads the same on the calendar.
     fixed = applyLeads(fixed, await readLeads(env), today);
     unchecked = windowDays(today).length - (w?.loaded.length ?? 0);

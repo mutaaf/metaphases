@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { leadRows, leadsNasdaq } from "../../shared/leadDay";
+import { leadIns, leadRows, leadsNasdaq } from "../../shared/leadDay";
 import { tickerShareTitle } from "../../shared/pending";
 import { tickerShareDesc } from "../../shared/reported";
 import { contestedDay } from "../../shared/closedRows";
@@ -59,9 +59,34 @@ describe("leadRows (the calendar)", () => {
     expect(nt).toMatchObject({ d: "2026-11-23", h: "" });
     for (const e of [amat, co, nt]) expect(e.xf).toBeUndefined();
   });
-  it("leaves the row where it is when Nasdaq's day is outside the range", () => {
-    const [kss] = leadRows([row("KSS", "2026-11-20", "", { x: "differs", xd: "2026-11-23", xh: "bmo" })], "2026-11-16", "2026-11-20", "2026-11-19");
-    expect(kss).toMatchObject({ d: "2026-11-20", xd: "2026-11-23" });
+  it("0112: drops the row from this range when Nasdaq's day is outside it (it belongs to Nasdaq's day, whatever the range)", () => {
+    // Was "leaves the row where it is": a one-day read of the feed's day then listed PVH on Dec 1 while every week read had Dec 3.
+    const out = leadRows([
+      row("KSS", "2026-11-20", "", { x: "differs", xd: "2026-11-23", xh: "bmo" }),
+      row("ZZAM", "2026-11-20", "amc", { x: "differs", xd: "2026-11-23", xh: "bmo" }),
+      row("ZZNT", "2026-11-20", "", { x: "differs", xd: "2026-11-23" }),
+    ], "2026-11-16", "2026-11-20", "2026-11-19");
+    expect(out.map((e) => e.s)).toEqual(["ZZAM", "ZZNT"]); // a timed feed row or an untimed Nasdaq listing keeps the feed's day
+  });
+  it("0112 review: a feed day that has passed stays in its range (leadIns doesn't pick it up, so dropping it would lose it)", () => {
+    const past = row("KSS", "2026-11-20", "", { x: "differs", xd: "2026-11-24", xh: "bmo" });
+    expect(leadRows([past], "2026-11-20", "2026-11-20", "2026-11-23")).toEqual([past]);
+    expect(leadIns([], [past], "2026-11-24", "2026-11-24", "2026-11-23")).toEqual([]);
+  });
+  it("0112: a feed row on day A that Nasdaq lists on day B is not in a one-day read of A, and is in a one-day read of B", () => {
+    const pvh = row("PVH", "2026-12-01", "", { x: "differs", xd: "2026-12-03", xh: "bmo" });
+    const today = "2026-11-25";
+    expect(leadRows([pvh], "2026-12-01", "2026-12-01", today)).toEqual([]);
+    const week = leadRows([pvh], "2026-11-30", "2026-12-04", today);
+    const one = leadIns([], [pvh], "2026-12-03", "2026-12-03", today);
+    expect(one).toEqual(week);
+    expect(one).toEqual([expect.objectContaining({ s: "PVH", d: "2026-12-03", h: "bmo", hs: "n", xd: "2026-12-01", xf: 1 })]);
+    // Not when the company already has a row in the range, not into a range that misses Nasdaq's day, not twice.
+    expect(leadIns([row("PVH", "2026-12-03", "bmo")], [pvh], "2026-12-03", "2026-12-03", today)).toEqual([]);
+    expect(leadIns([], [pvh], "2026-12-02", "2026-12-02", today)).toEqual([]);
+    expect(leadIns([], [pvh, { ...pvh }], "2026-12-03", "2026-12-04", today)).toHaveLength(1);
+    // Nothing a wider range wouldn't move: a timed feed row, a company date, figures in.
+    for (const e of [{ ...pvh, h: "amc" as const }, { ...pvh, o: "https://example.com/ir" }, { ...pvh, eA: 1 }]) expect(leadIns([], [e], "2026-12-03", "2026-12-03", today)).toEqual([]);
   });
   it("a moved row is marked by the feed's day, still unconfirmed, and never filed as a contested passed day", () => {
     const [kss] = leadRows([row("KSS", "2026-11-23", "", { x: "differs", xd: "2026-11-24", xh: "bmo" })], "2026-11-23", "2026-11-27", TODAY);
@@ -210,6 +235,36 @@ describe("0099 on the worker", () => {
     expect(kss).toMatch(/DTSTART;VALUE=DATE:20261124/);
     expect(kss).toMatch(/TENTATIVE/);
     expect(ev.find((e) => e.includes("QQAM"))).toMatch(/DTSTART[^\n]*20261123/);
+  });
+
+  it("0112: one-day reads agree with the week: the feed's day doesn't list the moved row, Nasdaq's day does", async () => {
+    const week = await warm();
+    for (const d of ["2026-11-23", "2026-11-24", "2026-11-25"]) {
+      unlock();
+      const one = await call(`/api/calendar?from=${d}&to=${d}`);
+      const syms = (r: any) => r.events.filter((e: EarningsEvent) => e.d === d).map((e: EarningsEvent) => `${e.s}:${e.h}`).sort();
+      expect(syms(one)).toEqual(syms(week));
+    }
+    unlock();
+    const mon = await call("/api/calendar?from=2026-11-23&to=2026-11-23");
+    expect(mon.events.map((e: EarningsEvent) => e.s).sort()).toEqual(["QQAM", "QQNT"]);
+    unlock();
+    const tue = await call("/api/calendar?from=2026-11-24&to=2026-11-24");
+    expect(tue.events.filter((e: EarningsEvent) => e.s === "QQKS")).toEqual([expect.objectContaining({ d: "2026-11-24", h: "bmo", hs: "n", x: "differs", xd: "2026-11-23", xf: 1, eE: 0.1 })]);
+  });
+
+  it("0112 review: Nasdaq down, a remembered contest (0083) only: the row is on Nasdaq's day in every read, never lost", async () => {
+    cold = true;
+    const kvStore = new Map<string, string>([["xc:v1", JSON.stringify({ QQKS: { d: "2026-11-23", xd: "2026-11-24", xh: "bmo", at: TODAY } })]]);
+    const kvEnv = { ...env, SUPPORT: { get: async (k: string) => kvStore.get(k) ?? null, put: async (k: string, v: string) => void kvStore.set(k, v) } };
+    const read = async (path: string) => {
+      const r = await worker.fetch(new Request(`https://mutaafaziz.com/metaphases${path}`), kvEnv, ctx);
+      await Promise.all(waits); waits = [];
+      return ((await r.json()) as any).events.filter((e: EarningsEvent) => e.s === "QQKS").map((e: EarningsEvent) => `${e.d}:${e.h}:${e.xf ?? ""}`);
+    };
+    expect(await read("/api/calendar?from=2026-11-23&to=2026-11-23")).toEqual([]);
+    expect(await read("/api/calendar?from=2026-11-24&to=2026-11-24")).toEqual(["2026-11-24:bmo:1"]);
+    expect(await read(WEEK)).toEqual(["2026-11-24:bmo:1"]);
   });
 
   it("with a cold cross-check (no Nasdaq), today's behaviour: the feed's projected day", async () => {

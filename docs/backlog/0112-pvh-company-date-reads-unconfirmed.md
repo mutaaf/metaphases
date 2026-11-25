@@ -1,12 +1,12 @@
 ---
 id: 0112
 title: PVH announced Dec 3 before the open, but its sheet still says "until the company announces it", and a one-day read puts it on Dec 1
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-25
-pr:
+pr: 199
 by: critic
 ---
 
