@@ -28,7 +28,7 @@ import { contestedSession, isContested, pastSession, projectedSession, reactionM
 import { applyPreReport, fillMovedFigures, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, sameActual, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
-import { admitUntracked, capUsd, foldCaps, nasdaqDayCaps, type NqCaps } from "../shared/untrackedGate";
+import { admitUntracked, capsGrow, capUsd, foldCaps, mergeCapDocs, nasdaqDayCaps, type CapDoc, type NqCaps } from "../shared/untrackedGate";
 import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, overrideSession, type DateOverrides } from "../shared/dateOverrides";
 import { dayShareText } from "../shared/dayShare";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, passedQuarter, skippedQuarter } from "../shared/pending";
@@ -595,16 +595,84 @@ const CAL_TTL_UNSIZED = 300;
  * (a company's Nasdaq day can differ from the feed's, so the whole window counts; a Nasdaq outage never keeps the
  * short lifetime going).
  */
-async function nasdaqCaps(days: string[], today: string): Promise<{ caps: NqCaps; complete: boolean }> {
+async function nasdaqCaps(days: string[], today: string, env?: Env, ctx?: ExecutionContext): Promise<{ caps: NqCaps; complete: boolean }> {
   const win = windowDays(today);
   const want = [...new Set([...win, ...days])];
-  const [got, failed] = await Promise.all([
+  const [got, failed, shared] = await Promise.all([
     Promise.all(want.map((d) => readJson<NqCaps>(NQX_CAP(d)))),
     readJson<Record<string, number>>(NQX_FAIL),
+    env ? readCapsShared(env) : Promise.resolve(undefined),
   ]);
   const now = Date.now();
-  const complete = want.every((d, i) => got[i] != null || !win.includes(d) || (failed?.[d] ?? 0) > now);
-  return { caps: foldCaps(got), complete };
+  // 0110 bounce: a day another colo has sized counts as sized here too (this colo's Nasdaq calls may keep failing).
+  const complete = want.every((d, i) => got[i] != null || Object.keys(shared?.[d] ?? {}).length > 0 || !win.includes(d) || (failed?.[d] ?? 0) > now);
+  if (env && ctx && shared !== undefined) {
+    const local: CapDoc = {};
+    want.forEach((d, i) => { if (got[i]) local[d] = got[i]!; });
+    offerCaps(env, ctx, shared, local, today);
+  }
+  return { caps: foldCaps([...got, ...want.map((d) => shared?.[d])]), complete };
+}
+
+// ── 0110 bounce: Nasdaq's caps every colo reads ──
+// Same pattern as 0083/0104/0111: one small KV record (day → untracked caps), a 60 s per-colo copy in front of it,
+// and a write only when this colo holds a symbol the record lacks (read-merge-write, a per-colo daily cap).
+const NQC_KV = "nqcap:v1";
+/** Days kept in the record: the window ahead, and two weeks back (a passed day's list is rebuilt after the report). */
+const NQC_KEEP_DAYS = 14;
+const NQC_KV_TTL = 30 * 86400;
+const NQC_LOCAL = CAL("nqcap:local:v1");
+const NQC_WLOCK = CAL("nqcap:kv:w:v1");
+/** KV's free tier (1,000 writes a day) is shared with the support inbox and the other memos. */
+const NQC_WRITES_PER_DAY = 24;
+const capDocOk = (v: unknown): v is CapDoc => !!v && typeof v === "object" && !Array.isArray(v);
+/** Review: parsed once per isolate per NQC_MEMO_MS (a range runs up to three weeks in parallel, each asking). */
+const NQC_MEMO_MS = 30_000;
+let nqcMemo: { at: number; m: CapDoc | null } | null = null;
+/** One offer in flight per isolate, claimed synchronously (parallel weeks would otherwise each pass the cache lock). */
+let nqcOffering = false;
+/** The shared record (null: KV holds none yet), or undefined when it can't be read (never written over then). */
+async function readCapsShared(env: Env): Promise<CapDoc | null | undefined> {
+  if (!env.SUPPORT) return undefined;
+  if (nqcMemo && Date.now() - nqcMemo.at >= 0 && Date.now() - nqcMemo.at < NQC_MEMO_MS) return nqcMemo.m;
+  const m = await readCapsSharedUncached(env);
+  if (m !== undefined) nqcMemo = { at: Date.now(), m };
+  return m;
+}
+async function readCapsSharedUncached(env: Env): Promise<CapDoc | null | undefined> {
+  if (!env.SUPPORT) return undefined;
+  const local = await readJson<{ m: CapDoc | null }>(NQC_LOCAL);
+  if (local) return local.m;
+  try {
+    const v = await env.SUPPORT.get(NQC_KV, { cacheTtl: 60 });
+    const parsed = v ? JSON.parse(v) : null;
+    const m = capDocOk(parsed) ? parsed : null;
+    await putJson(NQC_LOCAL, { m }, 60);
+    return m;
+  } catch { return undefined; }
+}
+function offerCaps(env: Env, ctx: ExecutionContext, shared: CapDoc | null, local: CapDoc, today: string): void {
+  const kv = env.SUPPORT;
+  const keepFrom = addDays(today, -NQC_KEEP_DAYS);
+  if (!kv || nqcOffering || !capsGrow(shared, local, keepFrom)) return;
+  nqcOffering = true;
+  ctx.waitUntil((async () => {
+    if (await caches.default.match(NQC_WLOCK).catch(() => true)) return; // another isolate on this colo is writing
+    await putJson(NQC_WLOCK, 1, 60);
+    const countKey = CAL(`nqcap:n:v1:${today}`);
+    const n = (await readJson<number>(countKey)) ?? 0;
+    if (n >= NQC_WRITES_PER_DAY) return;
+    // Last writer wins (KV has no compare-and-set): merge onto the newest copy, and never write after a failed read.
+    const raw = await kv.get(NQC_KV).catch(() => undefined);
+    if (raw === undefined) return;
+    let latest: CapDoc | null = null;
+    try { const p = raw ? JSON.parse(raw) : null; latest = capDocOk(p) ? p : null; } catch { latest = null; } // corrupt: rewrite it
+    if (!capsGrow(latest, local, keepFrom)) { nqcMemo = { at: Date.now(), m: latest }; await putJson(NQC_LOCAL, { m: latest }, 60); return; }
+    const merged = mergeCapDocs(latest, local, keepFrom);
+    try { await kv.put(NQC_KV, JSON.stringify(merged), { expirationTtl: NQC_KV_TTL }); } catch { return; }
+    nqcMemo = { at: Date.now(), m: merged };
+    await Promise.all([putJson(countKey, n + 1, 86400), putJson(NQC_LOCAL, { m: merged }, 60)]);
+  })().catch(() => {}).finally(() => { nqcOffering = false; }));
 }
 
 /**
@@ -623,7 +691,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
   }));
   if (!missing.length) return out;
   const from = days[Math.min(...missing)], to = days[Math.max(...missing)];
-  const sized = await nasdaqCaps(missing.map((i) => days[i]), today).catch(() => ({ caps: {} as NqCaps, complete: false }));
+  const sized = await nasdaqCaps(missing.map((i) => days[i]), today, env, ctx).catch(() => ({ caps: {} as NqCaps, complete: false }));
   const ttl = (d: string) => (sized.complete || !windowDays(today).includes(d) ? calTtl(d, today) : Math.min(CAL_TTL_UNSIZED, calTtl(d, today)));
   let byDay: Map<string, EarningsEvent[]> | null = null;
   let rangeError: unknown = null;
