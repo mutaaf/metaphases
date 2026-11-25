@@ -37,6 +37,19 @@ test("the sheet calls a Nasdaq-filled time expected and says where it's from; a 
   await expect(page.locator(".next-card").getByTestId("nc-session")).not.toContainText("(expected)");
 });
 
+test("0113: a company date whose notice gives no time says the notice has none, never that the company hasn't said", async ({ page }) => {
+  await page.route("**/api/ticker/INTU", async (r) => {
+    const body = JSON.parse(fx("ticker-NVDA.json").replaceAll('"NVDA"', '"INTU"'));
+    body.next = { ...body.next, date: "2026-11-19", session: "amc", quarter: 1, year: 2027, hs: "n", confirmed: "https://example.com/notice" };
+    delete body.next.projected; delete body.next.nasdaq;
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("./t/INTU");
+  const note = page.locator(".next-card").getByTestId("nc-expected");
+  await expect(note).toHaveText("The date is the company's; the time is from Nasdaq's calendar, since the company's notice we found doesn't give one.");
+  await noSideScroll(page);
+});
+
 test("the day drawer tags a Nasdaq-filled time 'Time expected' and nothing scrolls sideways at 390", async ({ page }) => {
   const cal = JSON.parse(fx("calendar-2026-11.json"));
   for (const e of cal.events) if (e.s === "CEG" && e.d === "2026-11-09") Object.assign(e, { h: "bmo", hs: "n", x: "agree", xh: "bmo" });

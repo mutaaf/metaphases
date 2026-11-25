@@ -1537,7 +1537,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // 0007: the feed's projection, not the company's date: "expected around", and no session stated as fact.
     read.push(`${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} is expected around ${longDay(upNext.date)}, but the company hasn't confirmed the date yet.`);
   } else if (upNext && leadNq) {
-    read.push(`Nasdaq's calendar lists ${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} on ${longDay(leadNq.date)} ${WHEN_LONG[leadNq.session]}, but that's unconfirmed: our data feed projects ${longDay(upNext.date)}, and the company hasn't announced a date.`);
+    read.push(`Nasdaq's calendar lists ${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} on ${longDay(leadNq.date)} ${WHEN_LONG[leadNq.session]}, but that's unconfirmed: our data feed projects ${longDay(upNext.date)}, and we haven't found a company announcement of the date.`);
   } else if (upNext && nqNext && nqNext.date !== upNext.date && upNext.date <= today) {
     // 0078: the feed's day has come, Nasdaq lists another, the company hasn't said: no "reports today", no "expected".
     read.push(`${name}'s Q${upNext.quarter} report date isn't confirmed: our data feed put it on ${longDay(upNext.date)}, but Nasdaq's calendar lists ${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}, and no results are in our data yet.`);

@@ -49,9 +49,11 @@ describe("0113 the copy never claims the company's silence", () => {
     const p = join(dir, f);
     return statSync(p).isDirectory() ? walk(p) : /\.(tsx?|css|html)$/.test(f) ? [p] : [];
   });
-  it("\"the company hasn't said\" appears nowhere in src/", () => {
-    const root = new URL("../../src", import.meta.url).pathname;
-    const hits = walk(root).filter((p) => /hasn['’]t said/i.test(readFileSync(p, "utf8")));
+  // Code comments may describe the state; only strings a reader (or the AI) sees are checked.
+  const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  it("no copy in src/, shared/ or worker/ claims the company hasn't said or announced", () => {
+    const hits = ["src", "shared", "worker"].flatMap((d) => walk(new URL(`../../${d}`, import.meta.url).pathname))
+      .filter((p) => /(company|it) hasn['’]t (said|announced)/i.test(strip(readFileSync(p, "utf8"))));
     expect(hits).toEqual([]);
   });
   it("the ICS for a Nasdaq-filled session says we have no announcement on file", () => {
