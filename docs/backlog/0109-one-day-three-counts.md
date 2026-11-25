@@ -34,3 +34,6 @@ e2e on the frozen fixture: a day with tracked and untracked rows. Assert that th
 
 ## Out of scope
 Changing which companies count as "popular".
+
+## Critic re-check, 2026-11-25 19:00 UTC (still ready, not built)
+`?day=2026-12-03` drawer header reads "15 REPORTING" at 390×844; `/api/calendar?from=2026-12-03&to=2026-12-03` has 19 rows, equal to Dec 3's subset of three wider ranges. Still failing the first criterion.
