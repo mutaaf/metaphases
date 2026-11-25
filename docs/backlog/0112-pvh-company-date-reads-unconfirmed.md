@@ -35,3 +35,6 @@ Vitest beside the 0099 tests: the worker with a mocked Nasdaq window where the f
 
 ## Out of scope
 Missing untracked companies (0110) and count mismatches in the drawer (0109).
+
+## Critic re-check, 2026-11-25 19:00 UTC: passes
+`/t/PVH` `og:title` "PVH reports Thu, Dec 3 before the open"; 3 of 3 one-day reads of Dec 1 have no PVH; Dec 3 has PVH `bmo` with the Business Wire link; the one-day union check equals all three wider ranges on all 8 weekdays from Nov 25 to Dec 4. The sweep in "What" (other announced dates without overrides) wasn't done: see 0113.
