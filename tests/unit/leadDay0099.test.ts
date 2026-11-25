@@ -190,7 +190,7 @@ describe("0099 on the worker", () => {
     expect(t.next).toMatchObject({ date: "2026-11-24", session: "bmo", hs: "n", feedDay: "2026-11-23" });
     expect(t.next.nasdaq).toBeUndefined();
     expect(t.next.projected).toBeUndefined();
-    expect(t.read[0]).toMatch(/^Nasdaq's calendar lists .*Q3 report on Tuesday, Nov 24 before the opening bell, but that's unconfirmed: our data feed projects Monday, Nov 23, and the company hasn't announced a date\.$/);
+    expect(t.read[0]).toMatch(/^Nasdaq's calendar lists .*Q3 report on Tuesday, Nov 24 before the opening bell, but that's unconfirmed: our data feed projects Monday, Nov 23, and we haven't found a company announcement of the date\.$/);
     const u = await call("/api/ticker/QQUR");
     expect(u.next).toMatchObject({ date: "2026-11-24", session: "amc", feedDay: "2026-11-23" });
   });

@@ -107,7 +107,7 @@ describe("the recorded verdict (calendar side)", () => {
   it("the ICS names Nasdaq's session as expected", () => {
     const ics = buildIcs([{ symbol: "ZZHL", name: "Zz Foods", date: "2026-12-03", session: "bmo", quarter: 4, year: 2026, epsE: 0.38, url: "https://x/t/ZZHL", expected: true }], new Date("2026-11-23T15:00:00Z"));
     expect(ics).toContain("SUMMARY:ZZHL earnings · before the open (expected)");
-    expect(ics.replace(/\r\n /g, "")).toContain("the company hasn't said");
+    expect(ics.replace(/\r\n /g, "")).toContain("we haven't found a company announcement yet");
   });
 });
 
@@ -175,7 +175,7 @@ describe("0104 through the worker", () => {
     expect(t.next.nasdaq).toBeUndefined();
     expect(t.next.confirmed).toBeUndefined();
     const read = t.read.join(" ");
-    expect(read).toContain("before the opening bell (expected; the company hasn't said)");
+    expect(read).toContain("before the opening bell (expected; we haven't found a company announcement yet)");
     expect(read).toContain("Our data feed says after the close.");
     expect(read).not.toMatch(/time unconfirmed/);
     expect(tickerShareTitle(SYM, "Zz Foods", t.next, t.justReported)).toBe(`${SYM} reports Thu, Dec 3 before the open (expected) · Metaphases`);

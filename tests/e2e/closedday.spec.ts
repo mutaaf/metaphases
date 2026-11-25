@@ -215,7 +215,7 @@ test.describe("0078 a contested date that reached its day", () => {
       await expect(drawer.locator(".drawer-head .eyebrow")).toHaveText("1 reporting");
       const group = drawer.getByTestId("unconfirmed-group");
       await expect(group.locator(".sess-head")).toContainText("Date not confirmed");
-      await expect(group.getByTestId("contested-note")).toHaveText("Our data feed put this report on this day, but Nasdaq's calendar lists another day (shown on the row) and the company hasn't announced one, so it isn't counted as reporting.");
+      await expect(group.getByTestId("contested-note")).toHaveText("Our data feed put this report on this day, but Nasdaq's calendar lists another day (shown on the row) and we haven't found a company announcement, so it isn't counted as reporting.");
       await expect(group.getByTestId("overdue-note")).toHaveCount(0);
       const cvx = group.locator(".erow", { hasText: "CVX" });
       await expect(cvx.locator(".erow-x")).toHaveText("Nasdaq: Tue, Nov 3, before open");

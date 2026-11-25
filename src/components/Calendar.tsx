@@ -175,7 +175,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         <span className="muted">{nameOf(e.s)}</span>
         {mark?.kind === "differs" && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{mark.label}</span>}
         {(mark?.kind === "projected" || mark?.kind === "closed") && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
-        {!mark && e.hs === "n" && e.h && e.eA == null && !pendingNow(e) && <span className="erow-proj" data-testid="erow-expected" title="Our data feed left the time blank; this one is from Nasdaq's calendar. The company hasn't said.">Time expected</span>}
+        {!mark && e.hs === "n" && e.h && e.eA == null && !pendingNow(e) && <span className="erow-proj" data-testid="erow-expected" title="Our data feed left the time blank; this one is from Nasdaq's calendar. We haven't found a company announcement yet.">Time expected</span>}
         {mark?.kind === "overdue" && <span className="erow-proj" data-testid="erow-overdue" title={e.pf ? "Our data feed listed results for this day, but the company's own report history has no report then, so we don't show them. It isn't counted as reporting." : "Our data feed expected a report this day, but no results came out then. It isn't counted as reporting."}>No report that day</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}
@@ -208,7 +208,7 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
   // 0080: rows whose feed figures the company's history doesn't have (`pf`) get their own line.
   const closedN = unconfirmed.filter((e) => e.c).length, contestedN = unconfirmed.filter(isContested).length;
   const phantomN = unconfirmed.filter((e) => !e.c && !isContested(e) && e.pf).length, passedN = unconfirmed.length - closedN - contestedN - phantomN;
-  const why = (e: EarningsEvent) => e.c ? `our data feed projects ${e.c}, when markets are closed` : isContested(e) ? `our data feed says this day, but Nasdaq's calendar lists ${fmtDay(e.xd!)} and the company hasn't announced a date` : e.pf ? "our data feed listed results this day, but the company's report history has none then" : "our data feed expected a report this day, but none came out";
+  const why = (e: EarningsEvent) => e.c ? `our data feed projects ${e.c}, when markets are closed` : isContested(e) ? `our data feed says this day, but Nasdaq's calendar lists ${fmtDay(e.xd!)} and we haven't found a company announcement` : e.pf ? "our data feed listed results this day, but the company's report history has none then" : "our data feed expected a report this day, but none came out";
   if (compact) return (
     <div className="wsess" data-testid="unconfirmed-group">
       <span className="eyebrow sess-mini"><Phase h="" size={10} projected /> Date not confirmed</span>
@@ -224,7 +224,7 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
     <section className="sess" data-testid="unconfirmed-group">
       <h3 className="sess-head"><Phase h="" size={14} projected /> <Term k="unconfirmed">Date not confirmed</Term> <span className="muted">· {unconfirmed.length}</span></h3>
       {closedN > 0 && <p className="muted small sess-note">Our data feed projects {closedN === 1 ? "this report" : "these reports"} on {holiday}, when markets are closed, so {closedN === 1 ? "it's" : "they're"} likely not the real date. The real date is probably a nearby trading day.</p>}
-      {contestedN > 0 && <p className="muted small sess-note" data-testid="contested-note">Our data feed put {contestedN === 1 ? "this report" : "these reports"} on this day, but Nasdaq's calendar lists another day (shown on {contestedN === 1 ? "the row" : "each row"}) and the company hasn't announced one, so {contestedN === 1 ? "it isn't" : "they aren't"} counted as reporting.</p>}
+      {contestedN > 0 && <p className="muted small sess-note" data-testid="contested-note">Our data feed put {contestedN === 1 ? "this report" : "these reports"} on this day, but Nasdaq's calendar lists another day (shown on {contestedN === 1 ? "the row" : "each row"}) and we haven't found a company announcement, so {contestedN === 1 ? "it isn't" : "they aren't"} counted as reporting.</p>}
       {passedN > 0 && <p className="muted small sess-note" data-testid="overdue-note">Our data feed expected {passedN === 1 ? "this report" : "these reports"} on this day, but no results came out then, so {passedN === 1 ? "it isn't" : "they aren't"} counted as reporting. Check the company's own announcements for the real date.</p>}
       {phantomN > 0 && <p className="muted small sess-note" data-testid="phantom-note">Our data feed listed results for {phantomN === 1 ? "this company" : "these companies"} on this day, but {phantomN === 1 ? "its" : "their"} own report history has no report then, so we don't show those figures or count {phantomN === 1 ? "it" : "them"} as reporting. Check the company's own announcements for the real date.</p>}
       {unconfirmed.map((e) => <EventRow key={e.s} e={e} />)}

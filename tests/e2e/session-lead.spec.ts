@@ -21,7 +21,7 @@ for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
     const card = page.locator(".next-card");
     await expect(card.getByTestId("nc-session")).toContainText("Before open (expected)");
     await expect(card.getByTestId("nc-session")).not.toContainText("unconfirmed");
-    await expect(card.getByTestId("nc-feed-session")).toHaveText("The time is from Nasdaq's calendar, and the stock's moves after its recent reports all fit it. Our data feed says after the close; the company hasn't said.");
+    await expect(card.getByTestId("nc-feed-session")).toHaveText("The time is from Nasdaq's calendar, and the stock's moves after its recent reports all fit it. Our data feed says after the close; we haven't found a company announcement yet.");
     await expect(card.getByTestId("nc-expected")).toHaveCount(0);
     await noSideScroll(page);
     await page.screenshot({ path: test.info().outputPath(`session-lead-sheet-${vp.width}.png`) });

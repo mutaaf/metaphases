@@ -1537,15 +1537,15 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // 0007: the feed's projection, not the company's date: "expected around", and no session stated as fact.
     read.push(`${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} is expected around ${longDay(upNext.date)}, but the company hasn't confirmed the date yet.`);
   } else if (upNext && leadNq) {
-    read.push(`Nasdaq's calendar lists ${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} on ${longDay(leadNq.date)} ${WHEN_LONG[leadNq.session]}, but that's unconfirmed: our data feed projects ${longDay(upNext.date)}, and the company hasn't announced a date.`);
+    read.push(`Nasdaq's calendar lists ${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} on ${longDay(leadNq.date)} ${WHEN_LONG[leadNq.session]}, but that's unconfirmed: our data feed projects ${longDay(upNext.date)}, and we haven't found a company announcement of the date.`);
   } else if (upNext && nqNext && nqNext.date !== upNext.date && upNext.date <= today) {
     // 0078: the feed's day has come, Nasdaq lists another, the company hasn't said: no "reports today", no "expected".
     read.push(`${name}'s Q${upNext.quarter} report date isn't confirmed: our data feed put it on ${longDay(upNext.date)}, but Nasdaq's calendar lists ${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}, and no results are in our data yet.`);
   } else if (upNext && sessionLead) {
     // 0104: Nasdaq's session leads; the feed's is named as the disagreement, and nothing reads as the company's word.
-    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${WHEN_LONG[sessionLead.h]} (expected; the company hasn't said): that's when Nasdaq's calendar lists it, and the stock's moves after its recent reports all fit that time. Our data feed says ${WHEN_LONG[sessionLead.f]}.`);
+    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${WHEN_LONG[sessionLead.h]} (expected; we haven't found a company announcement yet): that's when Nasdaq's calendar lists it, and the stock's moves after its recent reports all fit that time. Our data feed says ${WHEN_LONG[sessionLead.f]}.`);
   } else if (upNext) {
-    const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; the company hasn't said)" : ""}` : nqNext ? "" : usual ? `(time not announced; going by its last reports, it usually reports ${WHEN_LONG[usual]})` : "(time not yet confirmed)";
+    const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; we haven't found a company announcement yet)" : ""}` : nqNext ? "" : usual ? `(time not announced; going by its last reports, it usually reports ${WHEN_LONG[usual]})` : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
     const nqWhen = nqNext ? (nqNext.date === upNext.date ? (nqNext.session ? `it ${WHEN_LONG[nqNext.session]} that day` : "it at another time that day") : `${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}`) : "";
     // 0062: same day, other session: lead with the day and call the time unconfirmed, as the sheet's headline does.
