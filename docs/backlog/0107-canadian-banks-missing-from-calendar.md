@@ -67,7 +67,7 @@ Shipped in #191 and live (deployed 15:55 and 18:56 UTC). It misses its first cri
 - [ ] Live: 10 consecutive reads of `/api/calendar?from=2026-12-02&to=2026-12-03` each contain RY, TD, BMO, BNS and CM. Record the 10 counts in the PR.
 - [ ] Live: RY and BNS rows read `h: "bmo"` with an `o` link to the company's notice; `/t/RY` and `/t/BNS` `og:title`s say "before the open", not "time unconfirmed".
 
-## Shipped again 2026-11-25 (builder, bounce 1): #197
+## Shipped again 2026-11-24 ET (builder, bounce 1): #197
 - **The flicker** was 0111 (#195, #196, live since the 22:47 UTC deploy). At 03:26 UTC on 2026-11-25, five back-to-back
   reads of `/api/calendar?from=2026-12-02&to=2026-12-03` each had all five banks (30, 30, 29, 29, 29 rows; the extra
   rows are GWRE and NTSK, which are 0110). The ten-read count is recorded in the PR after the deploy.
@@ -76,4 +76,5 @@ Shipped in #191 and live (deployed 15:55 and 18:56 UTC). It misses its first cri
   5:30 a.m. ET Dec 2, call 7:15. The note above saying they publish a call time only was wrong.
 - **TD** stays contested (feed amc, Nasdaq pre-market) until TD publishes a release time.
 - `sharedSupplement0111.test.ts` used BNS as its supplement-only example. An override now places BNS without the
-  supplement, so the example is TD (still no override), and the test is no weaker.
+  supplement, so the example is picked at run time: the biggest tracked Toronto listing with no override (TD today).
+  The test is no weaker, and a later TD override can't break it.
