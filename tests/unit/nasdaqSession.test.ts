@@ -99,7 +99,7 @@ describe("0050 the sheet marks and words a Nasdaq-filled session as expected", (
     cache.store.set(CAL("nq:x:v1:2026-11-18"), JSON.stringify({ QQPA: "amc", QQPB: "amc" }));
     const t = await sheet("QQPA");
     expect(t.next).toMatchObject({ date: "2026-11-18", session: "amc", hs: "n" });
-    expect(t.read.join(" ")).toContain("Wednesday, Nov 18 after the close (expected; the company hasn't said)");
+    expect(t.read.join(" ")).toContain("Wednesday, Nov 18 after the close (expected; we haven't found a company announcement yet)");
     expect(tickerShareTitle("QQPA", "Qqpa", t.next)).toContain("(expected)");
   });
 

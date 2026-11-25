@@ -28,7 +28,7 @@ test("the sheet calls a Nasdaq-filled time expected and says where it's from; a 
   await page.goto("./t/INTU");
   const card = page.locator(".next-card");
   await expect(card.getByTestId("nc-session")).toContainText("After close (expected)");
-  await expect(card.getByTestId("nc-expected")).toHaveText("The time is from Nasdaq's calendar; our data feed left it blank and the company hasn't said.");
+  await expect(card.getByTestId("nc-expected")).toHaveText("The time is from Nasdaq's calendar; our data feed left it blank and we haven't found a company announcement yet.");
   await noSideScroll(page);
   await page.screenshot({ path: test.info().outputPath("nasdaq-session-sheet.png") });
 

@@ -1543,9 +1543,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     read.push(`${name}'s Q${upNext.quarter} report date isn't confirmed: our data feed put it on ${longDay(upNext.date)}, but Nasdaq's calendar lists ${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}, and no results are in our data yet.`);
   } else if (upNext && sessionLead) {
     // 0104: Nasdaq's session leads; the feed's is named as the disagreement, and nothing reads as the company's word.
-    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${WHEN_LONG[sessionLead.h]} (expected; the company hasn't said): that's when Nasdaq's calendar lists it, and the stock's moves after its recent reports all fit that time. Our data feed says ${WHEN_LONG[sessionLead.f]}.`);
+    read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${WHEN_LONG[sessionLead.h]} (expected; we haven't found a company announcement yet): that's when Nasdaq's calendar lists it, and the stock's moves after its recent reports all fit that time. Our data feed says ${WHEN_LONG[sessionLead.f]}.`);
   } else if (upNext) {
-    const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; the company hasn't said)" : ""}` : nqNext ? "" : usual ? `(time not announced; going by its last reports, it usually reports ${WHEN_LONG[usual]})` : "(time not yet confirmed)";
+    const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; we haven't found a company announcement yet)" : ""}` : nqNext ? "" : usual ? `(time not announced; going by its last reports, it usually reports ${WHEN_LONG[usual]})` : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
     const nqWhen = nqNext ? (nqNext.date === upNext.date ? (nqNext.session ? `it ${WHEN_LONG[nqNext.session]} that day` : "it at another time that day") : `${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}`) : "";
     // 0062: same day, other session: lead with the day and call the time unconfirmed, as the sheet's headline does.

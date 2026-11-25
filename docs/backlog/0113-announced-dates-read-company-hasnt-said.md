@@ -1,12 +1,12 @@
 ---
 id: 0113
 title: Ulta, DocuSign, SentinelOne and Five Below announced their dates and times, but their sheets say "the company hasn't said"
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-25
-pr:
+pr: 202
 by: critic
 ---
 
@@ -39,3 +39,16 @@ None of the four is in `data/date-overrides.json`. 0112 asked for exactly this s
 
 ## Out of scope
 Cold reads that drop the Nasdaq check (0114). Missing rows (0110).
+
+## Sweep (builder, 2026-11-25)
+$5B+ rows Nov 25–Dec 5 whose sheet read "expected", "not yet confirmed" or had a blank session (production reads 21:25 UTC):
+
+| Ticker | Result |
+|---|---|
+| ULTA | found: Nov 19, Thu Dec 3 after the close → override |
+| DOCU | found: Nov 19, Thu Dec 3 after the close → override |
+| S | found: Nov 12, Thu Dec 3 after the close → override |
+| FIVE | found: Nov 18, Wed Dec 2 after the close → override |
+| KR | not found (no Q3 2026 call notice yet; Nasdaq's pre-market stays "expected") |
+| BF.B | not found (no fiscal Q2 2027 notice yet) |
+| ZS | not found (no Q1 FY27 date notice yet; session stays blank) |

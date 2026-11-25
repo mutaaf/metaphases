@@ -175,7 +175,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
         <span className="muted">{nameOf(e.s)}</span>
         {mark?.kind === "differs" && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{mark.label}</span>}
         {(mark?.kind === "projected" || mark?.kind === "closed") && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
-        {!mark && e.hs === "n" && e.h && e.eA == null && !pendingNow(e) && <span className="erow-proj" data-testid="erow-expected" title="Our data feed left the time blank; this one is from Nasdaq's calendar. The company hasn't said.">Time expected</span>}
+        {!mark && e.hs === "n" && e.h && e.eA == null && !pendingNow(e) && <span className="erow-proj" data-testid="erow-expected" title="Our data feed left the time blank; this one is from Nasdaq's calendar. We haven't found a company announcement yet.">Time expected</span>}
         {mark?.kind === "overdue" && <span className="erow-proj" data-testid="erow-overdue" title={e.pf ? "Our data feed listed results for this day, but the company's own report history has no report then, so we don't show them. It isn't counted as reporting." : "Our data feed expected a report this day, but no results came out then. It isn't counted as reporting."}>No report that day</span>}
       </span>
       {showDate && <span className="eyebrow">{fmtLong(e.d).split(",")[0]}</span>}
