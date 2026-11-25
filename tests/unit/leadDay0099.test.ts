@@ -68,6 +68,11 @@ describe("leadRows (the calendar)", () => {
     ], "2026-11-16", "2026-11-20", "2026-11-19");
     expect(out.map((e) => e.s)).toEqual(["ZZAM", "ZZNT"]); // a timed feed row or an untimed Nasdaq listing keeps the feed's day
   });
+  it("0112 review: a feed day that has passed stays in its range (leadIns doesn't pick it up, so dropping it would lose it)", () => {
+    const past = row("KSS", "2026-11-20", "", { x: "differs", xd: "2026-11-24", xh: "bmo" });
+    expect(leadRows([past], "2026-11-20", "2026-11-20", "2026-11-23")).toEqual([past]);
+    expect(leadIns([], [past], "2026-11-24", "2026-11-24", "2026-11-23")).toEqual([]);
+  });
   it("0112: a feed row on day A that Nasdaq lists on day B is not in a one-day read of A, and is in a one-day read of B", () => {
     const pvh = row("PVH", "2026-12-01", "", { x: "differs", xd: "2026-12-03", xh: "bmo" });
     const today = "2026-11-25";
@@ -246,6 +251,20 @@ describe("0099 on the worker", () => {
     unlock();
     const tue = await call("/api/calendar?from=2026-11-24&to=2026-11-24");
     expect(tue.events.filter((e: EarningsEvent) => e.s === "QQKS")).toEqual([expect.objectContaining({ d: "2026-11-24", h: "bmo", hs: "n", x: "differs", xd: "2026-11-23", xf: 1, eE: 0.1 })]);
+  });
+
+  it("0112 review: Nasdaq down, a remembered contest (0083) only: the row is on Nasdaq's day in every read, never lost", async () => {
+    cold = true;
+    const kvStore = new Map<string, string>([["xc:v1", JSON.stringify({ QQKS: { d: "2026-11-23", xd: "2026-11-24", xh: "bmo", at: TODAY } })]]);
+    const kvEnv = { ...env, SUPPORT: { get: async (k: string) => kvStore.get(k) ?? null, put: async (k: string, v: string) => void kvStore.set(k, v) } };
+    const read = async (path: string) => {
+      const r = await worker.fetch(new Request(`https://mutaafaziz.com/metaphases${path}`), kvEnv, ctx);
+      await Promise.all(waits); waits = [];
+      return ((await r.json()) as any).events.filter((e: EarningsEvent) => e.s === "QQKS").map((e: EarningsEvent) => `${e.d}:${e.h}:${e.xf ?? ""}`);
+    };
+    expect(await read("/api/calendar?from=2026-11-23&to=2026-11-23")).toEqual([]);
+    expect(await read("/api/calendar?from=2026-11-24&to=2026-11-24")).toEqual(["2026-11-24:bmo:1"]);
+    expect(await read(WEEK)).toEqual(["2026-11-24:bmo:1"]);
   });
 
   it("with a cold cross-check (no Nasdaq), today's behaviour: the feed's projected day", async () => {

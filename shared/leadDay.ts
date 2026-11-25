@@ -32,7 +32,12 @@ export function leadRows(events: EarningsEvent[], from: string, to: string, toda
   const out: EarningsEvent[] = [];
   for (const e of events) {
     if (!leads(e, today)) { out.push(e); continue; }
-    if (e.xd! < from || e.xd! > to) continue; // 0112: it belongs to Nasdaq's day, which another range shows
+    if (e.xd! < from || e.xd! > to) {
+      // 0112: it belongs to Nasdaq's day, which another range shows (`leadIns`). A feed day that has passed stays (the
+      // past check settles those first on a range that holds them, and `leadIns` doesn't pick them up).
+      if (e.d < today) out.push(e);
+      continue;
+    }
     if (on.has(`${e.s}|${e.xd}`)) { out.push(e); continue; }
     out.push(moved(e));
   }
@@ -58,7 +63,7 @@ export function leadIns(inRange: EarningsEvent[], neighbours: EarningsEvent[], f
   const seen = new Set<string>();
   const out: EarningsEvent[] = [];
   for (const e of neighbours) {
-    if ((e.d >= from && e.d <= to) || have.has(e.s) || seen.has(e.s) || !leads(e, today)) continue;
+    if ((e.d >= from && e.d <= to) || e.d < today || have.has(e.s) || seen.has(e.s) || !leads(e, today)) continue;
     if (e.xd! < from || e.xd! > to) continue;
     seen.add(e.s);
     out.push(moved(e));
