@@ -27,6 +27,11 @@ describe("0110 shared caps, pure", () => {
     });
     expect(mergeCapDocs(null, local, "2026-11-11")).toEqual(local);
   });
+  it("shares only caps that can admit ($1B+) and never an empty day (review: size and CPU, and {} is 'not sized yet')", () => {
+    const local = { "2026-12-01": { CRDO: 20_009, ZENA: 95, OOMA: 494 }, "2026-12-02": {}, "2026-12-03": { AFJK: 76 } };
+    expect(mergeCapDocs(null, local, "2026-11-11")).toEqual({ "2026-12-01": { CRDO: 20_009 } });
+    expect(capsGrow({ "2026-12-01": { CRDO: 20_009 } }, local, "2026-11-11")).toBe(false);
+  });
   it("a colo offers its copy only when it holds a symbol the shared one lacks", () => {
     const shared = { "2026-12-01": { CRDO: 20_009, HQY: 7_900 } };
     expect(capsGrow(shared, { "2026-12-01": { CRDO: 20_009 } }, "2026-11-11")).toBe(false);
@@ -111,7 +116,7 @@ beforeEach(() => {
     if (url.hostname === "api.nasdaq.com") return new Response(JSON.stringify({ data: { earningsSurpriseTable: { rows: [] } } }));
     if (url.pathname.endsWith("/calendar/earnings")) {
       const sym = url.searchParams.get("symbol");
-      if (sym) return new Response(JSON.stringify({ earningsCalendar: sym === "TCOM" ? [FH_ROWS[1]] : [] }));
+      if (sym) return new Response(JSON.stringify({ earningsCalendar: [] })); // the range feed's 9961.HK row alone must place TCOM
       const from = url.searchParams.get("from")!, to = url.searchParams.get("to")!;
       return new Response(JSON.stringify({ earningsCalendar: FH_ROWS.filter((r) => r.date >= from && r.date <= to) }));
     }

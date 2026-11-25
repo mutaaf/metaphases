@@ -57,11 +57,24 @@ export type CapDoc = Record<string, NqCaps>;
 export function mergeCapDocs(shared: CapDoc | null | undefined, local: CapDoc, keepFrom: string): CapDoc {
   const out: CapDoc = {};
   for (const src of [shared ?? {}, local])
-    for (const [day, caps] of Object.entries(src)) if (day >= keepFrom && caps && typeof caps === "object") out[day] = foldCaps([out[day], caps]);
+    for (const [day, caps] of Object.entries(src)) {
+      if (day < keepFrom || !caps || typeof caps !== "object") continue;
+      const slim = shareable(caps);
+      if (Object.keys(slim).length) out[day] = foldCaps([out[day], slim]); // an empty day is "not sized yet", never shared
+    }
+  return out;
+}
+
+/** Only caps that can admit a company are shared ($1B+, millions): Nasdaq's peak days list 300–570 micro-caps, and the
+ *  record is parsed on the calendar path (CPU, no 1102s). Below $1B a colo without its own caps keeps the revenue gate. */
+export const SHARED_MIN_CAP_M = REVENUE_MIN_CAP / 1e6;
+export function shareable(caps: NqCaps): NqCaps {
+  const out: NqCaps = {};
+  for (const [s, c] of Object.entries(caps)) if (c >= SHARED_MIN_CAP_M) out[s] = c;
   return out;
 }
 
 /** Whether `local` holds a day or a symbol `shared` lacks (days before `keepFrom` don't count): then a colo offers it. */
 export function capsGrow(shared: CapDoc | null | undefined, local: CapDoc, keepFrom: string): boolean {
-  return Object.entries(local).some(([day, caps]) => day >= keepFrom && Object.keys(caps ?? {}).some((s) => !(shared?.[day]?.[s])));
+  return Object.entries(local).some(([day, caps]) => day >= keepFrom && Object.keys(shareable(caps ?? {})).some((s) => !(shared?.[day]?.[s])));
 }

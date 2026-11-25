@@ -605,7 +605,7 @@ async function nasdaqCaps(days: string[], today: string, env?: Env, ctx?: Execut
   ]);
   const now = Date.now();
   // 0110 bounce: a day another colo has sized counts as sized here too (this colo's Nasdaq calls may keep failing).
-  const complete = want.every((d, i) => got[i] != null || shared?.[d] != null || !win.includes(d) || (failed?.[d] ?? 0) > now);
+  const complete = want.every((d, i) => got[i] != null || Object.keys(shared?.[d] ?? {}).length > 0 || !win.includes(d) || (failed?.[d] ?? 0) > now);
   if (env && ctx && shared !== undefined) {
     const local: CapDoc = {};
     want.forEach((d, i) => { if (got[i]) local[d] = got[i]!; });
@@ -626,8 +626,20 @@ const NQC_WLOCK = CAL("nqcap:kv:w:v1");
 /** KV's free tier (1,000 writes a day) is shared with the support inbox and the other memos. */
 const NQC_WRITES_PER_DAY = 24;
 const capDocOk = (v: unknown): v is CapDoc => !!v && typeof v === "object" && !Array.isArray(v);
+/** Review: parsed once per isolate per NQC_MEMO_MS (a range runs up to three weeks in parallel, each asking). */
+const NQC_MEMO_MS = 30_000;
+let nqcMemo: { at: number; m: CapDoc | null } | null = null;
+/** One offer in flight per isolate, claimed synchronously (parallel weeks would otherwise each pass the cache lock). */
+let nqcOffering = false;
 /** The shared record (null: KV holds none yet), or undefined when it can't be read (never written over then). */
 async function readCapsShared(env: Env): Promise<CapDoc | null | undefined> {
+  if (!env.SUPPORT) return undefined;
+  if (nqcMemo && Date.now() - nqcMemo.at >= 0 && Date.now() - nqcMemo.at < NQC_MEMO_MS) return nqcMemo.m;
+  const m = await readCapsSharedUncached(env);
+  if (m !== undefined) nqcMemo = { at: Date.now(), m };
+  return m;
+}
+async function readCapsSharedUncached(env: Env): Promise<CapDoc | null | undefined> {
   if (!env.SUPPORT) return undefined;
   const local = await readJson<{ m: CapDoc | null }>(NQC_LOCAL);
   if (local) return local.m;
@@ -642,9 +654,10 @@ async function readCapsShared(env: Env): Promise<CapDoc | null | undefined> {
 function offerCaps(env: Env, ctx: ExecutionContext, shared: CapDoc | null, local: CapDoc, today: string): void {
   const kv = env.SUPPORT;
   const keepFrom = addDays(today, -NQC_KEEP_DAYS);
-  if (!kv || !capsGrow(shared, local, keepFrom)) return;
+  if (!kv || nqcOffering || !capsGrow(shared, local, keepFrom)) return;
+  nqcOffering = true;
   ctx.waitUntil((async () => {
-    if (await caches.default.match(NQC_WLOCK).catch(() => true)) return; // another request on this colo is writing
+    if (await caches.default.match(NQC_WLOCK).catch(() => true)) return; // another isolate on this colo is writing
     await putJson(NQC_WLOCK, 1, 60);
     const countKey = CAL(`nqcap:n:v1:${today}`);
     const n = (await readJson<number>(countKey)) ?? 0;
@@ -654,11 +667,12 @@ function offerCaps(env: Env, ctx: ExecutionContext, shared: CapDoc | null, local
     if (raw === undefined) return;
     let latest: CapDoc | null = null;
     try { const p = raw ? JSON.parse(raw) : null; latest = capDocOk(p) ? p : null; } catch { latest = null; } // corrupt: rewrite it
-    if (!capsGrow(latest, local, keepFrom)) { await putJson(NQC_LOCAL, { m: latest }, 60); return; }
+    if (!capsGrow(latest, local, keepFrom)) { nqcMemo = { at: Date.now(), m: latest }; await putJson(NQC_LOCAL, { m: latest }, 60); return; }
     const merged = mergeCapDocs(latest, local, keepFrom);
     try { await kv.put(NQC_KV, JSON.stringify(merged), { expirationTtl: NQC_KV_TTL }); } catch { return; }
+    nqcMemo = { at: Date.now(), m: merged };
     await Promise.all([putJson(countKey, n + 1, 86400), putJson(NQC_LOCAL, { m: merged }, 60)]);
-  })().catch(() => {}));
+  })().catch(() => {}).finally(() => { nqcOffering = false; }));
 }
 
 /**

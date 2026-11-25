@@ -61,7 +61,8 @@ Live before the fix (build `be43859d`): RBRK is on Nov 30 on every read (fixed b
 Dec 1, eight reads: **CRDO on every CMH read and on no YYZ read** (`cf-ray` suffix), so the caps, which lived in each colo's
 own cache, were the gap; **TCOM on none**: it is untracked and the range feed labels it `9961.HK` (its sheet's logo).
 - Nasdaq's caps are shared through KV (`nqcap:v1`, day → caps, two weeks back plus the window), read through a 60 s
-  per-colo copy and folded into `nasdaqCaps`; a day another colo has sized counts as sized. A colo writes only when it
+  per-colo copy (parsed once per isolate per 30 s) and folded into `nasdaqCaps`; a day another colo has sized counts as
+  sized. Only $1B+ caps are shared (peak days list 300–570 micro-caps) and never an empty day. A colo writes only when it
   holds a symbol KV lacks (read-merge-write, 24 writes per colo per day at most).
 - TCOM is tracked (universe + `build_universe.py` EXTRA, HK logo, `ec: CNY`), so the 0024 alias renames `9961.HK` and
   the supplement covers it.
