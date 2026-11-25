@@ -21,16 +21,47 @@ export function leadsNasdaq(feed: { date: string; session: string; source?: stri
 /**
  * Calendar rows for `leadsNasdaq`: placed on Nasdaq's day at Nasdaq's session (`hs: "n"`), with the feed's day kept
  * as the evidence the other way round (`xd` = the feed's day, `xf: 1`), so the row is still `x: "differs"` and
- * counted as not confirmed. A row whose Nasdaq day falls outside `from`..`to` stays where it is (the range that
- * holds Nasdaq's day never saw the feed's row), and so does one whose company already has a row on that day.
+ * counted as not confirmed. A row whose company already has a row on Nasdaq's day stays where it is.
+ *
+ * 0112: the move doesn't depend on the range asked for. A row whose Nasdaq day falls outside `from`..`to` leaves this
+ * range (it used to stay on the feed's day, so a one-day read of Dec 1 listed PVH while every week read had Dec 3);
+ * the range that holds Nasdaq's day picks it up through `leadIns`.
  */
 export function leadRows(events: EarningsEvent[], from: string, to: string, today: string): EarningsEvent[] {
   const on = new Set(events.map((e) => `${e.s}|${e.d}`));
-  return events.map((e) => {
-    if (e.xf || e.x !== "differs" || !e.xd || e.o || e.c || e.od || e.fh || e.eA != null || e.rA != null) return e;
-    if (!leadsNasdaq({ date: e.d, session: e.h, source: e.o }, { date: e.xd, session: e.xh ?? "" }, today)) return e;
-    if (e.xd < from || e.xd > to || on.has(`${e.s}|${e.xd}`)) return e;
-    const { xh: _xh, ...rest } = e;
-    return { ...rest, d: e.xd, h: e.xh as Session, hs: "n" as const, xd: e.d, xf: 1 as const };
-  });
+  const out: EarningsEvent[] = [];
+  for (const e of events) {
+    if (!leads(e, today)) { out.push(e); continue; }
+    if (e.xd! < from || e.xd! > to) continue; // 0112: it belongs to Nasdaq's day, which another range shows
+    if (on.has(`${e.s}|${e.xd}`)) { out.push(e); continue; }
+    out.push(moved(e));
+  }
+  return out;
+}
+
+const leads = (e: EarningsEvent, today: string) =>
+  !(e.xf || e.x !== "differs" || !e.xd || e.o || e.c || e.od || e.fh || e.eA != null || e.rA != null)
+  && leadsNasdaq({ date: e.d, session: e.h, source: e.o }, { date: e.xd, session: e.xh ?? "" }, today);
+
+const moved = (e: EarningsEvent): EarningsEvent => {
+  const { xh: _xh, ...rest } = e;
+  return { ...rest, d: e.xd!, h: e.xh as Session, hs: "n" as const, xd: e.d, xf: 1 as const };
+};
+
+/**
+ * 0112: rows the feed has on a day outside `from`..`to` (`neighbours`, already cross-checked) that Nasdaq's timed
+ * listing leads onto a day inside it, so a one-day read of Nasdaq's day lists them as every wider range does. A
+ * company that already has a row in the range (`inRange`) is left to it.
+ */
+export function leadIns(inRange: EarningsEvent[], neighbours: EarningsEvent[], from: string, to: string, today: string): EarningsEvent[] {
+  const have = new Set(inRange.map((e) => e.s));
+  const seen = new Set<string>();
+  const out: EarningsEvent[] = [];
+  for (const e of neighbours) {
+    if ((e.d >= from && e.d <= to) || have.has(e.s) || seen.has(e.s) || !leads(e, today)) continue;
+    if (e.xd! < from || e.xd! > to) continue;
+    seen.add(e.s);
+    out.push(moved(e));
+  }
+  return out;
 }

@@ -36,7 +36,7 @@ import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surp
 import { shownSession } from "../shared/contestedTime";
 import { applyLeads, leadFor, LEAD_MEMO_DAYS, nasdaqSessionLeads, noteLead, type SessionLeads } from "../shared/sessionLead";
 import { applyMemos, contestsIn, dayStanding, memoCross, noteContests, windowCovered, XMEMO_DAYS, type XMemos } from "../shared/contestMemo";
-import { leadRows, leadsNasdaq } from "../shared/leadDay";
+import { leadIns, leadRows, leadsNasdaq } from "../shared/leadDay";
 import { buildIndex, companyDayFill, crossCheck, crossOne, keepNasdaq, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, fetchedAt, homeListing, mergeShared, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
@@ -843,6 +843,38 @@ async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, t
   return oneReportOneRow([...fixed, ...pad]).filter(inRange);
 }
 
+/**
+ * 0112: the rows a neighbouring day's feed row contributes to this range through 0099's move (`leadIns`). Only
+ * companies Nasdaq lists here with a session and that have no row here (and no company date) are looked for, in the
+ * same SAME_REPORT_DAYS neighbours `oneRowInRange` reads, from the cache only: a cold neighbour adds nothing.
+ */
+async function leadInRange(fixed: EarningsEvent[], from: string, to: string, today: string, w: NqWindow, memos: XMemos | null): Promise<EarningsEvent[]> {
+  const have = new Set(fixed.map((e) => e.s));
+  const live = activeOverrides(OVERRIDES, today);
+  const want = new Set<string>();
+  for (const [s, list] of Object.entries(w.idx)) {
+    if (have.has(s) || s in live) continue;
+    if (list.some((l) => l.d >= from && l.d <= to && l.d >= today && (l.h === "bmo" || l.h === "amc"))) want.add(s);
+  }
+  if (!want.size) return fixed;
+  const padFrom = addDays(from, -SAME_REPORT_DAYS), padTo = addDays(to, SAME_REPORT_DAYS);
+  const days: string[] = [];
+  for (let d = padFrom; d <= padTo; d = addDays(d, 1)) {
+    const wd = new Date(d + "T12:00:00Z").getUTCDay();
+    if ((d < from || d > to) && wd !== 0 && wd !== 6) days.push(d);
+  }
+  const read = async (d: string) => {
+    const hit = (await caches.default.match(CAL_DAY(d)).catch(() => undefined)) ?? (await caches.default.match(CAL(`cal:stale:v3:${d}`)).catch(() => undefined));
+    return hit ? ((await hit.json().catch(() => [])) as EarningsEvent[]) : [];
+  };
+  // Feed days still ahead only: a passed one goes through the past check (0072/0076) first on a range that holds it.
+  const rows = (await Promise.all(days.map(read))).flat().filter((e) => want.has(e.s) && e.d >= today);
+  if (!rows.length) return fixed;
+  const checked = applyMemos(crossCheck(flagClosed(rows), w), memos, today, w);
+  const ins = leadIns(fixed, checked, from, to, today);
+  return ins.length ? [...fixed, ...ins] : fixed;
+}
+
 async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
   const from = url.searchParams.get("from") ?? iso(new Date());
   const to = url.searchParams.get("to") ?? addDays(from, 34);
@@ -901,6 +933,9 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     fixed = applyMemos(fixed, memos, today, w);
     // 0099: a timeless projection Nasdaq lists on another day with a session sits on Nasdaq's day, still unconfirmed.
     fixed = leadRows(fixed, from, to, today);
+    // 0112: and a neighbouring day's row that Nasdaq's day here leads onto this range (cache only), so a one-day read
+    // lists what every wider range does.
+    if (w) fixed = await leadInRange(fixed, from, to, today, w, memos).catch(() => fixed);
     // 0104: a session the sheet settled (Nasdaq's, backed by every recent report) reads the same on the calendar.
     fixed = applyLeads(fixed, await readLeads(env), today);
     unchecked = windowDays(today).length - (w?.loaded.length ?? 0);
