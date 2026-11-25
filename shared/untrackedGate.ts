@@ -44,3 +44,24 @@ export function foldCaps(days: (NqCaps | null | undefined)[]): NqCaps {
 
 /** A folded lookup's cap for `sym`, in dollars (undefined when Nasdaq listed no size for it). */
 export const capUsd = (caps: NqCaps, sym: string): number | undefined => (caps[sym] ? caps[sym] * 1e6 : undefined);
+
+// ── 0110 bounce: one set of caps every colo reads ──
+// The caps above live in each colo's own cache. A colo whose Nasdaq calls fail (YYZ, 2026-11-25) never sizes a day,
+// so the revenue gate dropped CRDO ($20B, $540M revenue) there on every read while CMH showed it. A small KV
+// document, day → caps, lets every colo size a day any colo has loaded.
+
+/** Day → that day's untracked caps (the shared document). */
+export type CapDoc = Record<string, NqCaps>;
+
+/** `local`'s days merged into `shared`: per day, the union of symbols (largest cap wins); days before `keepFrom` dropped. */
+export function mergeCapDocs(shared: CapDoc | null | undefined, local: CapDoc, keepFrom: string): CapDoc {
+  const out: CapDoc = {};
+  for (const src of [shared ?? {}, local])
+    for (const [day, caps] of Object.entries(src)) if (day >= keepFrom && caps && typeof caps === "object") out[day] = foldCaps([out[day], caps]);
+  return out;
+}
+
+/** Whether `local` holds a day or a symbol `shared` lacks (days before `keepFrom` don't count): then a colo offers it. */
+export function capsGrow(shared: CapDoc | null | undefined, local: CapDoc, keepFrom: string): boolean {
+  return Object.entries(local).some(([day, caps]) => day >= keepFrom && Object.keys(caps ?? {}).some((s) => !(shared?.[day]?.[s])));
+}

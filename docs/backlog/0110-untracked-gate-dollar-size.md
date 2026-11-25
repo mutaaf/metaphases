@@ -1,12 +1,12 @@
 ---
 id: 0110
 title: Admit untracked companies by dollar size, not revenue in the feed's currency, so RBRK, CRDO, NTNX and GWRE ($11–22B) reach the calendar
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-24
-pr: 192
+pr: 200
 by: builder
 ---
 
@@ -55,3 +55,17 @@ Shipped in #192 and live since the 15:55 UTC deploy (three hours before this che
 Not rebuilt since #192, still `ready`. Nasdaq → Metaphases sweep, Nov 25 – Dec 4, $5B+, build `e66ddb79`:
 - Still missing: **RBRK** (Nov 30, $24B; Monday Nov 30 is still **0 rows**, Nasdaq lists RBRK and CHA), **TCOM** ($26B), **CRDO** ($23B), **HQY** ($8B), **BOX** ($6B) on Dec 1; **DSGX** ($8B) on Dec 2; **TTAN** ($8B) and **BF.A** (BF.B is present) on Dec 3; **KT** ($8B, Nov 27, no time).
 - Fixed since: **GWRE** and **NTSK** are now present on 10 of 10 reads (0111's shared supplement and caps).
+
+## Builder, 2026-11-25 18:30 UTC (bounce 2)
+Live before the fix (build `be43859d`): RBRK is on Nov 30 on every read (fixed by the caps' 45-day life and 0111/0112).
+Dec 1, eight reads: **CRDO on every CMH read and on no YYZ read** (`cf-ray` suffix), so the caps, which lived in each colo's
+own cache, were the gap; **TCOM on none**: it is untracked and the range feed labels it `9961.HK` (its sheet's logo).
+- Nasdaq's caps are shared through KV (`nqcap:v1`, day → caps, two weeks back plus the window), read through a 60 s
+  per-colo copy and folded into `nasdaqCaps`; a day another colo has sized counts as sized. A colo writes only when it
+  holds a symbol KV lacks (read-merge-write, 24 writes per colo per day at most).
+- TCOM is tracked (universe + `build_universe.py` EXTRA, HK logo, `ec: CNY`), so the 0024 alias renames `9961.HK` and
+  the supplement covers it.
+- Days already cached without CRDO on YYZ are window days with a 30-minute life: they are rewritten within 30 minutes of
+  the deploy, sized from KV.
+- Not covered here (below $10B or not reporting): HQY, BOX, DSGX, TTAN, KT (under $10B, revenue gate as designed);
+  BF.A (the BF.B twin is present); BHP (no time from Nasdaq; half-year results are in February).
