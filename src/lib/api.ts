@@ -85,7 +85,7 @@ export function useApi<T>(path: string | null, { recheck = false }: { recheck?: 
         (data) => {
           if (!live) return;
           // Partial result (some upstream calls were rate-limited, or days on screen not cross-checked yet): quietly ask again.
-          const wait = retryDelay(data as { warnings?: string[]; uncheckedDays?: string[] }, attempt, recheck);
+          const wait = retryDelay(data as { warnings?: string[]; uncheckedDays?: string[]; next?: { unchecked?: true } | null }, attempt, recheck);
           setSt({ data, error: null, loading: false, retrying: wait != null });
           if (wait != null) timer = setTimeout(() => load(`${path}${path.includes("?") ? "&" : "?"}_r=${attempt + 1}`, attempt + 1), wait);
         },
@@ -107,5 +107,5 @@ export function useApi<T>(path: string | null, { recheck = false }: { recheck?: 
 export const calendarPath = (from: string, to: string) => `${BASE}/api/calendar?from=${from}&to=${to}`;
 export const useCalendar = (from: string, to: string, recheck = false) => useApi<CalendarResponse>(calendarPath(from, to), { recheck });
 export const useMacro = () => useApi<MacroResponse>(`${BASE}/api/macro`);
-export const useTicker = (s: string | null) => useApi<TickerResponse>(s ? `${BASE}/api/ticker/${s}` : null);
+export const useTicker = (s: string | null) => useApi<TickerResponse>(s ? `${BASE}/api/ticker/${s}` : null, { recheck: true }); // 0114: `next.unchecked`
 export const prefetchTicker = (s: string) => { get(`${BASE}/api/ticker/${s}`).catch(() => {}); };
