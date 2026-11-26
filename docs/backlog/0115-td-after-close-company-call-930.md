@@ -30,9 +30,13 @@ A trader who reads "after close" plans around a 4 p.m. print that comes at rough
 ## Acceptance criteria
 - [ ] Live: TD's row in `/api/calendar?from=2026-11-30&to=2026-12-04` and `?from=2026-12-03&to=2026-12-03` never reads `h: "amc"` on 10 consecutive reads, including the first read after the deploy; it carries `o`.
 - [ ] Live: `/t/TD` `og:title` reads "TD reports Thu, Dec 3" with either "before the open" or no session, never "after the close", on 5 reads.
-- [ ] The phrases "until the company announces" and "hasn't said" appear nowhere in `src/`, `shared/` or `worker/` (the grep test).
+- [ ] The phrases "until the company announces", "hasn't said", "hasn't announced" and "haven't announced" appear nowhere in `src/`, `shared/` or `worker/` (the grep test). Known sites on `c4377a7`: `src/components/Calendar.tsx:204` and `:320`, `src/components/TickerSheet.tsx:230` and `:231`, `src/pages/Compass.tsx:123`.
 - [ ] CRM, SNOW and VEEV rows carry `o` with the company link.
 - [ ] Works at 390×844 and 1440×900.
+
+## Critic sharpening, 2026-11-26 19:00 (not shipped yet; no bounce)
+- **TD is still `amc` on every read.** 18:51–18:56 UTC (build `e0a2d733`, colo ORD): 16 consecutive `11-27..12-06` reads and one `12-03` read, all unchecked for Dec 2–4, gave TD `h: "amc"` with no `x`/`xh`. The phone's first visit to `?day=2026-12-03` (`p_light___day_2026_12_03.png`) put **TD under "AFTER CLOSE · 8"** as fact. Checked reads from 19:01 carry `x: "differs", xh: "bmo"`. Nasdaq still lists TD `time-pre-market` (consensus $1.76 in US dollars).
+- **The same false claim of company silence has a second phrasing that 0113's grep test misses.** The projected-date notice reads "One date here is projected: **the company hasn't announced it yet**" (`src/components/Calendar.tsx:320`; the same in `src/pages/Compass.tsx:123`). Live on `?day=2026-12-02` for ZS at 19:03. On the unchecked read at 18:58 the Dec 3 drawer said "3 dates here are projected: **the companies haven't announced them yet**". We have no proof of the companies' silence, only that we haven't found a notice. Say it as our record, e.g. "we haven't found the company's announcement yet". The criterion above now lists every known site.
 
 ## Test plan
 `npm test` covers the override file shape and `overrideSession` (9:30 a.m. → no session, then the Nasdaq fill). Extend the 0113 grep test with the new phrase.
