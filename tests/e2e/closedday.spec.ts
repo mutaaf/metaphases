@@ -99,8 +99,8 @@ test("Compass marks a holding's Thanksgiving row as date not confirmed, with no 
 test("a normal trading day next to the holiday keeps its count, session groups and \"N reporting\"", async ({ page }) => {
   await page.goto("./?d=2026-11-02&day=2026-11-02");
   const drawer = page.locator(".drawer[role=dialog]");
-  await expect(drawer.locator(".drawer-head .eyebrow")).toHaveText(/^\d+ reporting$/);
-  await expect(drawer.locator(".sess-head", { hasText: "After close" })).toHaveCount(1);
+  await expect(drawer.locator(".drawer-head .eyebrow")).toHaveText(/^\d+ popular · \d+ in all$/); // 0109: the drawer gives both counts when the filter hides rows
+  await expect(drawer.locator(":scope > .sess .sess-head", { hasText: "After close" })).toHaveCount(1);
   await expect(drawer.getByTestId("unconfirmed-group")).toHaveCount(0);
 });
 
