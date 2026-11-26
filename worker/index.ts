@@ -29,7 +29,7 @@ import { applyPreReport, fillMovedFigures, isReit, judgeReaction, matchQuarters,
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { admitUntracked, capsGrow, capUsd, foldCaps, mergeCapDocs, nasdaqDayCaps, type CapDoc, type NqCaps } from "../shared/untrackedGate";
-import { mergeShare, shareDocOk, sharedDays, shareGrows, type NqShareDoc } from "../shared/nqShare";
+import { mergeShare, shareBudgetLeft, shareDocOk, sharedDays, shareGrows, type NqShareDay, type NqShareDoc } from "../shared/nqShare";
 import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, overrideSession, type DateOverrides } from "../shared/dateOverrides";
 import { dayShareText } from "../shared/dayShare";
 import { unconfirmedRow } from "../shared/closedRows";
@@ -480,7 +480,12 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
   if (missing.length && env?.SUPPORT) {
     const got = sharedDays(await readWindowShared(env), missing, Date.now());
     const seed: Promise<unknown>[] = [];
-    for (const [d, v] of Object.entries(got)) { loaded[d] = v.h; seed.push(putJson(NQX_DAY(d), v.h, Math.max(60, Math.floor(v.life / 1000)))); }
+    for (const [d, v] of Object.entries(got)) {
+      loaded[d] = v.h;
+      seed.push(putJson(NQX_DAY(d), v.h, Math.max(60, Math.floor(v.life / 1000))));
+      // The same call's caps, so this colo has sized the day too (0110's gate never falls back for a seeded day).
+      if (v.c) seed.push(putJson(NQX_CAP(d), v.c, Object.keys(v.c).length ? NQX_CAP_TTL : 3600));
+    }
     if (seed.length) ctx.waitUntil(Promise.all(seed));
     missing = missing.filter((d) => !got[d]);
   }
@@ -495,9 +500,9 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
     if (take.length) ctx.waitUntil((async () => {
       const got = await pool(take, 2, (d) => fetchNasdaqDayFull(d, NQX_BUILD_TIMEOUT));
       const fresh: Record<string, number> = {};
-      const share: NqShareDoc = {};
+      const share: Record<string, NqShareDay> = {};
       await Promise.all(got.map(async (r, i) => {
-        if (r.status === "fulfilled") { await storeNqDay(take[i], r.value); share[take[i]] = { h: r.value.h, at: Date.now() }; }
+        if (r.status === "fulfilled") { await storeNqDay(take[i], r.value); share[take[i]] = { h: r.value.h, c: r.value.c, at: Date.now() }; }
         else fresh[take[i]] = now + 15 * 60_000;
       }));
       if (env && Object.keys(share).length) await offerWindow(env, share, today);
@@ -512,49 +517,53 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
 }
 
 // ── 0114: the window's days every colo reads ──
-// Same pattern as 0110's caps: one small KV record (day → sessions + fetch time), a 60 s per-colo copy in front of it,
-// and a write only when this colo fetched a day the record lacks, holds stale, or last saw over an hour ago.
+// Same pattern as 0110's caps: one small KV record (day → sessions, caps, fetch time), a 60 s per-colo copy in front of
+// it, and a write only when this colo fetched a day the record lacks or holds stale. Writes are capped per colo and,
+// in the record itself, for all colos together (`NQW_GLOBAL_WRITES_PER_DAY`).
 const NQW_KV = "nqw:v1";
 const NQW_KV_TTL = 2 * 86400;
 const NQW_LOCAL = CAL("nqw:local:v1");
 const NQW_WLOCK = CAL("nqw:kv:w:v1");
 /** KV's free tier (1,000 writes a day) is shared with the support inbox and the other memos. */
-const NQW_WRITES_PER_DAY = 24;
-const NQW_MEMO_MS = 30_000;
-let nqwMemo: { at: number; m: NqShareDoc | null } | null = null;
+const NQW_WRITES_PER_DAY = 12;
+/** One offer in flight per isolate, claimed synchronously. */
+let nqwOffering = false;
 /** The shared window (null: none yet, or unreadable: this only ever adds evidence). */
 async function readWindowShared(env: Env): Promise<NqShareDoc | null> {
   if (!env.SUPPORT) return null;
-  if (nqwMemo && Date.now() - nqwMemo.at >= 0 && Date.now() - nqwMemo.at < NQW_MEMO_MS) return nqwMemo.m;
   const local = await readJson<{ m: NqShareDoc | null }>(NQW_LOCAL);
-  if (local) { nqwMemo = { at: Date.now(), m: local.m }; return local.m; }
+  if (local) return local.m;
   try {
     const v = await env.SUPPORT.get(NQW_KV, { cacheTtl: 60 });
     const parsed = v ? JSON.parse(v) : null;
     const m = shareDocOk(parsed) ? parsed : null;
-    nqwMemo = { at: Date.now(), m };
     await putJson(NQW_LOCAL, { m }, 60);
     return m;
   } catch { return null; }
 }
 /** Offer freshly fetched days (runs inside the fill's waitUntil). Read-merge-write; never writes after a failed read. */
-async function offerWindow(env: Env, fetched: NqShareDoc, today: string): Promise<void> {
+async function offerWindow(env: Env, fetched: Record<string, NqShareDay>, today: string): Promise<void> {
   const kv = env.SUPPORT;
-  if (!kv || !shareGrows(await readWindowShared(env), fetched, Date.now())) return;
-  if (await caches.default.match(NQW_WLOCK).catch(() => true)) return; // another isolate on this colo is writing
-  await putJson(NQW_WLOCK, 1, 30);
-  const countKey = CAL(`nqw:n:v1:${today}`);
-  const n = (await readJson<number>(countKey)) ?? 0;
-  if (n >= NQW_WRITES_PER_DAY) return;
-  const raw = await kv.get(NQW_KV).catch(() => undefined);
-  if (raw === undefined) return;
-  let latest: NqShareDoc | null = null;
-  try { const p = raw ? JSON.parse(raw) : null; latest = shareDocOk(p) ? p : null; } catch { latest = null; } // corrupt: rewrite it
-  if (!shareGrows(latest, fetched, Date.now())) { nqwMemo = { at: Date.now(), m: latest }; await putJson(NQW_LOCAL, { m: latest }, 60); return; }
-  const merged = mergeShare(latest, fetched, today);
-  try { await kv.put(NQW_KV, JSON.stringify(merged), { expirationTtl: NQW_KV_TTL }); } catch { return; }
-  nqwMemo = { at: Date.now(), m: merged };
-  await Promise.all([putJson(countKey, n + 1, 86400), putJson(NQW_LOCAL, { m: merged }, 60)]);
+  if (!kv || nqwOffering) return;
+  const utc = new Date().toISOString().slice(0, 10);
+  const seen = await readWindowShared(env);
+  if (!shareGrows(seen, fetched, Date.now()) || !shareBudgetLeft(seen, utc)) return;
+  nqwOffering = true;
+  try {
+    if (await caches.default.match(NQW_WLOCK).catch(() => true)) return; // another isolate on this colo is writing
+    await putJson(NQW_WLOCK, 1, 30);
+    const countKey = CAL(`nqw:n:v1:${utc}`);
+    const n = (await readJson<number>(countKey)) ?? 0;
+    if (n >= NQW_WRITES_PER_DAY) return;
+    const raw = await kv.get(NQW_KV).catch(() => undefined);
+    if (raw === undefined) return;
+    let latest: NqShareDoc | null = null;
+    try { const p = raw ? JSON.parse(raw) : null; latest = shareDocOk(p) ? p : null; } catch { latest = null; } // corrupt: rewrite it
+    if (!shareGrows(latest, fetched, Date.now()) || !shareBudgetLeft(latest, utc)) { await putJson(NQW_LOCAL, { m: latest }, 60); return; }
+    const merged = mergeShare(latest, fetched, today, utc);
+    try { await kv.put(NQW_KV, JSON.stringify(merged), { expirationTtl: NQW_KV_TTL }); } catch { return; }
+    await Promise.all([putJson(countKey, n + 1, 86400), putJson(NQW_LOCAL, { m: merged }, 60)]);
+  } finally { nqwOffering = false; }
 }
 
 // ── 0083: Nasdaq date contests every colo can read ──
@@ -662,6 +671,11 @@ async function nasdaqCaps(days: string[], today: string, env?: Env, ctx?: Execut
     env ? readCapsShared(env) : Promise.resolve(undefined),
   ]);
   const now = Date.now();
+  // 0114 review: a day this colo hasn't fetched but the window share holds (fresh) comes with that call's caps: sized.
+  if (env?.SUPPORT && got.some((c) => c == null)) {
+    const fromShare = sharedDays(await readWindowShared(env), want.filter((_, i) => got[i] == null), now);
+    want.forEach((d, i) => { if (got[i] == null && fromShare[d]?.c) got[i] = fromShare[d].c!; });
+  }
   // 0110 bounce: a day another colo has sized counts as sized here too (this colo's Nasdaq calls may keep failing).
   const complete = want.every((d, i) => got[i] != null || Object.keys(shared?.[d] ?? {}).length > 0 || !win.includes(d) || (failed?.[d] ?? 0) > now);
   if (env && ctx && shared !== undefined) {

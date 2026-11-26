@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { windowDays } from "../../shared/crossCheck";
-import { mergeShare, NQW_EMPTY_FRESH_MS, NQW_FRESH_MS, NQW_REWRITE_MS, sharedDays, shareGrows, shareLife } from "../../shared/nqShare";
+import { mergeShare, NQW_EMPTY_FRESH_MS, NQW_FRESH_MS, NQW_GLOBAL_WRITES_PER_DAY, shareBudgetLeft, sharedDays, shareGrows, shareLife } from "../../shared/nqShare";
 import { tickerShareTitle } from "../../shared/pending";
 import { tickerShareDesc } from "../../shared/reported";
 import { sheetTtl, SHEET_DEGRADED_TTL } from "../../shared/sheetCache";
@@ -16,6 +16,7 @@ import worker from "../../worker/index";
 const H = 3600_000;
 describe("0114 shared window, pure", () => {
   const now = Date.UTC(2026, 10, 25, 19);
+  const doc = (days: Record<string, any>, w?: { d: string; n: number }) => ({ days, ...(w ? { w } : {}) });
   it("a shared day lives as long as a colo's own copy would: 6 h, or 1 h when empty; never from the future", () => {
     expect(shareLife({ h: { A: "amc" }, at: now - H }, now)).toBe(NQW_FRESH_MS - H);
     expect(shareLife({ h: { A: "amc" }, at: now - 7 * H }, now)).toBe(0);
@@ -25,23 +26,26 @@ describe("0114 shared window, pure", () => {
     expect(shareLife({ at: now }, now)).toBe(0);
     expect(shareLife(null, now)).toBe(0);
   });
-  it("sharedDays returns only the asked days still fresh", () => {
-    const doc = { "2026-12-01": { h: { A: "amc" as const }, at: now - H }, "2026-12-02": { h: { B: "bmo" as const }, at: now - 8 * H } };
-    expect(Object.keys(sharedDays(doc, ["2026-12-01", "2026-12-02", "2026-12-03"], now))).toEqual(["2026-12-01"]);
+  it("sharedDays returns only the asked days still fresh, with their caps", () => {
+    const d = doc({ "2026-12-01": { h: { A: "amc" }, c: { BIG: 20_000 }, at: now - H }, "2026-12-02": { h: { B: "bmo" }, at: now - 8 * H } });
+    expect(sharedDays(d, ["2026-12-01", "2026-12-02", "2026-12-03"], now)).toEqual({ "2026-12-01": { h: { A: "amc" }, c: { BIG: 20_000 }, life: NQW_FRESH_MS - H } });
     expect(sharedDays(null, ["2026-12-01"], now)).toEqual({});
   });
-  it("a fetch is offered only when it adds a day, refreshes a stale one, or replaces one over an hour old", () => {
-    const doc = { "2026-12-01": { h: { A: "amc" as const }, at: now - 30 * 60_000 } };
-    expect(shareGrows(doc, { "2026-12-01": { h: { A: "amc" }, at: now } }, now)).toBe(false); // another colo just wrote it
-    expect(shareGrows({ "2026-12-01": { h: { A: "amc" }, at: now - NQW_REWRITE_MS } }, { "2026-12-01": { h: { A: "amc" }, at: now } }, now)).toBe(true);
-    expect(shareGrows(doc, { "2026-12-02": { h: {}, at: now } }, now)).toBe(true);
+  it("a fetch is offered only when it adds a day or refreshes a stale one (a fresh shared day is never rewritten)", () => {
+    const d = doc({ "2026-12-01": { h: { A: "amc" }, at: now - 5 * H } });
+    expect(shareGrows(d, { "2026-12-01": { h: { A: "amc" }, at: now } }, now)).toBe(false);
+    expect(shareGrows(d, { "2026-12-02": { h: {}, at: now } }, now)).toBe(true);
     expect(shareGrows(null, { "2026-12-02": { h: {}, at: now } }, now)).toBe(true);
-    expect(shareGrows({ "2026-12-01": { h: { A: "amc" }, at: now - 7 * H } }, { "2026-12-01": { h: { A: "amc" }, at: now } }, now)).toBe(true);
+    expect(shareGrows(doc({ "2026-12-01": { h: { A: "amc" }, at: now - 7 * H } }), { "2026-12-01": { h: { A: "amc" }, at: now } }, now)).toBe(true);
   });
-  it("merge keeps the newer copy of each day and drops passed days", () => {
-    const latest = { "2026-11-24": { h: { OLD: "bmo" as const }, at: now - 20 * H }, "2026-12-01": { h: { A: "amc" as const }, at: now - 2 * H }, "2026-12-02": { h: { B: "bmo" as const }, at: now } };
-    const got = mergeShare(latest, { "2026-12-01": { h: { A: "bmo" }, at: now }, "2026-12-02": { h: {}, at: now - H } }, "2026-11-25");
-    expect(got).toEqual({ "2026-12-01": { h: { A: "bmo" }, at: now }, "2026-12-02": { h: { B: "bmo" }, at: now } });
+  it("merge keeps the newer copy of each day, drops passed days and counts the write against one budget for all colos", () => {
+    const latest = doc({ "2026-11-24": { h: { OLD: "bmo" }, at: now - 20 * H }, "2026-12-01": { h: { A: "amc" }, at: now - 2 * H }, "2026-12-02": { h: { B: "bmo" }, at: now } }, { d: "2026-11-25", n: 4 });
+    const got = mergeShare(latest, { "2026-12-01": { h: { A: "bmo" }, at: now }, "2026-12-02": { h: {}, at: now - H } }, "2026-11-25", "2026-11-25");
+    expect(got).toEqual({ days: { "2026-12-01": { h: { A: "bmo" }, at: now }, "2026-12-02": { h: { B: "bmo" }, at: now } }, w: { d: "2026-11-25", n: 5 } });
+    expect(mergeShare(latest, {}, "2026-11-25", "2026-11-26").w).toEqual({ d: "2026-11-26", n: 1 });
+    expect(shareBudgetLeft(doc({}, { d: "2026-11-25", n: NQW_GLOBAL_WRITES_PER_DAY }), "2026-11-25")).toBe(false);
+    expect(shareBudgetLeft(doc({}, { d: "2026-11-24", n: NQW_GLOBAL_WRITES_PER_DAY }), "2026-11-25")).toBe(true);
+    expect(shareBudgetLeft(null, "2026-11-25")).toBe(true);
   });
 });
 
@@ -49,8 +53,9 @@ describe("0114 a sheet whose time couldn't be checked", () => {
   const next = { date: "2026-12-03", session: "" as const, quarter: 3, year: 2026, epsE: 1, revE: 5e9, projected: true as const, unchecked: true as const };
   it("never unfurls as 'not yet confirmed', and is re-read in 30 s by the edge and the client", () => {
     const title = tickerShareTitle("QQUL", "Qq Ulta", next);
-    expect(title).toBe("QQUL earnings on Thu, Dec 3, time being checked · Metaphases");
+    expect(title).toBe("QQUL earnings around Thu, Dec 3, time being checked · Metaphases");
     expect(title).not.toMatch(/not yet confirmed|expected around/);
+    expect(title).not.toMatch(/ reports /); // a projected date is never stated as the report day (0007)
     const desc = tickerShareDesc("Qq Ulta", { next, justReported: null, beatRate: null, expectedMove: null, setup: { grade: null }, compass: { grade: null } } as any);
     expect(desc).not.toMatch(/not yet confirmed/);
     expect(desc).toMatch(/still being checked against Nasdaq's calendar/);
@@ -84,8 +89,10 @@ class MemKv {
 const TODAY = "2026-11-25";
 const fh = (symbol: string, date: string, hour = "") => ({ symbol, date, hour, quarter: 3, year: 2026, epsEstimate: 1, epsActual: null, revenueEstimate: 5e10, revenueActual: null });
 // Timeless in the feed; Nasdaq lists both with a time (KR-, ULTA-shaped).
-const FH_ROWS = [fh("QQKR", "2026-12-03"), fh("QQUL", "2026-12-03")];
+const FH_ROWS = [fh("QQKR", "2026-12-03"), fh("QQUL", "2026-12-03"), { ...fh("QQCR", "2026-12-01", "amc"), revenueEstimate: 5.4e8 }];
 const NQ: Record<string, { symbol: string; time: string; marketCap: string }[]> = {
+  // CRDO-shaped: small revenue, $20B, admitted only once Nasdaq has sized the day (0110).
+  "2026-12-01": [{ symbol: "QQCR", time: "time-after-hours", marketCap: "$20,009,361,400" }],
   "2026-12-03": [
     { symbol: "QQKR", time: "time-pre-market", marketCap: "$40,000,000,000" },
     { symbol: "QQUL", time: "time-after-hours", marketCap: "$25,000,000,000" },
@@ -190,5 +197,16 @@ describe("0114 through the worker", () => {
     on("YYZ");
     for (let i = 0; i < 5; i++) { unlock(); later(61); await call(RANGE); }
     expect(kv.puts.filter((k) => k === "nqw:v1").length).toBe(writes);
+  });
+
+  it("a colo seeded from the share has sized those days too (review: 0110's gate must not fall back), with no Nasdaq calls", async () => {
+    await warm();
+    expect(row(await call(RANGE), "QQCR")).toBeTruthy();
+    kv.store.delete("nqcap:v1"); // only the window share can tell the cold colo the day's caps now
+    on("YYZ"); down.add("YYZ");
+    const r = await call(RANGE);
+    expect(row(r, "QQCR")).toBeTruthy();
+    expect(r.uncheckedDays).toBeUndefined();
+    expect(nqCalls.YYZ ?? 0).toBe(0);
   });
 });
