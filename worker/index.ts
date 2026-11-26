@@ -1628,7 +1628,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     read.push(`${name}'s Q${upNext.quarter} report date is not confirmed yet: the data feed projects ${longDay(upNext.date)}, when the market is closed (${closed}).`);
   } else if (upNext && projected && !nqNext) {
     // 0007: the feed's projection, not the company's date: "expected around", and no session stated as fact.
-    read.push(`${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} is expected around ${longDay(upNext.date)}, but the company hasn't confirmed the date yet.`);
+    read.push(`${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} is expected around ${longDay(upNext.date)}, but we haven't found the company's announcement of the date yet.`);
   } else if (upNext && leadNq) {
     read.push(`Nasdaq's calendar lists ${name}${reported ? "'s next report" : `'s Q${upNext.quarter} report`} on ${longDay(leadNq.date)} ${WHEN_LONG[leadNq.session]}, but that's unconfirmed: our data feed projects ${longDay(upNext.date)}, and we haven't found a company announcement of the date.`);
   } else if (upNext && nqNext && nqNext.date !== upNext.date && upNext.date <= today) {

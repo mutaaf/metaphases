@@ -54,7 +54,8 @@ describe("0115 the copy never claims what the company has or hasn't done", () =>
     return statSync(p).isDirectory() ? walk(p) : /\.(tsx?|css|html)$/.test(f) ? [p] : [];
   });
   const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  const PHRASES = /until the company announces|hasn['’]t said|hasn['’]t announced|haven['’]t announced/i;
+  // Every inflection (LESSONS 2026-11-26), not one phrase: "hasn't confirmed its time" slipped past an earlier list.
+  const PHRASES = /until the compan(y|ies) announces?|when the compan(y|ies) announces?|(hasn['’]t|haven['’]t|has not|have not) (yet )?(said|announced|confirmed|named|given|published)/i;
   it("no copy in src/, shared/ or worker/ uses the phrases", () => {
     const hits = ["src", "shared", "worker"].flatMap((d) => walk(new URL(`../../${d}`, import.meta.url).pathname))
       .filter((p) => PHRASES.test(strip(readFileSync(p, "utf8"))));
@@ -103,6 +104,9 @@ describe("0115 through the worker, with Nasdaq unread (the unchecked first read)
         const rows = r.events.filter((e: any) => e.s === c.s);
         expect(rows, c.s).toHaveLength(1);
         expect(rows[0]).toMatchObject({ d: c.date, h: c.h, o: FILE[c.s]?.source });
+        // No contest mark either: the client would blank a marked row to "Time unconfirmed".
+        expect(rows[0].x, c.s).toBeUndefined();
+        expect(rows[0].xh, c.s).toBeUndefined();
       }
     });
   }
@@ -112,5 +116,24 @@ describe("0115 through the worker, with Nasdaq unread (the unchecked first read)
     expect(r.next).toMatchObject({ date: "2026-12-03", session: "bmo", confirmed: FILE.TD?.source, call: "9:30 a.m. ET" });
     expect(r.next.projected).toBeUndefined();
     expect(r.next.nasdaq).toBeUndefined();
+  });
+
+  it("/t/TD unfurls before the open, never after the close", async () => {
+    // A tiny HTMLRewriter (Workers-only) that records what the share page sets, as in announced0093Overrides.test.ts.
+    vi.stubGlobal("HTMLRewriter", class {
+      hs: [string, any][] = [];
+      on(sel: string, h: any) { this.hs.push([sel, h]); return this; }
+      transform(res: Response) {
+        const out: Record<string, string> = {};
+        for (const [sel, h] of this.hs) h.element?.({ setInnerContent: (v: string) => { out[sel] = v; }, setAttribute: (_a: string, v: string) => { out[sel] = v; }, getAttribute: (a: string) => (sel.includes("og:title") && a === "property" ? "og:title" : null), append: (v: string) => { out[sel] = v; } });
+        return new Response(JSON.stringify(out), { status: res.status, headers: res.headers });
+      }
+    });
+    const r = await worker.fetch(new Request("https://mutaafaziz.com/metaphases/t/TD"), env, ctx);
+    await Promise.all(pending); pending = [];
+    const out = (await r.json()) as Record<string, string>;
+    const og = out['meta[property="og:title"], meta[name="twitter:title"]'];
+    expect(og).toMatch(/^TD reports Thu, Dec 3 before the open/);
+    expect(JSON.stringify(out)).not.toMatch(/after the close/i);
   });
 });

@@ -113,7 +113,7 @@ describe("0007 through the worker", () => {
     const t = await (await get("/api/ticker/QQPF")).json() as any;
     expect(t.next).toMatchObject({ date: "2027-02-02", session: "amc", projected: true });
     const line = t.read.join(" ");
-    expect(line).toMatch(/Q4 report is expected around Tuesday, Feb 2, but the company hasn't confirmed the date yet\./);
+    expect(line).toMatch(/Q4 report is expected around Tuesday, Feb 2, but we haven't found the company's announcement of the date yet\./);
     expect(line).not.toMatch(/after the (close|closing bell)/i);
   }, 20_000);
 

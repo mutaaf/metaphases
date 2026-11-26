@@ -37,7 +37,7 @@ test("the sheet says a projected date isn't confirmed by the company; a firm one
   const card = page.locator(".next-card");
   await expect(card.locator("h3")).toHaveText("Around Tuesday, February 2");
   await expect(card).toContainText("After close (projected)");
-  await expect(card.getByTestId("nc-projected")).toHaveText("Date not yet confirmed by the company. The date and time shown are our data feed's projection and can move when the company announces its own.");
+  await expect(card.getByTestId("nc-projected")).toHaveText("Date not yet confirmed by the company. The date and time shown are our data feed's projection and can move once we find the company's own announcement.");
   await expect(card.locator(".nc-phase .phase-projected")).toHaveCount(1);
   await noSideScroll(page);
   await page.screenshot({ path: test.info().outputPath("projected-sheet.png") });
@@ -70,7 +70,7 @@ test("the sheet names a projected report's usual time, not the feed's", async ({
   await expect(card.getByTestId("nc-session")).toContainText("Before open (usual time)");
   await expect(card.getByTestId("nc-session")).not.toContainText("projected");
   await expect(card).not.toContainText("After close");
-  await expect(card.getByTestId("nc-projected")).toHaveText("Date not yet confirmed by the company. The date shown is our data feed's projection; the time is when the company has usually reported. Both can move when the company announces its own.");
+  await expect(card.getByTestId("nc-projected")).toHaveText("Date not yet confirmed by the company. The date shown is our data feed's projection; the time is when the company has usually reported. Both can move once we find the company's own announcement.");
   await noSideScroll(page);
   await page.screenshot({ path: test.info().outputPath("projected-habit.png") });
 });

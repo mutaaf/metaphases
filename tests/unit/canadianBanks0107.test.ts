@@ -129,6 +129,7 @@ describe("0107 on the worker", () => {
     expect(by.BNS).toMatchObject({ d: "2026-12-02", h: "bmo", o: BNS_SRC });
     // TD: the feed says amc; the company's advisory (0115) says before the open, so it reads bmo with its link.
     expect(by.TD).toMatchObject({ d: "2026-12-03", h: "bmo", o: FILE.TD.source });
+    expect(by.TD.x).toBeUndefined();
   });
 
   it("/t/BMO: Wed Dec 2 before the open, never after the close", async () => {
