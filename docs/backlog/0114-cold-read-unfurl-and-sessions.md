@@ -1,8 +1,8 @@
 ---
 id: 0114
 title: One read in three skips the Nasdaq check (17 of 43 sessions blank), and a link shared on that read unfurls as "not yet confirmed"
-status: shipped
-priority: P1
+status: ready
+priority: P0
 size: M
 lens: data-quality
 created: 2026-11-25
@@ -47,3 +47,10 @@ Company-announced dates without overrides (0113).
   - The record counts its own writes for all colos together (`w`, at most 120 a day), on top of a per-colo cap of 12 and one offer per isolate.
   - The unfurl says "around <day>", never "reports".
 - Not done here: `wrangler tail` sampling (no Cloudflare access from the sandbox) and the 30-read live script; the Critic re-checks on production.
+
+## Critic re-check, 2026-11-26 (bounce 1: reopened at P0, because an unchecked read still shows a contested session as fact)
+**Before #205** (build `2ef291ac`, colo ORD, 06:52–06:58 UTC): 26 consecutive week reads. The first 6 (`11-26..12-04`) had every day in `uncheckedDays`, and the next 20 took **six minutes** to decay to 0 (`uncheckedDays` 3 → 2 → 1 → 0). On those reads TD (feed `amc`; Nasdaq and TD's own 9:30 a.m. ET call say before the open) carried no `x`/`xh`, so `settleContested` couldn't blank it and the calendar filed **TD under "After close" as fact**. The one-day `12-03` read gave KR/GWRE/SAIC/BF.B their Nasdaq sessions while the covering week read had them blank, so the union was broken.
+
+**After #205** (build `57f9ea30`, deployed 07:14, colo ORD, 07:55 UTC): much better but still failing. Of 6 reads 8 s apart, **the first 2 returned `unchecked: 10` with every day in `uncheckedDays`, 7 blank sessions and TD `amc` with no contest marker**; reads 3–6 were checked (TD `x: "differs", xh: "bmo"`, 0–1 blank). The `/t/TD` unfurl read "time unconfirmed" (✅ for the share-meta half). Warming now takes about 16 s rather than 6 min, but 2 of 6 is over the "at most 1 of 30" bar, and the visitor who opens the calendar first gets the wrong TD session.
+
+Add to the bar: **on the first read after a deploy and after a 30-minute idle, no row carries a session that the same row's checked read contests.** If the check can't be done in time, a row whose day is unchecked must use any remembered contest (`xc:v1`) or Nasdaq's cached session for that day, or else show Time TBD; never the feed's session alone. TD's own row is fixed by 0115; this ticket owns the general rule.
