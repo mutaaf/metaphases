@@ -76,7 +76,7 @@ function MoreReporting({ more }: { more: EarningsEvent[] }) {
       <summary>+{more.length} more reporting</summary>
       <p className="muted small sess-note">
         {more.length === 1 ? "This one isn't" : "These aren't"} in the filter you're using.
-        {untracked > 0 && <> {untracked === more.length ? (untracked === 1 ? "It isn't" : "They aren't") : `${untracked} of them aren't`} among the <Term k="follow">companies we follow</Term>, so we don't grade {untracked === 1 ? "it" : "them"}: setup and quality read “—”.</>}
+        {untracked > 0 && <> {untracked === more.length ? (untracked === 1 ? "It isn't" : "They aren't") : `${untracked} of them aren't`} among the <Term k="follow">companies we follow</Term>, so {untracked === 1 ? "it has" : "they have"} no setup or quality grades.</>}
       </p>
       {groupBySession(more).map((g) => (
         <section key={g.h} className="sess">
@@ -263,7 +263,7 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
 // The drawer has its own shareable URL (?day=), so an empty day there gets the same
 // guidance as the grid, never a blank under "0 reporting" (0051, 0026).
 type DrawerUnknown = "loading" | "failed" | "outside";
-function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean, unconfirmed = false, contested = false, more = 0) {
+function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean, unconfirmed = false, contested = false, more = 0, kind = "popular") {
   const holiday = HOLIDAY[day];
   const dow = parse(day).getDay();
   if (holiday) return { eyebrow: "Market closed", body: unconfirmed ? <>Market closed · {holiday}. The exchanges are shut, so the dates below aren't confirmed.</> : <>Market closed · {holiday}. No companies report while the exchanges are shut.</> };
@@ -279,8 +279,8 @@ function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: 
     : <>No report we follow is confirmed for {WEEKDAY_LONG[dow]}. The ones below were expected but didn't come out that day.</> };
   // 0109: rows the filter hides are listed under "+N more reporting", so say so rather than "may".
   const others = more ? <> {more === 1 ? "One other company does" : `${more} other companies do`}: see “more reporting” below.</> : null;
-  if (narrowed) return { eyebrow: more ? `0 shown · ${more} in all` : "None with these filters", body: <>None with these filters report on {WEEKDAY_LONG[dow]}.{others ?? <> Try <b>Everything</b>.</>}</> };
-  return { eyebrow: more ? `0 popular · ${more} in all` : "None we follow", body: <><Term k="follow">{NONE_OURS}</Term> report on {WEEKDAY_LONG[dow]}.{others ?? <> Smaller companies, and some listed only overseas, may.</>}</> };
+  if (narrowed) return { eyebrow: more ? `0 ${kind} · ${more} in all` : "None with these filters", body: <>None with these filters report on {WEEKDAY_LONG[dow]}.{others ?? <> Try <b>Everything</b>.</>}</> };
+  return { eyebrow: more ? `0 ${kind} · ${more} in all` : "None we follow", body: <><Term k="follow">{NONE_OURS}</Term> report on {WEEKDAY_LONG[dow]}.{others ?? <> Smaller companies, and some listed only overseas, may.</>}</> };
 }
 
 export function DayDrawer({ day, events, all = events, macro, onClose, unknown, checking = false }: { day: string; events: EarningsEvent[]; all?: EarningsEvent[]; macro: MacroEvent[]; onClose: () => void; unknown?: DrawerUnknown; checking?: boolean }) {
@@ -291,7 +291,7 @@ export function DayDrawer({ day, events, all = events, macro, onClose, unknown, 
   // 0064: holiday rows aren't reporting that day, so a holiday with only those still reads "Market closed".
   const dated = splitClosed(events, todayISO()).dated;
   const count = dayCount(events, all, todayISO());
-  const empty = dated.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector, events.length > 0, events.some((e) => !e.c && !e.od && contestedDay(e, todayISO())), count.more.length);
+  const empty = dated.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector, events.length > 0, events.some((e) => !e.c && !e.od && contestedDay(e, todayISO())), count.more.length, filterKind(prefs.filter, prefs.sector));
   return (
     <div className="drawer-scrim" onClick={onClose}>
       <aside className="drawer" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Earnings on ${fmtLong(day)}`}>
@@ -463,9 +463,12 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
             {view === "day" ? fmtLong(anchor).split(",")[0] : MONTHS[a.getMonth()]} <em>earnings</em>.
           </h1>
           <p className="dek">
-            {datedCount ? (
+            {view === "day" && !loading && data && (unknownDay(anchor) || failedDays.has(anchor)) ? (
+              // 0109 review: the dek counts the anchor day now, so a day that didn't load says so, never "none".
+              unknownDay(anchor) === "loading" ? "Charting the phases…" : "This day's earnings didn't load, so we can't say who reports yet."
+            ) : datedCount || viewCount.total ? (
               <>
-                <b>{datedCount}</b> {viewCount.total > datedCount && kind ? `${kind} ` : ""}companies report {view === "month" ? "this month" : view === "week" ? "this week" : "today"}{viewCount.total > datedCount && <> ({viewCount.total} in all)</>}
+                <b>{datedCount}</b> {viewCount.total > datedCount && kind && kind !== "shown" ? `${kind} ` : ""}{datedCount === 1 ? "company" : "companies"} {view === "day" && anchor < today ? "reported" : datedCount === 1 ? "reports" : "report"} {view === "month" ? "this month" : view === "week" ? "this week" : anchor === today ? "today" : `on ${WEEKDAY_LONG[parse(anchor).getDay()]}`}{viewCount.total > datedCount && <> ({viewCount.total} in all)</>}
                 {reported.length > 0 && <> · <b>{Math.round((beats / reported.length) * 100)}%</b> of those reported so far <Term k="beat">beat</Term> on both lines</>}
                 . Tap any logo for the full read.
               </>
