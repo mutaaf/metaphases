@@ -46,6 +46,8 @@ export interface EarningsEvent {
   fh?: Session;
   /** 0099: the row sits on Nasdaq's day and session (`leadRows`) because the feed's was a timeless projection; `xd` is then the feed's day. */
   xf?: 1;
+  /** 0114: the row's day couldn't be checked against Nasdaq on this read, so the feed's session (`fh`) is held back (`h` ""): Time TBD until the re-read. */
+  hu?: 1;
 }
 
 export interface CalendarResponse {

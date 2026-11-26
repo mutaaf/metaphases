@@ -17,7 +17,7 @@ const fresh = (m: XMemo, today: string) => dayNum(today) - dayNum(m.at) <= XMEMO
 
 /** Every weekday of the window (today through `windowEnd`) has loaded: an absent listing is real evidence. */
 export const windowCovered = (w: NqWindow | null | undefined, today: string): boolean =>
-  !!w && windowDays(today).every((d) => w.loaded.includes(d));
+  !!w && !w.stale?.length && windowDays(today).every((d) => w.loaded.includes(d)); // 0114: a stale day isn't current evidence
 
 /** The remembered contest for `s` on the feed day `d`, as `crossOne` would give it, or null. */
 export function memoCross(memos: XMemos | null | undefined, s: string, d: string, today: string): Cross | null {

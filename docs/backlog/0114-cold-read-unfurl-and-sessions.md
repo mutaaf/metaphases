@@ -1,12 +1,12 @@
 ---
 id: 0114
 title: One read in three skips the Nasdaq check (17 of 43 sessions blank), and a link shared on that read unfurls as "not yet confirmed"
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-25
-pr: 205
+pr: 207
 by: critic
 ---
 
@@ -54,3 +54,13 @@ Company-announced dates without overrides (0113).
 **After #205** (build `57f9ea30`, deployed 07:14, colo ORD, 07:55 UTC): much better but still failing. Of 6 reads 8 s apart, **the first 2 returned `unchecked: 10` with every day in `uncheckedDays`, 7 blank sessions and TD `amc` with no contest marker**; reads 3–6 were checked (TD `x: "differs", xh: "bmo"`, 0–1 blank). The `/t/TD` unfurl read "time unconfirmed" (✅ for the share-meta half). Warming now takes about 16 s rather than 6 min, but 2 of 6 is over the "at most 1 of 30" bar, and the visitor who opens the calendar first gets the wrong TD session.
 
 Add to the bar: **on the first read after a deploy and after a 30-minute idle, no row carries a session that the same row's checked read contests.** If the check can't be done in time, a row whose day is unchecked must use any remembered contest (`xc:v1`) or Nasdaq's cached session for that day, or else show Time TBD; never the feed's session alone. TD's own row is fixed by 0115; this ticket owns the general rule.
+
+## Builder notes, bounce 1 (2026-11-26)
+- Cause of the remaining cold reads: every copy of a Nasdaq day (each colo's `nq:x:v1:<day>` and the `nqw:v1` share) carries the same 6 h life from the same fetch, so they all expire together. The next read after that mark found no fresh copy anywhere and answered the whole window `unchecked` until the two-a-minute fill caught up: the "first 2 of 6" the Critic saw.
+- (First pass: #205.) Fix 1 (stale while revalidate): each fetched day is also kept 24 h as a stale copy (`nq:x:stale:v1:<day>`; the share's entries count as stale up to 24 h, `staleDays`). A day with no fresh copy serves its stale one and stays in `missing`, so the same fill re-fetches it (same cap, no extra Nasdaq calls). A window with any stale day is never folded into the hour-long index, which would skip the refresh.
+- Fix 2 (the Critic's rule): on a day still unchecked after that, a row whose session is the feed's alone (no `x`, no remembered contest, no Nasdaq fill `hs`, no 0104 lead, no company override) is held: `h: ""` (Time TBD), the feed's in `fh`, marked `hu: 1` (`holdUnchecked`, `shared/contestedTime.ts`). The edge keeps it 30 s and the client re-reads it, as before.
+- Nasdaq calls per minute: unchanged (the fill is the same; stale days only change what a read answers while it runs). Finnhub: unchanged. KV writes: unchanged (stale copies are colo cache only).
+- Tests: `tests/unit/staleWindow0114.test.ts` (all copies past 6 h with Nasdaq failing: 4 reads checked, TD contested; a cold colo from the share's stale copy; no folding; no copy anywhere: TD held, never `amc`). Four older tests asserted the feed's session on an unchecked read and now assert the hold.
+- Not done here: the 30-read live script needs the deploy; the Critic re-checks on production.
+- Self-review fixes: a stale day rides on `NqWindow.stale`. It is enough to compare a row, but it is never evidence of absence (`windowCovered`, crossCheck's `unknown`). A read with a stale day neither writes nor clears the `xc:v1` memos (calendar and sheet). The sheet still fetches its next day on demand when that day is only stale. An empty answer is never kept as a stale copy. `dmh` is held too.
+- Known gaps, for a follow-up: the ICS feed doesn't apply the hold. Surfaces other than the calendar (Today, Compass, Ask) don't re-read an unchecked answer, so a held row reads Time TBD for that view. With stale copies this only happens when there is no Nasdaq copy anywhere in the last 24 h.

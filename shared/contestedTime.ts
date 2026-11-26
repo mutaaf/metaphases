@@ -20,3 +20,11 @@ export const nextTimeContested = (n: Next): boolean =>
 
 /** The session to headline for the next report ("" when the two calendars contest it). */
 export const shownSession = (n: Next): Session => (!n ? "" : nextTimeContested(n) ? "" : n.session);
+
+/** 0114 bounce 1: rows on unchecked days whose session is the feed's alone read Time TBD (`hu`), the feed's in `fh`. */
+export function holdUnchecked<E extends EarningsEvent>(events: E[], days: Set<string>): E[] {
+  return events.map((e) =>
+    days.has(e.d) && (e.h === "bmo" || e.h === "amc" || e.h === "dmh") && !e.x && !e.hs && !e.fh && !e.xf && !e.o && !e.c && !e.od && e.eA == null && e.rA == null
+      ? { ...e, h: "" as Session, fh: e.h, hu: 1 as const }
+      : e);
+}

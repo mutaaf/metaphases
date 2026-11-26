@@ -29,13 +29,13 @@ import { applyPreReport, fillMovedFigures, isReit, judgeReaction, matchQuarters,
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { admitUntracked, capsGrow, capUsd, foldCaps, mergeCapDocs, nasdaqDayCaps, type CapDoc, type NqCaps } from "../shared/untrackedGate";
-import { mergeShare, shareBudgetLeft, shareDocOk, sharedDays, shareGrows, type NqShareDay, type NqShareDoc } from "../shared/nqShare";
+import { mergeShare, NQW_STALE_MS, shareBudgetLeft, shareDocOk, sharedDays, shareGrows, staleDays, type NqShareDay, type NqShareDoc } from "../shared/nqShare";
 import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, overrideSession, type DateOverrides } from "../shared/dateOverrides";
 import { dayShareText } from "../shared/dayShare";
 import { unconfirmedRow } from "../shared/closedRows";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, passedQuarter, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
-import { shownSession } from "../shared/contestedTime";
+import { holdUnchecked, shownSession } from "../shared/contestedTime";
 import { applyLeads, leadFor, LEAD_MEMO_DAYS, nasdaqSessionLeads, noteLead, type SessionLeads } from "../shared/sessionLead";
 import { applyMemos, contestsIn, dayStanding, memoCross, noteContests, windowCovered, XMEMO_DAYS, type XMemos } from "../shared/contestMemo";
 import { leadIns, leadRows, leadsNasdaq } from "../shared/leadDay";
@@ -391,6 +391,8 @@ const keepNq = (s: string, cap: number, h: Session) => keepNasdaq(s in U, cap, h
 /** The folded window, read in one cache lookup (written once every day in it has loaded). */
 const NQX_IDX = (today: string) => CAL(`nq:x:idx:v1:${today}`);
 const NQX_DAY = (day: string) => CAL(`nq:x:v1:${day}`);
+/** 0114 bounce 1: the same day kept for NQW_STALE_MS, served while the fresh copy is fetched again (never folded, never shared). */
+const NQX_STALE = (day: string) => CAL(`nq:x:stale:v1:${day}`);
 /** 0110: the same day's untracked listings → dollar cap (millions), written beside it, so the calendar can admit by size. */
 const NQX_CAP = (day: string) => CAL(`nq:x:cap:v1:${day}`);
 const NQX_FAIL = CAL("nq:x:fail:v1");
@@ -420,7 +422,7 @@ async function fetchNasdaqDayFull(day: string, ms = 2500): Promise<{ h: NqDay; c
 const NQX_CAP_TTL = 45 * 86400;
 const storeNqDay = (day: string, v: { h: NqDay; c: NqCaps }) => {
   const ttl = Object.keys(v.h).length ? 21600 : 3600;
-  return Promise.all([putJson(NQX_DAY(day), v.h, ttl), putJson(NQX_CAP(day), v.c, Object.keys(v.c).length ? NQX_CAP_TTL : 3600)]);
+  return Promise.all([putJson(NQX_DAY(day), v.h, ttl), ...(Object.keys(v.h).length ? [putJson(NQX_STALE(day), v.h, NQW_STALE_MS / 1000)] : []), putJson(NQX_CAP(day), v.c, Object.keys(v.c).length ? NQX_CAP_TTL : 3600)]);
 };
 
 /** How far ahead a next report's Nasdaq day is read on demand (later days rarely carry a session). */
@@ -489,6 +491,16 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
     if (seed.length) ctx.waitUntil(Promise.all(seed));
     missing = missing.filter((d) => !got[d]);
   }
+  // 0114 bounce 1: a day with no fresh copy anywhere serves its stale one (this colo's, else the share's) while it's
+  // fetched again below. It stays in `missing`, so the refresh (same two-a-minute fill, no extra calls) still runs.
+  const stale: string[] = [];
+  if (missing.length) {
+    await Promise.all(missing.map(async (d) => { const v = await readJson<NqDay>(NQX_STALE(d)); if (v) { loaded[d] = v; stale.push(d); } }));
+    const left = missing.filter((d) => !loaded[d]);
+    if (left.length && env?.SUPPORT) {
+      for (const [d, v] of Object.entries(staleDays(await readWindowShared(env), left, Date.now()))) { loaded[d] = v.h; stale.push(d); }
+    }
+  }
   if (build && missing.length && !(await caches.default.match(NQX_LOCK).catch(() => true))) {
     await caches.default.put(NQX_LOCK, new Response("1", { headers: { "Cache-Control": "public, max-age=60" } })).catch(() => {});
     const failed = (await readJson<Record<string, number>>(NQX_FAIL)) ?? {};
@@ -511,8 +523,9 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
     })().catch(() => {}));
   }
   if (!Object.keys(loaded).length) return null;
-  const w: NqWindow = { from: today, to: windowEnd(today), loaded: Object.keys(loaded).sort(), idx: buildIndex(loaded) };
-  if (w.loaded.length === days.length) ctx.waitUntil(putJson(NQX_IDX(today), w, 3600));
+  const w: NqWindow = { from: today, to: windowEnd(today), loaded: Object.keys(loaded).sort(), idx: buildIndex(loaded), ...(stale.length ? { stale: stale.sort() } : {}) };
+  // A window with a stale day is never folded into the hour-long index: the index skips the refresh.
+  if (w.loaded.length === days.length && !stale.length) ctx.waitUntil(putJson(NQX_IDX(today), w, 3600));
   return w;
 }
 
@@ -1082,7 +1095,8 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     // 0083: what this read found is remembered for every colo (real evidence only), and a cold or partial read
     // gets the contests another read saw, so a flagged row stays flagged.
     const memos = await readMemos(env);
-    rememberContests(env, ctx, memos, contestsIn(fixed, windowCovered(w, today)), today);
+    // 0114: a read with a stale day neither writes nor clears memos (24 h old listings aren't current evidence).
+    if (!w?.stale?.length) rememberContests(env, ctx, memos, contestsIn(fixed, windowCovered(w, today)), today);
     fixed = applyMemos(fixed, memos, today, w);
     // 0099: a timeless projection Nasdaq lists on another day with a session sits on Nasdaq's day, still unconfirmed.
     fixed = leadRows(fixed, from, to, today);
@@ -1096,6 +1110,9 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     // instead of showing a cold read as if it had been checked.
     const done = new Set(w?.loaded ?? []);
     uncheckedDays = windowDays(today).filter((d) => inRange(d) && !done.has(d));
+    // 0114 bounce 1: on a day that couldn't be checked, a feed session with no Nasdaq evidence (no contest, no
+    // remembered one, no settled lead) isn't shown as fact: Time TBD until the re-read (30 s), feed's kept in `fh`.
+    if (uncheckedDays.length) fixed = holdUnchecked(fixed, new Set(uncheckedDays));
   }
   const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings, ...(pending ? { pending } : {}), ...(unchecked ? { unchecked } : {}), ...(uncheckedDays.length ? { uncheckedDays } : {}) };
   // An unchecked answer must not sit in the browser for 10 minutes: the next read is the checked one.
@@ -1240,7 +1257,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // none). Unless the window already loaded that day: read the one Nasdaq day the next report is on, on demand (one
   // shared, cached call per day), so the habit never waits for the window to reach that date. 0059: inside the
   // window, that day joins the cross-check too, so the sheet's session matches the calendar's.
-  const inWin = !!nqWin && nqWin.loaded.includes(nextE?.date ?? ""); // the window already answered for that day
+  // the window already answered for that day (0114: freshly; a stale day is fetched on demand again)
+  const inWin = !!nqWin && nqWin.loaded.includes(nextE?.date ?? "") && !nqWin.stale?.includes(nextE?.date ?? "");
   // 0060: also when Finnhub gives a session, so a session the two calendars disagree on is caught without waiting.
   const nqNextDay = nextE && !nextE.source && nextE.hour !== "dmh" && !inWin ? await nasdaqDayOnDemand(nextE.date, today, ctx) : null;
   const nqNextHour = nqNextDay?.[symbol];
@@ -1354,7 +1372,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // 0083: a cold window is no evidence either way, so the row is "still checking", never "results expected".
     if (!companyDated && row && row.eA == null && row.rA == null && !row.od) {
       const w = nqWin ?? (await nasdaqWindow(today, ctx, false, undefined, env).catch(() => null));
-      if (w) seen.push({ s: symbol, d: row.d, c: crossOne(symbol, row.d, (row.h ?? "") as Session, w), clear: windowCovered(w, today) });
+      if (w && !w.stale?.length) seen.push({ s: symbol, d: row.d, c: crossOne(symbol, row.d, (row.h ?? "") as Session, w), clear: windowCovered(w, today) });
       const st = dayStanding(symbol, row.d, (row.h ?? "") as Session, w, windowCovered(w, today) ? null : await memosOf(), today);
       if (st.k === "contested") skipContested = { date: st.c.xd!, session: st.c.xh ?? "" };
       // Positive evidence that's usually cached already (0080's day read): Nasdaq's own calendar lists the company on
@@ -1557,7 +1575,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   let nqNext: { date: string; session: Session } | undefined = skipContested ?? undefined;
   if (upNext && upNext === nextE && !duePending && !pending && !reported && !upNext.source && !closed) {
     const c = nqWin ? crossOne(symbol, upNext.date, (upNext.hour || "") as Session, nqWin) : null;
-    if (c) seen.push({ s: symbol, d: upNext.date, c, clear: windowCovered(nqWin, today) });
+    if (c && !nqWin?.stale?.length) seen.push({ s: symbol, d: upNext.date, c, clear: windowCovered(nqWin, today) });
     // 0083: a cold window keeps the day contest an earlier read saw (from any colo).
     const use = c ?? (windowCovered(nqWin, today) ? null : memoCross(await memosOf(), symbol, upNext.date, today));
     if (use?.x === "differs" && use.xd) nqNext = { date: use.xd, session: use.xh ?? "" };

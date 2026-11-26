@@ -62,7 +62,7 @@ export function buildIndex(days: Record<string, NqDay>): NqIndex {
 }
 
 /** The cross-check's view: the index plus which days in the window actually loaded. */
-export interface NqWindow { from: string; to: string; loaded: string[]; idx: NqIndex }
+export interface NqWindow { from: string; to: string; loaded: string[]; idx: NqIndex; /** 0114: loaded days served from a stale copy (past 6 h, up to 24 h): enough to compare a row, never evidence of absence or a memo. */ stale?: string[] }
 
 /**
  * 0059: add one more loaded day to a (possibly partial, possibly absent) window, e.g. the day the sheet read on
@@ -109,7 +109,7 @@ export function crossOne(s: string, d: string, h: Session, w: NqWindow): Cross |
   }
   if (list.length) return { x: "differs", xd: list[0].d, ...(list[0].h ? { xh: list[0].h } : {}) };
   // Not on Nasdaq's day, and not elsewhere: only "unknown" when every day in the window was checked.
-  return w.loaded.length >= windowDays(w.from).length ? { x: "unknown" } : null;
+  return w.loaded.length >= windowDays(w.from).length && !w.stale?.length ? { x: "unknown" } : null;
 }
 
 /**

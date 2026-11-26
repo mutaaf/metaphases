@@ -294,7 +294,9 @@ describe("0104 through the worker", () => {
     delete env.SUPPORT;
     goCold();
     const c: any = await get(`/api/calendar?from=${DAY}&to=${DAY}`);
-    expect(c.events.find((x: any) => x.s === SYM)?.fh).toBeUndefined();
+    const row = c.events.find((x: any) => x.s === SYM);
+    expect(row?.hs).toBeUndefined(); // no remembered verdict without KV
+    if (row?.fh) expect(row).toMatchObject({ h: "", hu: 1 }); // 0114: only the unchecked-day hold may set `fh` here
   });
 });
 
