@@ -29,6 +29,7 @@ import { applyPreReport, fillMovedFigures, isReit, judgeReaction, matchQuarters,
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { admitUntracked, capsGrow, capUsd, foldCaps, mergeCapDocs, nasdaqDayCaps, type CapDoc, type NqCaps } from "../shared/untrackedGate";
+import { mergeShare, shareBudgetLeft, shareDocOk, sharedDays, shareGrows, type NqShareDay, type NqShareDoc } from "../shared/nqShare";
 import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, overrideSession, type DateOverrides } from "../shared/dateOverrides";
 import { dayShareText } from "../shared/dayShare";
 import { unconfirmedRow } from "../shared/closedRows";
@@ -468,13 +469,26 @@ const WHEN_LONG: Record<Session, string> = { bmo: "before the opening bell", amc
  * NQX_PER_BUILD fetched ones (if this request takes the per-colo lock). Returns null when there's nothing to
  * compare against.
  */
-async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean, want?: (d: string) => boolean): Promise<NqWindow | null> {
+async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean, want?: (d: string) => boolean, env?: Env): Promise<NqWindow | null> {
   const folded = await readJson<NqWindow>(NQX_IDX(today));
   if (folded) return folded;
   const days = windowDays(today);
   const loaded: Record<string, NqDay> = {};
-  const missing: string[] = [];
+  let missing: string[] = [];
   await Promise.all(days.map(async (d) => { const v = await readJson<NqDay>(NQX_DAY(d)); if (v) loaded[d] = v; else missing.push(d); }));
+  // 0114: a day another colo fetched (shared through KV) counts as loaded here, and isn't fetched again.
+  if (missing.length && env?.SUPPORT) {
+    const got = sharedDays(await readWindowShared(env), missing, Date.now());
+    const seed: Promise<unknown>[] = [];
+    for (const [d, v] of Object.entries(got)) {
+      loaded[d] = v.h;
+      seed.push(putJson(NQX_DAY(d), v.h, Math.max(60, Math.floor(v.life / 1000))));
+      // The same call's caps, so this colo has sized the day too (0110's gate never falls back for a seeded day).
+      if (v.c) seed.push(putJson(NQX_CAP(d), v.c, Object.keys(v.c).length ? NQX_CAP_TTL : 3600));
+    }
+    if (seed.length) ctx.waitUntil(Promise.all(seed));
+    missing = missing.filter((d) => !got[d]);
+  }
   if (build && missing.length && !(await caches.default.match(NQX_LOCK).catch(() => true))) {
     await caches.default.put(NQX_LOCK, new Response("1", { headers: { "Cache-Control": "public, max-age=60" } })).catch(() => {});
     const failed = (await readJson<Record<string, number>>(NQX_FAIL)) ?? {};
@@ -486,10 +500,12 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
     if (take.length) ctx.waitUntil((async () => {
       const got = await pool(take, 2, (d) => fetchNasdaqDayFull(d, NQX_BUILD_TIMEOUT));
       const fresh: Record<string, number> = {};
+      const share: Record<string, NqShareDay> = {};
       await Promise.all(got.map(async (r, i) => {
-        if (r.status === "fulfilled") await storeNqDay(take[i], r.value);
+        if (r.status === "fulfilled") { await storeNqDay(take[i], r.value); share[take[i]] = { h: r.value.h, c: r.value.c, at: Date.now() }; }
         else fresh[take[i]] = now + 15 * 60_000;
       }));
+      if (env && Object.keys(share).length) await offerWindow(env, share, today);
       // Re-read and merge, so another request's remembered failure survives (0047).
       if (Object.keys(fresh).length) await putJson(NQX_FAIL, { ...((await readJson<Record<string, number>>(NQX_FAIL)) ?? {}), ...fresh }, 900);
     })().catch(() => {}));
@@ -498,6 +514,56 @@ async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean
   const w: NqWindow = { from: today, to: windowEnd(today), loaded: Object.keys(loaded).sort(), idx: buildIndex(loaded) };
   if (w.loaded.length === days.length) ctx.waitUntil(putJson(NQX_IDX(today), w, 3600));
   return w;
+}
+
+// ── 0114: the window's days every colo reads ──
+// Same pattern as 0110's caps: one small KV record (day → sessions, caps, fetch time), a 60 s per-colo copy in front of
+// it, and a write only when this colo fetched a day the record lacks or holds stale. Writes are capped per colo and,
+// in the record itself, for all colos together (`NQW_GLOBAL_WRITES_PER_DAY`).
+const NQW_KV = "nqw:v1";
+const NQW_KV_TTL = 2 * 86400;
+const NQW_LOCAL = CAL("nqw:local:v1");
+const NQW_WLOCK = CAL("nqw:kv:w:v1");
+/** KV's free tier (1,000 writes a day) is shared with the support inbox and the other memos. */
+const NQW_WRITES_PER_DAY = 12;
+/** One offer in flight per isolate, claimed synchronously. */
+let nqwOffering = false;
+/** The shared window (null: none yet, or unreadable: this only ever adds evidence). */
+async function readWindowShared(env: Env): Promise<NqShareDoc | null> {
+  if (!env.SUPPORT) return null;
+  const local = await readJson<{ m: NqShareDoc | null }>(NQW_LOCAL);
+  if (local) return local.m;
+  try {
+    const v = await env.SUPPORT.get(NQW_KV, { cacheTtl: 60 });
+    const parsed = v ? JSON.parse(v) : null;
+    const m = shareDocOk(parsed) ? parsed : null;
+    await putJson(NQW_LOCAL, { m }, 60);
+    return m;
+  } catch { return null; }
+}
+/** Offer freshly fetched days (runs inside the fill's waitUntil). Read-merge-write; never writes after a failed read. */
+async function offerWindow(env: Env, fetched: Record<string, NqShareDay>, today: string): Promise<void> {
+  const kv = env.SUPPORT;
+  if (!kv || nqwOffering) return;
+  const utc = new Date().toISOString().slice(0, 10);
+  const seen = await readWindowShared(env);
+  if (!shareGrows(seen, fetched, Date.now()) || !shareBudgetLeft(seen, utc)) return;
+  nqwOffering = true;
+  try {
+    if (await caches.default.match(NQW_WLOCK).catch(() => true)) return; // another isolate on this colo is writing
+    await putJson(NQW_WLOCK, 1, 30);
+    const countKey = CAL(`nqw:n:v1:${utc}`);
+    const n = (await readJson<number>(countKey)) ?? 0;
+    if (n >= NQW_WRITES_PER_DAY) return;
+    const raw = await kv.get(NQW_KV).catch(() => undefined);
+    if (raw === undefined) return;
+    let latest: NqShareDoc | null = null;
+    try { const p = raw ? JSON.parse(raw) : null; latest = shareDocOk(p) ? p : null; } catch { latest = null; } // corrupt: rewrite it
+    if (!shareGrows(latest, fetched, Date.now()) || !shareBudgetLeft(latest, utc)) { await putJson(NQW_LOCAL, { m: latest }, 60); return; }
+    const merged = mergeShare(latest, fetched, today, utc);
+    try { await kv.put(NQW_KV, JSON.stringify(merged), { expirationTtl: NQW_KV_TTL }); } catch { return; }
+    await Promise.all([putJson(countKey, n + 1, 86400), putJson(NQW_LOCAL, { m: merged }, 60)]);
+  } finally { nqwOffering = false; }
 }
 
 // ── 0083: Nasdaq date contests every colo can read ──
@@ -605,6 +671,11 @@ async function nasdaqCaps(days: string[], today: string, env?: Env, ctx?: Execut
     env ? readCapsShared(env) : Promise.resolve(undefined),
   ]);
   const now = Date.now();
+  // 0114 review: a day this colo hasn't fetched but the window share holds (fresh) comes with that call's caps: sized.
+  if (env?.SUPPORT && got.some((c) => c == null)) {
+    const fromShare = sharedDays(await readWindowShared(env), want.filter((_, i) => got[i] == null), now);
+    want.forEach((d, i) => { if (got[i] == null && fromShare[d]?.c) got[i] = fromShare[d].c!; });
+  }
   // 0110 bounce: a day another colo has sized counts as sized here too (this colo's Nasdaq calls may keep failing).
   const complete = want.every((d, i) => got[i] != null || Object.keys(shared?.[d] ?? {}).length > 0 || !win.includes(d) || (failed?.[d] ?? 0) > now);
   if (env && ctx && shared !== undefined) {
@@ -1006,7 +1077,7 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
   if (to >= today && from <= addDays(windowEnd(today), XCHECK_REACH)) {
     // Only ranges overlapping the window may fetch; later ranges (the month view fires several at once) read the cache.
     const inRange = (d: string) => d >= from && d <= to;
-    const w = await nasdaqWindow(today, ctx, from <= windowEnd(today), inRange).catch(() => null);
+    const w = await nasdaqWindow(today, ctx, from <= windowEnd(today), inRange, env).catch(() => null);
     if (w) fixed = crossCheck(fixed, w);
     // 0083: what this read found is remembered for every colo (real evidence only), and a cold or partial read
     // gets the contests another read saw, so a flagged row stays flagged.
@@ -1160,7 +1231,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // worked out from it.
   // The rows the calendar's crossCheck compares: no company date, no figures in, not projected onto a closed day.
   const xcheck = !!nextE && !nextE.source && nextE.epsActual == null && nextE.revenueActual == null && !closedDay(nextE.date);
-  let nqWin = xcheck ? await nasdaqWindow(today, ctx, false).catch(() => null) : null;
+  let nqWin = xcheck ? await nasdaqWindow(today, ctx, false, undefined, env).catch(() => null) : null;
   // 0083: the contests any colo has seen (read once, only when a cold window leaves a question open).
   let memosP: Promise<XMemos | null> | null = null;
   const memosOf = () => (memosP ??= readMemos(env));
@@ -1282,7 +1353,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // is contested, not missed and not "results expected". Same check as the calendar's row (crossOne's past path).
     // 0083: a cold window is no evidence either way, so the row is "still checking", never "results expected".
     if (!companyDated && row && row.eA == null && row.rA == null && !row.od) {
-      const w = nqWin ?? (await nasdaqWindow(today, ctx, false).catch(() => null));
+      const w = nqWin ?? (await nasdaqWindow(today, ctx, false, undefined, env).catch(() => null));
       if (w) seen.push({ s: symbol, d: row.d, c: crossOne(symbol, row.d, (row.h ?? "") as Session, w), clear: windowCovered(w, today) });
       const st = dayStanding(symbol, row.d, (row.h ?? "") as Session, w, windowCovered(w, today) ? null : await memosOf(), today);
       if (st.k === "contested") skipContested = { date: st.c.xd!, session: st.c.xh ?? "" };
@@ -1504,6 +1575,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // Review: only Nasdaq's live listing for that day counts as current evidence (never 0060's cached contest): a blank
   // session, or no listing, there drops the verdict, as the calendar's cross-check would.
   const nqLoaded = !!upNext && (!!nqNextDay || !!nqWin?.loaded.includes(upNext.date));
+  // 0114: a timeless date inside the window whose Nasdaq day couldn't be read on this request: it is projected only for
+  // want of a check, so it's said to be "being checked" (and re-read in 30 s), never "not yet confirmed" on an unfurl.
+  const timeUnchecked = projected && upNext === nextE && !upNext.source && !upNext.hour && upNext.date > today && upNext.date <= windowEnd(today) && !nqLoaded && !nqNext;
   const liveContest = leadable && nqLoaded && isContested(upNext!.hour, nqOnNext);
   const leadNow = liveContest && nasdaqSessionLeads(upNext!.hour, nqOnNext, pastDates, closeOn) ? { h: nqOnNext as "bmo" | "amc", f: upNext!.hour as "bmo" | "amc" } : null;
   let sessionLead: { h: "bmo" | "amc"; f: "bmo" | "amc" } | null = leadNow;
@@ -1546,7 +1620,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     // 0104: Nasdaq's session leads; the feed's is named as the disagreement, and nothing reads as the company's word.
     read.push(`${name}${reported ? "'s next report is" : " reports"} Q${upNext.quarter} on ${longDay(upNext.date)} ${WHEN_LONG[sessionLead.h]} (expected; we haven't found a company announcement yet): that's when Nasdaq's calendar lists it, and the stock's moves after its recent reports all fit that time. Our data feed says ${WHEN_LONG[sessionLead.f]}.`);
   } else if (upNext) {
-    const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; we haven't found a company announcement yet)" : ""}` : nqNext ? "" : usual ? `(time not announced; going by its last reports, it usually reports ${WHEN_LONG[usual]})` : "(time not yet confirmed)";
+    const when = upNext.hour ? `${WHEN_LONG[upNext.hour as Session] ?? ""}${upNext.hs === "n" && !nqNext ? " (expected; we haven't found a company announcement yet)" : ""}` : nqNext ? "" : usual ? `(time not announced; going by its last reports, it usually reports ${WHEN_LONG[usual]})` : timeUnchecked ? "(the time is still being checked against Nasdaq's calendar)" : "(time not yet confirmed)";
     // 0059: a date Nasdaq lists elsewhere is said to be unconfirmed, as on the calendar.
     const nqWhen = nqNext ? (nqNext.date === upNext.date ? (nqNext.session ? `it ${WHEN_LONG[nqNext.session]} that day` : "it at another time that day") : `${longDay(nqNext.date)}${nqNext.session ? ` ${WHEN_LONG[nqNext.session]}` : ""}`) : "";
     // 0062: same day, other session: lead with the day and call the time unconfirmed, as the sheet's headline does.
@@ -1578,7 +1652,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
       : pending ? { date: pending.passed, session: pending.hour, quarter: pending.quarter, year: pending.year, epsE: pending.eE, revE: pending.rE, currency, overdue: true }
       : upNext && leadNq ? { date: leadNq.date, session: leadNq.session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, hs: "n", feedDay: upNext.date }
       : upNext && sessionLead ? { date: upNext.date, session: sessionLead.h, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, hs: "n", feedSession: sessionLead.f }
-      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...((upNext.hs === "n" || (upNext.hs === "h" && !upNext.source)) && upNext.hour ? { hs: upNext.hs as "n" | "h" } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}), ...(usual ? { usual } : {}), ...(call ? { call } : {}) } : null,
+      : upNext ? { date: upNext.date, session: (upNext.hour || "") as Session, quarter: upNext.quarter, year: upNext.year, epsE: upNext.epsEstimate, revE: upNext.revenueEstimate, currency, ...(upNext.source ? { confirmed: upNext.source } : {}), ...((upNext.hs === "n" || (upNext.hs === "h" && !upNext.source)) && upNext.hour ? { hs: upNext.hs as "n" | "h" } : {}), ...(closed ? { closed } : {}), ...(nqNext ? { nasdaq: nqNext } : {}), ...(projected ? { projected: true as const } : {}), ...(timeUnchecked ? { unchecked: true as const } : {}), ...(usual ? { usual } : {}), ...(call ? { call } : {}) } : null,
     ...(reported && tradingDaysSince(reported.date, today) <= JUST_DAYS ? { justReported: { date: reported.date, session: reported.hour as Session, quarter: reported.quarter, year: reported.year, epsE: reported.eE, epsA: reported.eA, currency, ...(usd && reported.nE != null ? { nE: reported.nE } : {}), ...(usd && reported.nA !== undefined ? { nA: reported.nA } : {}), ...(reit ? { reit: true as const } : {}) } } : {}),
     compass, setup, history, expectedMove, beatRate, street,
     ...(contest && chart ? { moveSession: { feed: contest.feed, nasdaq: contest.nasdaq, session: habit } } : {}),
@@ -2032,7 +2106,7 @@ async function ics(url: URL, env: Env, ctx: ExecutionContext): Promise<Response>
   );
   // 0062: the cached 0015 window (no new upstream calls). A session Nasdaq lists differently on the same day isn't
   // stated in the summary.
-  const nqWin = await nasdaqWindow(today, ctx, false).catch(() => null);
+  const nqWin = await nasdaqWindow(today, ctx, false, undefined, env).catch(() => null);
   // 0104: the sheet's session verdicts, so a session Nasdaq leads on reads the same as on the calendar and the sheet.
   const leads = syms.length ? await readLeads(env) : null;
   const items: IcsItem[] = [];

@@ -1,12 +1,12 @@
 ---
 id: 0114
 title: One read in three skips the Nasdaq check (17 of 43 sessions blank), and a link shared on that read unfurls as "not yet confirmed"
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: data-quality
 created: 2026-11-25
-pr:
+pr: 205
 by: critic
 ---
 
@@ -36,3 +36,14 @@ Vitest: the worker with a Nasdaq window cached in KV but not in the colo cache; 
 
 ## Out of scope
 Company-announced dates without overrides (0113).
+
+## Builder notes (2026-11-26)
+- Cause: the Nasdaq window's days (`nq:x:v1:<day>`) lived only in each colo's `caches.default`, and a colo fills at most two missing days per request with one builder a minute. A cold colo (YYZ, read every few requests from Ohio) answered most of the window `unchecked` while CMH, seconds earlier, had all of it. Same per-colo trap as 0110/0111.
+- Fix: every fetched window day is offered to one KV record (`nqw:v1`, day → sessions + fetch time; read-merge-write, a write only when a day is missing, stale or over an hour old; 24 writes/colo/day cap). `nasdaqWindow` takes a fresh shared day before reporting it unchecked, seeds its own cache with it for the copy's remaining life, and doesn't fetch it again. So Nasdaq calls per minute go down (a cold colo makes none for days another colo fetched); Finnhub calls are unchanged.
+- Sheet/unfurl: a timeless date inside the window whose Nasdaq day couldn't be read on this request carries `next.unchecked`: the share title reads "<SYM> earnings on <day>, time being checked", the description and Read say the time is still being checked, the edge keeps it 30 s and the client re-reads it (`retryDelay`).
+- Review of #205:
+  - Each shared day carries that call's untracked caps (`c`). A colo seeded from the share has sized the day, both in `nasdaqCaps` and in its own `NQX_CAP`, so 0110's gate never falls back and no short-lived unsized day adds Finnhub calls.
+  - A fresh shared day is never rewritten.
+  - The record counts its own writes for all colos together (`w`, at most 120 a day), on top of a per-colo cap of 12 and one offer per isolate.
+  - The unfurl says "around <day>", never "reports".
+- Not done here: `wrangler tail` sampling (no Cloudflare access from the sandbox) and the 30-read live script; the Critic re-checks on production.

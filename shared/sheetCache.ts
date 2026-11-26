@@ -30,8 +30,9 @@ export const isDegraded = (d: Pick<TickerResponse, "warnings">): boolean =>
 export const isEarlierRead = (d: Pick<TickerResponse, "warnings">): boolean => d.warnings.some((w) => w.startsWith(EARLIER) || w.startsWith(EARLIER_PAST));
 
 /** Edge TTL for a finished (or stood-in) sheet; both cache layers use it. */
-// 0083: a "still checking" sheet is re-read soon too, so it settles once the Nasdaq window warms up.
-export const sheetTtl = (d: Pick<TickerResponse, "warnings"> & { next?: TickerResponse["next"] }): number => (isDegraded(d) || isEarlierRead(d) || d.next?.status === "checking" ? SHEET_DEGRADED_TTL : SHEET_TTL);
+// 0083: a "still checking" sheet is re-read soon too, so it settles once the Nasdaq window warms up (0114: and one whose
+// time couldn't be checked against Nasdaq's day yet).
+export const sheetTtl = (d: Pick<TickerResponse, "warnings"> & { next?: TickerResponse["next"] }): number => (isDegraded(d) || isEarlierRead(d) || d.next?.status === "checking" || d.next?.unchecked ? SHEET_DEGRADED_TTL : SHEET_TTL);
 
 export interface StaleSheet { at: number; day: string; data: TickerResponse }
 

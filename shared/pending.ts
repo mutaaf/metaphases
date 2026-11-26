@@ -107,7 +107,7 @@ export const figuresPending = (e: { d: string; h: string; eA: number | null; rA:
 const SESSION_WORDS: Record<string, string> = { bmo: "before the open", amc: "after the close", dmh: "during market hours", "": "" };
 
 /** The `/t/:sym` share title: never a date beyond an unreported quarter (0038) or on a closed day (0045). */
-export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; hs?: "n" | "h"; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string }; feedDay?: string; projected?: true; usual?: "bmo" | "amc" } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
+export function tickerShareTitle(sym: string, name: string, next: { date: string; session: string; quarter: number; hs?: "n" | "h"; closed?: string; overdue?: true; status?: string; nasdaq?: { date: string; session: string }; feedDay?: string; projected?: true; unchecked?: true; usual?: "bmo" | "amc" } | null | undefined, just?: { quarter: number; epsE: number | null; epsA: number | null; currency?: string; nE?: number; nA?: number | null; reit?: true } | null): string {
   // 0039: a report that's out leads the title, whatever comes next.
   if (just) return just.epsA == null ? `${sym} reported Q${just.quarter} · Metaphases`
     // 0087: a pair whose same-source actual isn't posted yet is said to be ungraded, with no estimate quoted beside it.
@@ -124,6 +124,8 @@ export function tickerShareTitle(sym: string, name: string, next: { date: string
     // 0059: never state a date two calendars disagree on as fact.
     const nq = (next as { nasdaq?: { date: string } }).nasdaq;
     if (nq) return nq.date === next.date ? `${sym} reports ${when}, time unconfirmed · Metaphases` : `${sym} reports ${when} (unconfirmed; Nasdaq lists ${day(nq.date)}) · Metaphases`;
+    // 0114: projected only because Nasdaq's day couldn't be read yet: no claim either way (platforms keep the first unfurl).
+    if ((next as { projected?: true; unchecked?: true }).projected && (next as { unchecked?: true }).unchecked) return `${sym} earnings around ${when}, time being checked · Metaphases`;
     // 0007: the feed's projection is "expected around", never "reports" with a session.
     if ((next as { projected?: true }).projected) return `${sym} earnings expected around ${when} (not yet confirmed) · Metaphases`;
     const s = (next as { session: string }).session;
