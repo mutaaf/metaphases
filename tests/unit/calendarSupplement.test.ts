@@ -162,7 +162,8 @@ describe("calendar supplement in the worker", () => {
     expect(symCalls).toContain("TM");
     const tm = r.events.filter((e) => e.s === "TM");
     expect(tm).toHaveLength(1);
-    expect(tm[0]).toMatchObject({ d: "2026-11-05", h: "amc", eE: 64.4986, t: 1 });
+    // 0114 bounce 1: this read has no Nasdaq day, so the feed's session is held back (Time TBD), kept in `fh`.
+    expect(tm[0]).toMatchObject({ d: "2026-11-05", h: "", fh: "amc", hu: 1, eE: 64.4986, t: 1 });
   });
 
   it("fills in the rest over later requests and stops calling once everything is fresh", async () => {
@@ -198,7 +199,7 @@ describe("calendar supplement in the worker", () => {
   it("keeps the feed's own row when it has one, and renames a home-listing row", async () => {
     rangeRows = () => [raw("TM", "2026-11-05", { hour: "bmo" }), raw("7203.T", "2026-11-05"), raw("6758.T", "2026-11-05")];
     const r = await get("2026-11-05", "2026-11-05");
-    expect(r.events.filter((e) => e.s === "TM")).toEqual([expect.objectContaining({ h: "bmo" })]);
+    expect(r.events.filter((e) => e.s === "TM")).toEqual([expect.objectContaining({ h: "", fh: "bmo", hu: 1 })]); // the feed's own row (0114: held, unchecked)
     expect(r.events.filter((e) => e.s === "SONY")).toHaveLength(1);
     expect(r.events.some((e) => e.s.includes(".T"))).toBe(false);
   });

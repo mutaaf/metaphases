@@ -173,7 +173,10 @@ describe("0110 bounce: every colo sizes a day any colo has loaded", () => {
     for (const c of ["CMH", "YYZ"]) {
       on(c);
       const r = await call(DEC1);
-      expect((r.events as EarningsEvent[]).filter((e) => e.s === "TCOM")).toEqual([expect.objectContaining({ d: "2026-12-01", h: "amc", t: 1 })]);
+      expect((r.events as EarningsEvent[]).filter((e) => e.s === "TCOM")).toEqual([expect.objectContaining({ d: "2026-12-01", t: 1 })]);
+      // After the close: shown, or (0114) held back as Time TBD on a read whose day couldn't be checked.
+      const t = (r.events as EarningsEvent[]).find((e) => e.s === "TCOM")!;
+      expect(t.h === "amc" || (t.h === "" && t.fh === "amc" && t.hu === 1)).toBe(true);
       expect(syms(r).has("9961.HK")).toBe(false);
     }
   });

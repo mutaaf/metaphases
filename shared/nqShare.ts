@@ -69,3 +69,22 @@ export function mergeShare(latest: NqShareDoc | null | undefined, fetched: Recor
 
 export const shareDocOk = (v: unknown): v is NqShareDoc =>
   !!v && typeof v === "object" && !Array.isArray(v) && !!(v as NqShareDoc).days && typeof (v as NqShareDoc).days === "object";
+
+/**
+ * 0114 bounce 1: every copy of a day (each colo's and this document's) used to expire at the same 6 h mark, so each
+ * refresh reopened a cold window and the first reads came back unchecked. A day past its fresh life still serves, as a
+ * stale copy, for this long while it is fetched again. A day's listings rarely change within a day; a blank is worse.
+ */
+export const NQW_STALE_MS = 24 * 3600_000;
+
+/** The shared copies of `days` past their fresh life but younger than NQW_STALE_MS (fresh ones come from `sharedDays`). */
+export function staleDays(doc: NqShareDoc | null | undefined, days: string[], now: number): Record<string, { h: NqDay }> {
+  const out: Record<string, { h: NqDay }> = {};
+  for (const d of days) {
+    const e = doc?.days?.[d];
+    if (!okDay(e) || shareLife(e, now) > 0) continue;
+    const age = now - e.at;
+    if (age >= 0 && age < NQW_STALE_MS) out[d] = { h: e.h };
+  }
+  return out;
+}
