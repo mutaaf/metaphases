@@ -33,7 +33,7 @@ export default function LearnPage() {
           <h4 className="eyebrow">Why moons?</h4>
           <p>Earnings arrive in a cycle (every company, every quarter), like the moon. We draw report timing as a phase:</p>
           <ul>
-            {(["bmo", "dmh", "amc", ""] as const).map((h) => <li key={h}><Phase h={h} size={22} /><b>{PHASE_LABEL[h]}</b><span className="muted">{h ? GLOSSARY[h].def : "The company hasn't confirmed its time yet."}</span></li>)}
+            {(["bmo", "dmh", "amc", ""] as const).map((h) => <li key={h}><Phase h={h} size={22} /><b>{PHASE_LABEL[h]}</b><span className="muted">{h ? GLOSSARY[h].def : "We haven't found the company's announcement of the time yet."}</span></li>)}
           </ul>
           <button className="link small" onClick={() => navigate("/about")}>Where Metaphases comes from →</button>
         </section>

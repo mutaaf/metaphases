@@ -129,7 +129,7 @@ export function buildIcs(items: IcsItem[], stamp: Date): string {
       `DTEND;VALUE=DATE:${shift(it.date, 1).replace(/-/g, "")}`,
       `SUMMARY:${escText(`${it.symbol} earnings · ${it.closed || it.projected ? "date not confirmed" : `${SESSION_TEXT[it.session]}${it.expected && it.session ? " (expected)" : ""}`}`)}`,
       `DESCRIPTION:${escText(it.closed || it.projected
-        ? `${it.name}'s Q${it.quarter} ${it.year} report is expected around this day. Date not yet confirmed by the company: this is the data feed's projection, and it updates when the company announces its date.${est} Full read: ${it.url}`
+        ? `${it.name}'s Q${it.quarter} ${it.year} report is expected around this day. Date not yet confirmed by the company: this is the data feed's projection, and it updates once we find the company's announcement.${est} Full read: ${it.url}`
         : `${it.name} reports Q${it.quarter} ${it.year} ${SESSION_TEXT[it.session]}${it.expected && it.session ? " (expected: that's Nasdaq's calendar; we haven't found a company announcement yet)" : ""}.${est} Full read: ${it.url}`)}`,
       ...(it.closed || it.projected ? ["STATUS:TENTATIVE"] : []),
       `URL:${it.url}`,

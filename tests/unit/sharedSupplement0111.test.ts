@@ -39,11 +39,15 @@ const ctx = { waitUntil: (p: Promise<unknown>) => { waits.push(p); }, passThroug
 // Finnhub as on 2026-11-24: the range feed has BMO (as BMO.TO) but not BNS; `symbol=BNS` listed BNS on Wed Dec 2.
 // A company-dated override places its symbol without the supplement, so BNS stopped being a supplement-only example
 // once it got one (0107 bounce 1). The example is now picked at run time: the biggest tracked Toronto listing with no
-// override (TD today), so a future override can't make this test vacuous or break it (LESSONS 2026-11-06, 2026-11-25).
+// override (TD until 0115), so a future override can't make this test vacuous or break it (LESSONS 2026-11-06, 2026-11-25).
+// 0115 gave TD one and left no Toronto listing without an override, so the pick falls back to the biggest tracked
+// home-listed name (any exchange) with none (TSM as 2330.TW today). If none is left, the guard test below fails loudly.
 const OVR = overridesFile as unknown as Record<string, unknown>;
-const TORONTO = Object.entries(aliasMap(U)).filter(([k]) => k.endsWith(".TO"));
-const SYM = SUPP.find((s) => !(s in OVR) && TORONTO.some(([, v]) => v === s))!;
-const SYM_TO = TORONTO.find(([, v]) => v === SYM)![0];
+const HOMES = Object.entries(aliasMap(U));
+const TORONTO = HOMES.filter(([k]) => k.endsWith(".TO"));
+const free = (list: [string, string][]) => SUPP.find((s) => !(s in OVR) && list.some(([, v]) => v === s));
+const SYM = free(TORONTO) ?? free(HOMES) ?? "";
+const SYM_TO = HOMES.find(([, v]) => v === SYM)?.[0] ?? "";
 const FEED = [{ symbol: "BMO.TO", date: "2026-12-02", hour: "amc", quarter: 4, year: 2026, epsEstimate: 3.78, epsActual: null, revenueEstimate: 1e10, revenueActual: null }];
 const SYM_ROW = { symbol: SYM_TO, date: "2026-12-03", hour: "amc", quarter: 4, year: 2026, epsEstimate: 2.6, epsActual: null, revenueEstimate: 1.59e10, revenueActual: null };
 let finnhubCalls = 0;
@@ -97,7 +101,12 @@ const warmColo = async (colo: string) => {
 };
 
 describe("0111: the supplement is one document every colo reads", () => {
-  it("a warm colo has the Toronto example from the supplement (the range feed has no row for it)", async () => {
+  it("there is still a home-listed supplement name with no override to use as the example", () => {
+    expect(SYM).not.toBe("");
+    expect(SYM_TO).not.toBe(SYM);
+  });
+
+  it("a warm colo has the home-listed example from the supplement (the range feed has no row for it)", async () => {
     const r = await warmColo("CMH");
     expect(r.pending).toBeUndefined();
     expect(syms(r)).toEqual(expect.arrayContaining(["BMO", SYM]));

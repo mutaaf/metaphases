@@ -53,7 +53,7 @@ test("the sheet says the date isn't confirmed and names Nasdaq's day", async ({ 
   await page.goto("./t/AXON");
   const card = page.locator(".next-card");
   await expect(card.locator("h3")).toHaveText("Monday, November 2"); // the feed's date stays
-  await expect(card.getByTestId("nc-xcheck")).toHaveText("Two calendars disagree. Nasdaq's calendar lists it on Thursday, November 5, after close. Treat the date as unconfirmed until the company announces it.");
+  await expect(card.getByTestId("nc-xcheck")).toHaveText("Two calendars disagree. Nasdaq's calendar lists it on Thursday, November 5, after close. Treat the date as unconfirmed until we find the company's own announcement.");
   await noSideScroll(page);
   await page.screenshot({ path: test.info().outputPath("xcheck-sheet.png") });
 });
@@ -102,7 +102,7 @@ test("a contested session: the sheet headlines \"Time unconfirmed\" with the unk
   await expect(card).not.toContainText("After close");
   await expect(card.locator(".nc-phase .phase-tbd")).toHaveCount(1);
   await expect(card.locator(".phase-amc, .phase-bmo")).toHaveCount(0);
-  await expect(card.getByTestId("nc-xcheck")).toHaveText("Two calendars disagree. Our data feed lists it after the close; Nasdaq's calendar, before the open. Past moves point to before the open. Treat the time as unconfirmed until the company announces it.");
+  await expect(card.getByTestId("nc-xcheck")).toHaveText("Two calendars disagree. Our data feed lists it after the close; Nasdaq's calendar, before the open. Past moves point to before the open. Treat the time as unconfirmed until we find the company's own announcement.");
   await noSideScroll(page);
   await page.screenshot({ path: test.info().outputPath("contested-sheet.png") });
 });
@@ -152,7 +152,7 @@ test("a timeless projection Nasdaq lists on another day with a time: the sheet h
   const card = page.locator(".next-card");
   await expect(card.locator("h3")).toHaveText("Wednesday, November 4");
   await expect(card.getByTestId("nc-session")).toHaveText("Before open (unconfirmed) · in 4 days");
-  await expect(card.getByTestId("nc-xcheck")).toHaveText("Two calendars disagree. This is Nasdaq's calendar's day and time. Our data feed projects Tuesday, November 3, with no time. Treat the date as unconfirmed until the company announces it.");
+  await expect(card.getByTestId("nc-xcheck")).toHaveText("Two calendars disagree. This is Nasdaq's calendar's day and time. Our data feed projects Tuesday, November 3, with no time. Treat the date as unconfirmed until we find the company's own announcement.");
   await expect(card.getByTestId("nc-expected")).toHaveCount(0);
   await expect(card.getByTestId("nc-projected")).toHaveCount(0);
   await noSideScroll(page);

@@ -47,11 +47,13 @@ describe("0107 the Big Five are tracked", () => {
     expect(validateOverrides({ BMO: FILE.BMO, CM: FILE.CM }, TODAY)).toEqual([]);
   });
 
-  it("RY and BNS carry the company's release time as a pre-open session; TD (no time yet) has no override", () => {
+  it("RY, BNS and TD carry the company's release time as a pre-open session", () => {
     expect(FILE.RY).toMatchObject({ date: "2026-12-03", hour: "bmo", quarter: 4, year: 2026, source: RY_SRC });
     expect(FILE.BNS).toMatchObject({ date: "2026-12-02", hour: "bmo", quarter: 4, year: 2026, source: BNS_SRC });
     expect(validateOverrides({ RY: FILE.RY, BNS: FILE.BNS }, TODAY)).toEqual([]);
-    expect(FILE.TD).toBeUndefined();
+    // 0115: TD's Nov 12 advisory: results at about 6:30 a.m. ET on Dec 3, call 9:30 a.m. ET.
+    expect(FILE.TD).toMatchObject({ date: "2026-12-03", hour: "bmo", quarter: 4, year: 2026, call: "9:30 a.m. ET" });
+    expect(validateOverrides({ TD: FILE.TD }, "2026-11-26")).toEqual([]);
   });
 });
 
@@ -125,8 +127,9 @@ describe("0107 on the worker", () => {
     expect(by.CM).toMatchObject({ d: "2026-12-03", h: "bmo", o: CM_SRC });
     expect(by.RY).toMatchObject({ d: "2026-12-03", h: "bmo", o: RY_SRC });
     expect(by.BNS).toMatchObject({ d: "2026-12-02", h: "bmo", o: BNS_SRC });
-    // TD: the feed says amc, Nasdaq pre-market, no company time yet: contested, never a bare "amc".
-    expect(by.TD).toMatchObject({ x: "differs", xh: "bmo" });
+    // TD: the feed says amc; the company's advisory (0115) says before the open, so it reads bmo with its link.
+    expect(by.TD).toMatchObject({ d: "2026-12-03", h: "bmo", o: FILE.TD.source });
+    expect(by.TD.x).toBeUndefined();
   });
 
   it("/t/BMO: Wed Dec 2 before the open, never after the close", async () => {
