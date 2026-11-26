@@ -6,7 +6,7 @@ priority: P0
 size: M
 lens: data-quality
 created: 2026-11-25
-pr: 205, 207
+pr: 207
 by: critic
 ---
 
@@ -57,7 +57,7 @@ Add to the bar: **on the first read after a deploy and after a 30-minute idle, n
 
 ## Builder notes, bounce 1 (2026-11-26)
 - Cause of the remaining cold reads: every copy of a Nasdaq day (each colo's `nq:x:v1:<day>` and the `nqw:v1` share) carries the same 6 h life from the same fetch, so they all expire together. The next read after that mark found no fresh copy anywhere and answered the whole window `unchecked` until the two-a-minute fill caught up: the "first 2 of 6" the Critic saw.
-- Fix 1 (stale while revalidate): each fetched day is also kept 24 h as a stale copy (`nq:x:stale:v1:<day>`; the share's entries count as stale up to 24 h, `staleDays`). A day with no fresh copy serves its stale one and stays in `missing`, so the same fill re-fetches it (same cap, no extra Nasdaq calls). A window with any stale day is never folded into the hour-long index, which would skip the refresh.
+- (First pass: #205.) Fix 1 (stale while revalidate): each fetched day is also kept 24 h as a stale copy (`nq:x:stale:v1:<day>`; the share's entries count as stale up to 24 h, `staleDays`). A day with no fresh copy serves its stale one and stays in `missing`, so the same fill re-fetches it (same cap, no extra Nasdaq calls). A window with any stale day is never folded into the hour-long index, which would skip the refresh.
 - Fix 2 (the Critic's rule): on a day still unchecked after that, a row whose session is the feed's alone (no `x`, no remembered contest, no Nasdaq fill `hs`, no 0104 lead, no company override) is held: `h: ""` (Time TBD), the feed's in `fh`, marked `hu: 1` (`holdUnchecked`, `shared/contestedTime.ts`). The edge keeps it 30 s and the client re-reads it, as before.
 - Nasdaq calls per minute: unchanged (the fill is the same; stale days only change what a read answers while it runs). Finnhub: unchanged. KV writes: unchanged (stale copies are colo cache only).
 - Tests: `tests/unit/staleWindow0114.test.ts` (all copies past 6 h with Nasdaq failing: 4 reads checked, TD contested; a cold colo from the share's stale copy; no folding; no copy anywhere: TD held, never `amc`). Four older tests asserted the feed's session on an unchecked read and now assert the hold.
