@@ -162,3 +162,29 @@ describe("0114 bounce 1 through the worker", () => {
     expect(row(r, "QQCR")).toMatchObject({ h: "amc" });
   });
 });
+
+describe("0114 bounce 1 review: a stale day is enough to compare a row, never current evidence", () => {
+  it("a read with a stale day neither clears nor writes the shared contest memos", async () => {
+    await warm();
+    const memo = JSON.stringify({ QQUL: { d: "2026-12-03", xd: "2026-12-01", xh: "amc", at: "2026-11-25" } });
+    kv.store.set("xc:v1", memo);
+    later(6 * 3600 + 60); down.add("CMH");
+    for (const k of [...colos.CMH.store.keys()]) if (k.includes("xc%3Alocal")) colos.CMH.store.delete(k);
+    unlock(); const r = await call(RANGE);
+    expect(r.uncheckedDays).toBeUndefined();
+    expect(kv.store.get("xc:v1")).toBe(memo); // a fresh remembered contest survives a 24 h old listing
+  });
+
+  it("the sheet re-fetches its next day when the window only has it stale", async () => {
+    await warm();
+    later(6 * 3600 + 60);
+    const before = nqCalls.CMH ?? 0;
+    unlock(); await call("/api/ticker/QQUL");
+    expect((nqCalls.CMH ?? 0) - before).toBeGreaterThan(0);
+  });
+
+  it("an empty Nasdaq answer never becomes a day's stale stand-in", () => {
+    const now = Date.UTC(2026, 10, 26, 8);
+    expect(staleDays({ days: { "2026-12-01": { h: {}, at: now - 2 * H } } }, ["2026-12-01"], now)).toEqual({});
+  });
+});

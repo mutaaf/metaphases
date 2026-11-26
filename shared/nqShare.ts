@@ -82,7 +82,7 @@ export function staleDays(doc: NqShareDoc | null | undefined, days: string[], no
   const out: Record<string, { h: NqDay }> = {};
   for (const d of days) {
     const e = doc?.days?.[d];
-    if (!okDay(e) || shareLife(e, now) > 0) continue;
+    if (!okDay(e) || shareLife(e, now) > 0 || !Object.keys(e.h).length) continue; // an empty day is never a stale stand-in
     const age = now - e.at;
     if (age >= 0 && age < NQW_STALE_MS) out[d] = { h: e.h };
   }
