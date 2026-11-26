@@ -156,3 +156,11 @@ button.chip:hover { border-color: var(--ink); }
 .empty-none .term { position: static; }
 .empty-none .term-pop { left: 8px; right: 8px; top: auto; width: auto; margin-top: 8px; }
 .empty-tag.unknown-tag { border-style: dashed; background: transparent; }
+
+/* 0109: the day's rows the filter hides, one tap away. */
+.more-rows { margin: 18px 0 8px; border-top: 1px solid var(--line-2); }
+.more-rows > summary { cursor: pointer; list-style: none; display: flex; align-items: center; min-height: 44px; font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.more-rows > summary::-webkit-details-marker { display: none; }
+.more-rows > summary::after { content: "+"; margin-left: auto; font-size: 16px; transition: transform .2s; }
+.more-rows[open] > summary::after { transform: rotate(45deg); }
+.more-rows .sess-note { margin: 0 0 4px; }

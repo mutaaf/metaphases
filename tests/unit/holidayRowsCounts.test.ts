@@ -86,7 +86,7 @@ describe("?day= unfurl", () => {
   it("an ordinary day is unchanged", () => {
     const t = dayShareText("Tuesday, November 24", null, ["A", "B", "C", "D", "E"], []);
     expect(t.title).toBe("5 earnings on Tuesday, November 24 · Metaphases");
-    expect(t.desc).toBe("A, B, C, D and 1 more — sorted by session, with estimates, results and how each stock has reacted before.");
+    expect(t.desc).toBe("A, B, C, D and 1 more (5 in all) — sorted by session, with estimates, results and how each stock has reacted before.");
     expect(dayShareText("Tuesday, November 24", null, [], []).desc).toBe("A quiet day on the earnings calendar.");
   });
 });

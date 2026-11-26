@@ -12,6 +12,7 @@ import { eventProjected } from "../../shared/projected";
 import { dateMark, disagreeWhy } from "../lib/dateMark";
 import { sessionText } from "../lib/sessionText";
 import { contestedDay, splitClosed, unconfirmedRow } from "../../shared/closedRows";
+import { dayCount, dayCountLabel } from "../../shared/dayCount";
 import { addDays, fmtDay, fmtLong, iso, MONTHS, MON3, monthWeeks, nowMinNY, parse, todayISO, weekOf, WEEKDAYS, isWeekend } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct } from "../lib/format";
 import { navigate, param, setParam, useLocation } from "../lib/router";
@@ -58,6 +59,33 @@ export function nextTradingDay(from: string) {
   if (ny.getHours() >= 16) d = addDays(d, 1);
   while (isWeekend(d) || HOLIDAY[d]) d = addDays(d, 1);
   return d;
+}
+
+// 0109: the word for what the filter shows, in "10 popular · 19 in all".
+function filterKind(filter: string, sector: string): string {
+  if (sector) return "shown";
+  return ({ sp500: "S&P 500", mega: "mega-cap", watch: "watched", holdings: "held", everything: "" } as Record<string, string>)[filter] ?? "popular";
+}
+
+/** 0109: the day's rows the filter hides, so every row the calendar has for a day can be reached from it. */
+function MoreReporting({ more }: { more: EarningsEvent[] }) {
+  if (!more.length) return null;
+  const untracked = more.filter((e) => !e.t).length;
+  return (
+    <details className="more-rows" data-testid="more-reporting">
+      <summary>+{more.length} more reporting</summary>
+      <p className="muted small sess-note">
+        {more.length === 1 ? "This one isn't" : "These aren't"} in the filter you're using.
+        {untracked > 0 && <> {untracked === more.length ? (untracked === 1 ? "It isn't" : "They aren't") : `${untracked} of them aren't`} among the <Term k="follow">companies we follow</Term>, so we don't grade {untracked === 1 ? "it" : "them"}: setup and quality read “—”.</>}
+      </p>
+      {groupBySession(more).map((g) => (
+        <section key={g.h} className="sess">
+          <h3 className="sess-head"><Phase h={g.h} size={14} /> {sessionLabel(g.h, false)} <span className="muted">· {g.list.length}</span></h3>
+          {g.list.map((e) => <EventRow key={e.s} e={e} />)}
+        </section>
+      ))}
+    </details>
+  );
 }
 
 export function useFiltered(events: EarningsEvent[]) {
@@ -235,7 +263,7 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
 // The drawer has its own shareable URL (?day=), so an empty day there gets the same
 // guidance as the grid, never a blank under "0 reporting" (0051, 0026).
 type DrawerUnknown = "loading" | "failed" | "outside";
-function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean, unconfirmed = false, contested = false) {
+function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean, unconfirmed = false, contested = false, more = 0) {
   const holiday = HOLIDAY[day];
   const dow = parse(day).getDay();
   if (holiday) return { eyebrow: "Market closed", body: unconfirmed ? <>Market closed · {holiday}. The exchanges are shut, so the dates below aren't confirmed.</> : <>Market closed · {holiday}. No companies report while the exchanges are shut.</> };
@@ -249,24 +277,27 @@ function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: 
     // 0078: rows Nasdaq lists on another day: they may still come, just not (we know) today.
     ? <>No report we follow is confirmed for {WEEKDAY_LONG[dow]}. Our data feed put the ones below here, but their dates are disputed.</>
     : <>No report we follow is confirmed for {WEEKDAY_LONG[dow]}. The ones below were expected but didn't come out that day.</> };
-  if (narrowed) return { eyebrow: "None with these filters", body: <>None with these filters report on {WEEKDAY_LONG[dow]}. Try <b>Everything</b>.</> };
-  return { eyebrow: "None we follow", body: <><Term k="follow">{NONE_OURS}</Term> report on {WEEKDAY_LONG[dow]}. Smaller companies, and some listed only overseas, may.</> };
+  // 0109: rows the filter hides are listed under "+N more reporting", so say so rather than "may".
+  const others = more ? <> {more === 1 ? "One other company does" : `${more} other companies do`}: see “more reporting” below.</> : null;
+  if (narrowed) return { eyebrow: more ? `0 shown · ${more} in all` : "None with these filters", body: <>None with these filters report on {WEEKDAY_LONG[dow]}.{others ?? <> Try <b>Everything</b>.</>}</> };
+  return { eyebrow: more ? `0 popular · ${more} in all` : "None we follow", body: <><Term k="follow">{NONE_OURS}</Term> report on {WEEKDAY_LONG[dow]}.{others ?? <> Smaller companies, and some listed only overseas, may.</>}</> };
 }
 
-export function DayDrawer({ day, events, macro, onClose, unknown, checking = false }: { day: string; events: EarningsEvent[]; macro: MacroEvent[]; onClose: () => void; unknown?: DrawerUnknown; checking?: boolean }) {
+export function DayDrawer({ day, events, all = events, macro, onClose, unknown, checking = false }: { day: string; events: EarningsEvent[]; all?: EarningsEvent[]; macro: MacroEvent[]; onClose: () => void; unknown?: DrawerUnknown; checking?: boolean }) {
   const ref = useRef<HTMLElement>(null);
   useDialog(ref, onClose);
   const { prefs } = useStore();
   const openDayView = () => { onClose(); actions.setPref("view", "day"); setParam("d", day); };
   // 0064: holiday rows aren't reporting that day, so a holiday with only those still reads "Market closed".
   const dated = splitClosed(events, todayISO()).dated;
-  const empty = dated.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector, events.length > 0, events.some((e) => !e.c && !e.od && contestedDay(e, todayISO())));
+  const count = dayCount(events, all, todayISO());
+  const empty = dated.length ? null : drawerEmpty(day, unknown, !["popular", "everything"].includes(prefs.filter) || !!prefs.sector, events.length > 0, events.some((e) => !e.c && !e.od && contestedDay(e, todayISO())), count.more.length);
   return (
     <div className="drawer-scrim" onClick={onClose}>
       <aside className="drawer" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Earnings on ${fmtLong(day)}`}>
         <header className="drawer-head">
           <div>
-            <span className="eyebrow">{empty ? empty.eyebrow : `${dated.length} reporting`}</span>
+            <span className="eyebrow" data-testid="day-count">{empty ? empty.eyebrow : dayCountLabel(count.shown, count.total, filterKind(prefs.filter, prefs.sector))}</span>
             <h2>{fmtLong(day)}</h2>
           </div>
           <div className="drawer-actions">
@@ -296,6 +327,7 @@ export function DayDrawer({ day, events, macro, onClose, unknown, checking = fal
           </section>
         ))}
         <UnconfirmedGroup events={events} />
+        <MoreReporting more={count.more} />
       </aside>
     </div>
   );
@@ -357,7 +389,9 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const bWeek = useMemo(() => briefWeek(weeks, anchor), [weeks, anchor]);
 
   const inMonth = (d: string) => parse(d).getMonth() === a.getMonth();
-  const monthEvents = view === "month" ? filtered.filter((e) => inMonth(e.d)) : filtered;
+  // 0109: the day view's sentence counts that day, not the week it loaded.
+  const inView = (e: EarningsEvent) => (view === "month" ? inMonth(e.d) : view === "day" ? e.d === anchor : true);
+  const monthEvents = filtered.filter(inView);
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     if (!data) return c; // unknown, not zero: a failed load must never read "· 0" (0026)
@@ -388,6 +422,11 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
     for (const e of filtered) (m[e.d] ??= []).push(e);
     return m;
   }, [filtered]);
+  const allByDay = useMemo(() => {
+    const m: Record<string, EarningsEvent[]> = {};
+    for (const e of all) (m[e.d] ??= []).push(e);
+    return m;
+  }, [all]);
   const macroByDay = useMemo(() => {
     const m: Record<string, MacroEvent[]> = {};
     for (const e of macro.data?.events ?? []) if (["jobs", "cpi", "fomc", "gdp", "pce"].includes(e.key)) (m[e.date] ??= []).push(e);
@@ -410,7 +449,9 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
 
   const label = view === "month" ? `${MONTHS[a.getMonth()]} ${a.getFullYear()}` : view === "week" ? `Week of ${MON3[parse(weeks[0][0]).getMonth()]} ${parse(weeks[0][0]).getDate()}` : fmtLong(anchor).toUpperCase();
   const reported = monthEvents.filter((e) => e.eA != null);
-  const datedCount = monthEvents.filter((e) => !unconfirmedRow(e, today)).length;
+  const viewCount = dayCount(monthEvents, all.filter(inView), today);
+  const datedCount = viewCount.shown;
+  const kind = filterKind(prefs.filter, prefs.sector);
   const beats = reported.filter((e) => resultOf(e) === "beat").length;
 
   return (
@@ -424,7 +465,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
           <p className="dek">
             {datedCount ? (
               <>
-                <b>{datedCount}</b> companies report {view === "month" ? "this month" : view === "week" ? "this week" : "today"}
+                <b>{datedCount}</b> {viewCount.total > datedCount && kind ? `${kind} ` : ""}companies report {view === "month" ? "this month" : view === "week" ? "this week" : "today"}{viewCount.total > datedCount && <> ({viewCount.total} in all)</>}
                 {reported.length > 0 && <> · <b>{Math.round((beats / reported.length) * 100)}%</b> of those reported so far <Term k="beat">beat</Term> on both lines</>}
                 . Tap any logo for the full read.
               </>
@@ -475,7 +516,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       )}
 
       {view === "day" ? (
-        <DayView day={anchor} events={byDay[anchor] ?? []} checking={checkingDays.has(anchor)} loading={unknownDay(anchor) === "loading"} failed={unknownDay(anchor) === "failed" || failedDays.has(anchor)} macro={macroByDay[anchor] ?? []} />
+        <DayView day={anchor} events={byDay[anchor] ?? []} all={allByDay[anchor] ?? []} checking={checkingDays.has(anchor)} loading={unknownDay(anchor) === "loading"} failed={unknownDay(anchor) === "failed" || failedDays.has(anchor)} macro={macroByDay[anchor] ?? []} />
       ) : (
         <div className={`grid ${view}`}>
           {WEEKDAYS.map((w, i) => <div key={w} className={`wd wd-${i}`}><span>{w}</span></div>)}
@@ -490,7 +531,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
           )}
         </div>
       )}
-      {openDay && <DayDrawer day={openDay} events={byDay[openDay] ?? []} checking={checkingDays.has(openDay)} unknown={covered(openDay) ? (failedDays.has(openDay) ? "failed" : undefined) : error ? "failed" : loading ? "loading" : "outside"} macro={macroByDay[openDay] ?? []} onClose={closeDrawer} />}
+      {openDay && <DayDrawer day={openDay} events={byDay[openDay] ?? []} all={allByDay[openDay] ?? []} checking={checkingDays.has(openDay)} unknown={covered(openDay) ? (failedDays.has(openDay) ? "failed" : undefined) : error ? "failed" : loading ? "loading" : "outside"} macro={macroByDay[openDay] ?? []} onClose={closeDrawer} />}
     </>
   );
 }
@@ -521,10 +562,11 @@ function WeekColumn({ day, events, next, macro, failed, loaded, checking = false
   );
 }
 
-function DayView({ day, events, loading, macro, failed, checking = false }: { day: string; events: EarningsEvent[]; loading: boolean; macro: MacroEvent[]; failed?: boolean; checking?: boolean }) {
+function DayView({ day, events, all = events, loading, macro, failed, checking = false }: { day: string; events: EarningsEvent[]; all?: EarningsEvent[]; loading: boolean; macro: MacroEvent[]; failed?: boolean; checking?: boolean }) {
   const { prefs } = useStore();
   const narrowed = prefs.filter !== "everything" || !!prefs.sector;
   const wd = WEEKDAY_LONG[parse(day).getDay()];
+  const more = dayCount(events, all, todayISO()).more;
   if (loading) return <div className="dayview">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={52} />)}</div>;
   return (
     <div className="dayview">
@@ -532,7 +574,7 @@ function DayView({ day, events, loading, macro, failed, checking = false }: { da
       {HOLIDAY[day] && <Notice>Markets are closed for {HOLIDAY[day]}.</Notice>}
       {!events.length && !HOLIDAY[day] && (failed
         ? <p className="empty-big">This day's earnings didn't load, so we can't say who reports. Try again in a moment.</p>
-        : <p className="empty-big"><Term k="follow">{NONE_OURS}</Term> report on {wd}{narrowed ? <> with these filters. Try <b>Everything</b>.</> : <>. Smaller companies, and some listed only overseas, may.</>}</p>)}
+        : <p className="empty-big"><Term k="follow">{NONE_OURS}</Term> report on {wd}{narrowed ? " with these filters" : ""}.{more.length ? <> {more.length === 1 ? "One other company does" : `${more.length} other companies do`}: see “more reporting” below.</> : narrowed ? <> Try <b>Everything</b>.</> : <> Smaller companies, and some listed only overseas, may.</>}</p>)}
       {groupBySession(events).map((g) => (
         <section key={g.h} className="sess">
           <h3 className="sess-head"><Phase h={g.h} size={14} /> {sessionLabel(g.h, checking)} <span className="muted">· {g.list.length}</span></h3>
@@ -540,6 +582,7 @@ function DayView({ day, events, loading, macro, failed, checking = false }: { da
         </section>
       ))}
       <UnconfirmedGroup events={events} />
+      <MoreReporting more={more} />
     </div>
   );
 }

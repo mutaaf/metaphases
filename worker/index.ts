@@ -31,6 +31,7 @@ import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { admitUntracked, capsGrow, capUsd, foldCaps, mergeCapDocs, nasdaqDayCaps, type CapDoc, type NqCaps } from "../shared/untrackedGate";
 import { activeOverrides, applyToEvents, applyToRows, carryEstimates, closedDay, flagClosed, overrideSession, type DateOverrides } from "../shared/dateOverrides";
 import { dayShareText } from "../shared/dayShare";
+import { unconfirmedRow } from "../shared/closedRows";
 import { daysApart, isDated, lookbackDays, LOOKBACK_DAYS, tickerShareTitle, tradingDaysSince, nqDate, passedQuarter, skippedQuarter } from "../shared/pending";
 import { JUST_DAYS, pendingLine, reportedCard, reportedLine, reportOutcome, surprisePct, tickerShareDesc, type DayRow, type Outcome } from "../shared/reported";
 import { shownSession } from "../shared/contestedTime";
@@ -1860,7 +1861,8 @@ async function shareMeta(url: URL, env: Env, ctx: ExecutionContext): Promise<{ t
       const past = await settlePast(base, today, ctx, false).catch(() => base);
       const settled = await oneRowInRange(past, day, day, today, ctx).catch(() => oneReportOneRow(past.filter((e) => e.d === day)));
       const byCap = (a: EarningsEvent, b: EarningsEvent) => (U[b.s]?.mc ?? 0) - (U[a.s]?.mc ?? 0);
-      const evs = settled.filter((e) => e.t && !e.c && !e.od).sort(byCap);
+      // 0109: every dated row counts, popular ones named first, so the unfurl's total is the drawer's "in all".
+      const evs = settled.filter((e) => !unconfirmedRow(e, today)).sort((a, b) => (b.t ? 1 : 0) - (a.t ? 1 : 0) || byCap(a, b));
       // 0067: on a holiday the title says the market is closed and the feed's rows there are named as unconfirmed.
       const unconfirmed = settled.filter((e) => e.t && e.c).sort(byCap).map((e) => e.s);
       return dayShareText(label, closedDay(day), evs.map((e) => e.s), unconfirmed);

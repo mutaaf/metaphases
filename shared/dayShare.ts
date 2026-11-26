@@ -14,6 +14,6 @@ export function dayShareText(label: string, holiday: string | null, dated: strin
   }
   return {
     title: `${dated.length} earnings on ${label} · Metaphases`,
-    desc: dated.length ? `${list(dated)} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.`,
+    desc: dated.length ? `${list(dated)}${dated.length > 4 ? ` (${dated.length} in all)` : ""} — sorted by session, with estimates, results and how each stock has reacted before.` : `A quiet day on the earnings calendar.`,
   };
 }

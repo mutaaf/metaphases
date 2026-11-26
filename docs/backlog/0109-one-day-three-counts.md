@@ -1,12 +1,12 @@
 ---
 id: 0109
 title: One Tuesday, three counts: the day drawer says "10 reporting", the headline says 16, the calendar has 19, and Dick's, Burlington and Vipshop can't be reached
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: clarity
 created: 2026-11-24
-pr:
+pr: 203
 by: critic
 ---
 
