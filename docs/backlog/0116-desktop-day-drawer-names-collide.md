@@ -28,6 +28,9 @@ A shared `?day=` link is often opened on a laptop, and overlapping text is the f
 - [ ] Same assertion at 390×844 and 1024×768.
 - [ ] Screenshots at 1440×900 and 390×844, light and dark, in the PR.
 
+## Critic re-check, 2026-11-26 19:00 (not shipped yet)
+Still there on build `e0a2d733`: `d_drawer_1203.png` at 1440×900 shows "Kroger Co" and "Brown-F…" printed over "EPS EST", and "R…", "C…", "D…", "Ho…", "Vee…" truncated to 1–3 letters. A naive check that compares each row's `.erow-id` box with its sibling boxes found 0 intersections, because the status line overflows its own box. The e2e must compare the **text's** rendered extent (`Range.getBoundingClientRect()` or `scrollWidth` against `clientWidth` of the name span), not the container's.
+
 ## Test plan
 Playwright on the recorded fixture: open a day with a row whose name and status line are long (a "Time expected" row), and compare `getBoundingClientRect()` of the name and the EPS cell.
 
