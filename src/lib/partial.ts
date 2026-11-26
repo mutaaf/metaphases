@@ -33,9 +33,10 @@ const CHECK_DELAY = 40_000;
  * cross-checked yet (`uncheckedDays`) is re-read every 40 s, a few times at most, so the flags and
  * Nasdaq-filled sessions arrive without a reload (0061).
  */
-export function retryDelay(data: { warnings?: readonly string[]; uncheckedDays?: readonly string[] } | null | undefined, attempt: number, recheck = false): number | null {
+export function retryDelay(data: { warnings?: readonly string[]; uncheckedDays?: readonly string[]; next?: { unchecked?: true } | null } | null | undefined, attempt: number, recheck = false): number | null {
   if (needsRetry(data)) return attempt < 2 ? 4000 * (attempt + 1) : null;
-  if (recheck && (data?.uncheckedDays?.length ?? 0) > 0) return attempt < CHECK_TRIES ? CHECK_DELAY : null;
+  // 0114: a sheet whose next report's time couldn't be checked against Nasdaq's day yet asks again too.
+  if (recheck && ((data?.uncheckedDays?.length ?? 0) > 0 || !!data?.next?.unchecked)) return attempt < CHECK_TRIES ? CHECK_DELAY : null;
   return null;
 }
 
