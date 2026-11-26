@@ -13,7 +13,7 @@ test("the drawer marks blank-session rows projected (AXON Nov 2) and leaves AAPL
   const drawer = page.locator(".drawer[role=dialog]");
   await expect(drawer.locator(".erow", { hasText: "AXON" }).getByTestId("erow-proj")).toHaveText("Projected date");
   await expect(drawer.locator(".erow", { hasText: "AAPL" }).getByTestId("erow-proj")).toHaveCount(0);
-  await expect(drawer.locator(".notice", { hasText: "projected" })).toContainText("haven't announced them yet");
+  await expect(drawer.locator(".notice", { hasText: "projected" })).toContainText("we haven't found the companies' announcements yet");
   await noSideScroll(page);
   await page.screenshot({ path: test.info().outputPath("projected-drawer.png") });
 });

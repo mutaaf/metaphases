@@ -201,7 +201,7 @@ export function EventRow({ e, showDate }: { e: EarningsEvent; showDate?: boolean
       <span className="erow-id">
         <b>{e.s}</b>
         <span className="muted">{nameOf(e.s)}</span>
-        {mark?.kind === "differs" && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{mark.label}</span>}
+        {mark?.kind === "differs" && <span className="erow-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until we find the company's own announcement.">{mark.label}</span>}
         {(mark?.kind === "projected" || mark?.kind === "closed") && <span className="erow-proj" data-testid="erow-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
         {!mark && e.hs === "n" && e.h && e.eA == null && !pendingNow(e) && <span className="erow-proj" data-testid="erow-expected" title="Our data feed left the time blank; this one is from Nasdaq's calendar. We haven't found a company announcement yet.">Time expected</span>}
         {mark?.kind === "overdue" && <span className="erow-proj" data-testid="erow-overdue" title={e.pf ? "Our data feed listed results for this day, but the company's own report history has no report then, so we don't show them. It isn't counted as reporting." : "Our data feed expected a report this day, but no results came out then. It isn't counted as reporting."}>No report that day</span>}
@@ -317,7 +317,7 @@ export function DayDrawer({ day, events, all = events, macro, onClose, unknown, 
         {(() => {
           // 0007: dates the company hasn't announced (Nasdaq disagreements have their own note above).
           const n = dated.filter((e) => e.x !== "differs" && e.eA == null && eventProjected(e, todayISO())).length;
-          return n > 0 && <Notice><Term k="unconfirmed">{n === 1 ? "One date here is projected" : n === dated.length ? "These dates are projected" : `${n} dates here are projected`}</Term>: {n === 1 ? "the company hasn't" : "the companies haven't"} announced {n === 1 ? "it" : "them"} yet, so {n === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>;
+          return n > 0 && <Notice><Term k="unconfirmed">{n === 1 ? "One date here is projected" : n === dated.length ? "These dates are projected" : `${n} dates here are projected`}</Term>: we haven't found {n === 1 ? "the company's announcement" : "the companies' announcements"} yet, so {n === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>;
         })()}
         {empty && <p className="empty-big drawer-empty">{empty.body}</p>}
         {groupBySession(events).map((g) => (

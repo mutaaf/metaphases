@@ -120,7 +120,7 @@ export default function CompassPage() {
                 return (nx > 0 || np > 0) && (
                   <div data-testid="ex-notes">
                     {nx > 0 && <Notice><Term k="xcheck">{nx === 1 ? "One date here isn't confirmed" : `${nx} dates here aren't confirmed`}</Term>: {disagreeWhy(nx, nf)} Our feed and Nasdaq disagree, so check the company's own announcement.</Notice>}
-                    {np > 0 && <Notice><Term k="unconfirmed">{np === 1 ? "One date here is projected" : `${np} dates here are projected`}</Term>: {np === 1 ? "the company hasn't" : "the companies haven't"} announced {np === 1 ? "it" : "them"} yet, so {np === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>}
+                    {np > 0 && <Notice><Term k="unconfirmed">{np === 1 ? "One date here is projected" : `${np} dates here are projected`}</Term>: we haven't found {np === 1 ? "the company's announcement" : "the companies' announcements"} yet, so {np === 1 ? "it" : "they"} can move. Marked “Projected date” below.</Notice>}
                   </div>
                 );
               })()}
@@ -137,7 +137,7 @@ export default function CompassPage() {
                     <span className="erow-id">
                       <b>{e.s}</b>
                       {name !== e.s && <span className="muted ex-name">{name}</span>}
-                      {m?.kind === "differs" && <span className="erow-x" data-testid="ex-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until the company announces it.">{m.label}</span>}
+                      {m?.kind === "differs" && <span className="erow-x" data-testid="ex-x" title="Our data feed and Nasdaq's calendar disagree on this report's date or time. Treat it as unconfirmed until we find the company's own announcement.">{m.label}</span>}
                       {m?.kind === "projected" && <span className="erow-proj" data-testid="ex-proj" title="Date not yet confirmed by the company: this is our data feed's projection, and it can move.">Projected date</span>}
                     </span>
                     <span className="ex-via muted small">{via.join(" + ")}</span>
