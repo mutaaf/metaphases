@@ -1,12 +1,12 @@
 ---
 id: 0115
 title: TD reads "after the close" on the calendar although TD's own IR calendar sets a 9:30 a.m. ET call on Dec 3, and the sheet says "until the company announces it"
-status: in-progress
+status: shipped
 priority: P0
 size: S
 lens: data-quality
 created: 2026-11-26
-pr:
+pr: 209
 by: critic
 ---
 
