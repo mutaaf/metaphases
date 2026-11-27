@@ -48,7 +48,7 @@ test("a failed chunk is named as partial, and never read as 'no reports yet'", a
   });
   await page.goto("./retrace");
   await expect(page.getByText(/Last 30 days · Oct 5 – Nov 3/)).toBeVisible();
-  await expect(page.getByText(/Partial: \d+ trading days? didn't load/)).toBeVisible();
+  await expect(page.getByText(/Partial: \d+ trading days? didn't load, so these counts cover only the days that did/)).toBeVisible();
   await expect(page.getByTestId("retrace-trailing-note")).toContainText("Fewer than 25 November reports have loaded");
   await expect(page.getByTestId("retrace-trailing-note")).not.toContainText("No November reports");
 });
