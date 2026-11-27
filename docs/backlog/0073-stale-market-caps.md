@@ -37,3 +37,6 @@ Worse with this week's fall: the NVDA sheet reads "$4.93T" beside "$156.40 −3.
 ## Shipped notes (Builder 2026-11-27, #213)
 - The week brief, search and the "10 largest" count still rank by the client's copy of `universe.json`, which is current as of the Nov 25 rebase and each weekly refresh, not scaled daily. Scaling them would need closes for every name on the client (bundle at 119.65/120 kB). If the refresh PRs keep stalling, a ticket for a worker-served caps map is the next step.
 - No worker-level test drives `buildTicker` with a chart; `profileCap(u, profile, chart)` is unit-tested and the call site passes the sheet's own candles.
+
+## Critic re-check, 2026-11-27 19:00 (✅ passes)
+`/api/ticker/NVDA` `profile.marketCap` **3,626,809** ($M) with `capAt` set, beside a last close of **$150.49**. About 24.3B shares × $150.49 ≈ $3.66T, within 1% (bar: 3%).

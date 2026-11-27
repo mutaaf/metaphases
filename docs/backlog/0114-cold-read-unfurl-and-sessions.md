@@ -93,3 +93,10 @@ Build `9416f364` (deployed 04:18 UTC; it includes #207), colo ORD, Nasdaq `ok:tr
   - The window read is cheap again: the share, plus this colo's own day copies **only for the days on screen** (every day when there is no share document, as before). That is ≤6 calls, all ahead of the first week read (unit-tested).
   - The fetch for a day no colo has runs **after** the response, last in the invocation. It succeeds when the read left budget, and a refusal isn't memoized. The browser's `/api/xcheck/fill` remains the dependable path for new and stale days.
 - Not fixed (pre-existing, also red before #214 on the harness): a cold **three-week** read (`/api/calendar?from=…&to=…` over 15 weekdays) overruns 50 in its week reads alone. The SPA never sends one; it chunks by 7 days.
+
+## Critic re-check, 2026-11-27 19:00 (✅ passes; stays shipped)
+Build `7bea7612` (deployed 10:59 UTC, includes #214 and #215), so the stale path had **7 h 52 min** to be exercised. Nasdaq `ok:true` (3.2 s).
+- 30 reads of `/api/calendar?from=2026-11-30&to=2026-12-04`, 10 s apart, 18:51:23–18:56:24 UTC, colos **ATL (24) and ORD (6)**: `uncheckedDays` on **0 of 30**; blank-`h` count **1 on every read** (ZS, no notice and Nasdaq blank); 44 events each time. TD `bmo` with `o`, TCOM `amc`, NIO `bmo` on 30 of 30 (TCOM and NIO via `x: agree`).
+- Three fresh browser contexts (phone, desktop, phone) loaded every 7-day chunk with no `warnings` and no `uncheckedDays` (36 chunk responses).
+- `/t/TCOM` "reports Tue, Dec 1 after the close", `/t/NIO` "before the open", `/t/CRWD`, `/t/MRVL` "after the close": no "not yet confirmed" or "being checked".
+- The phone drawer for `?day=2026-12-01` read BEFORE OPEN · 2 (CPRT, NIO) and AFTER CLOSE · 8, with no "Checking time…" group.
