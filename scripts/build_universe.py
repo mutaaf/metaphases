@@ -4,6 +4,7 @@ Usage: FINNHUB_API_KEY=... python3 scripts/build_universe.py [--fresh]   (≈11 
 import sys
 import csv, json, os, time, urllib.request, pathlib
 from universe_fx import local_cap_currency, to_usd
+from universe_px import stamp
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 KEY = os.environ["FINNHUB_API_KEY"]
 EXTRA = """PLTR SOFI HOOD RIVN LCID NIO BABA BIDU JD PDD SHOP SE MELI COIN RBLX U SNOW NET DDOG ZS MDB ROKU SPOT
@@ -24,6 +25,7 @@ out_path = ROOT / "data/universe.json"
 old = json.load(open(out_path)) if out_path.exists() else {}
 done = {} if FRESH else {k: v for k, v in old.items() if k in universe}
 partial = ROOT / "data/.universe.partial.json"
+fetched = set()  # 0073: entries whose cap is from this run (a kept entry keeps its own mcAt/px)
 for i, (sym, base) in enumerate(universe.items()):
     if sym in done: continue
     for attempt in range(3):
@@ -35,6 +37,7 @@ for i, (sym, base) in enumerate(universe.items()):
     if not p.get("name") and sym in old:
         done[sym] = old[sym]  # keep last-known profile rather than dropping a company on a blip
     if p.get("name"):
+        fetched.add(sym)
         done[sym] = {"n": p["name"], "logo": p.get("logo") or "", "mc": round(p.get("marketCapitalization") or 0),
                      "ind": p.get("finnhubIndustry") or "", "sec": base.get("sector") or p.get("finnhubIndustry") or "",
                      "c": p.get("country") or "", "web": p.get("weburl") or "", "sp": base["sp500"]}
@@ -61,6 +64,8 @@ for i, (sym, base) in enumerate(universe.items()):
 to_usd(done)
 if len(done) < 0.9 * len(universe):
     sys.exit(f"refusing to write: only {len(done)}/{len(universe)} profiles fetched")
+# 0073: the close each cap was taken at, so the worker can scale it by the move since (about 3 min).
+stamp({s: c for s, c in done.items() if s in fetched})
 json.dump(dict(sorted(done.items())), open(out_path, "w"), separators=(",", ":"))
 partial.unlink(missing_ok=True)
 print("done", len(done))

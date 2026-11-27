@@ -177,6 +177,9 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
     : data?.next
     ? `${name} reports ${nextIn === 0 ? "today" : nextIn === 1 ? "tomorrow" : `in ${nextIn} days`}${data.next.feedDay ? " (date unconfirmed)" : data.next.nasdaq ? (data.next.nasdaq.date === data.next.date ? " (time unconfirmed)" : " (date unconfirmed)") : ""} — ${data.beatRate ? `beat ${data.beatRate.beats} of its last ${data.beatRate.total}` : "see the setup"}${data.expectedMove ? `, typical move ±${data.expectedMove.toFixed(1)}%` : ""}.`
     : `${name}: earnings track record, quality grade and setup.`;
+  // 0073: the worker's figure once the sheet loads (a tracked cap scaled to the last close); the universe's until then.
+  const capText = data?.profile ? (data.profile.marketCap ? moneyIn(data.profile.marketCap * 1e6, data.profile.currency) : "") : c && c.mc > 0 ? mcap(c.mc) : "";
+  const capTitle = data?.profile?.capAt ? `Market value at the ${fmtDay(data.profile.capAt)} close` : "Market value";
   const doShare = () => share(`${symbol} on Metaphases`, shareText, `${location.origin}${BASE}/t/${symbol}`, () => { setCopied(true); setTimeout(() => setCopied(false), 1800); });
 
   return (
@@ -185,7 +188,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
         <header className="sheet-head">
           <Tile s={symbol} size={56} force="logo" />
           <div className="sheet-id">
-            <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{c ? (c.mc > 0 ? ` · ${mcap(c.mc)}` : "") : data?.profile?.marketCap ? ` · ${moneyIn(data.profile.marketCap * 1e6, data.profile.currency)}` : ""}</span>
+            <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{capText ? <span className="sheet-cap" title={capTitle}>{` · ${capText}`}</span> : null}</span>
             <h2>{name}</h2>
             {everyday && <p className="sheet-does">{whatTheyDo(name, data?.profile?.industry ?? c?.ind)}</p>}
             {data?.quote ? (

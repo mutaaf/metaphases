@@ -59,7 +59,7 @@ interface Env {
 
 const BASE = "/metaphases";
 const SITE = "https://mutaafaziz.com";
-const U = universe as Record<string, { n: string; mc: number; c?: string; ec?: string; sec?: string }>;
+const U = universe as Record<string, { n: string; mc: number; px?: number; mcAt?: string; c?: string; ec?: string; sec?: string }>;
 const FH = "https://finnhub.io/api/v1";
 /** Company-announced dates that beat Finnhub's projection (0013). */
 const OVERRIDES = overridesFile as unknown as DateOverrides;
@@ -1160,11 +1160,11 @@ const MIN_BEAT_RECORD = 2;
 /**
  * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
  * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
- * (`tk:stale:v11:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use. Bumped for 0106: copies from before it carry Finnhub's raw cap label.
+ * (`tk:stale:v12:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use. Bumped for 0106 (copies from before it carry Finnhub's raw cap label) and 0073 (the cap scaled to the last close, with `capAt`).
  */
 async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
-  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v9:${symbol}`)}`);
-  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v11:${symbol}`)}`);
+  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v10:${symbol}`)}`);
+  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v12:${symbol}`)}`);
   const hit = await caches.default.match(key);
   if (hit) { const data = (await hit.json()) as TickerResponse; return { data, ttl: sheetTtl(data) }; }
   const built = await buildTicker(symbol, env, ctx);
@@ -1663,7 +1663,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
 
   const body: TickerResponse = {
     symbol,
-    profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, ...profileCap(U[symbol], profile), exchange: profile.exchange, ipo: profile.ipo } : null,
+    profile: profile?.name ? { name: profile.name, logo: profile.logo, industry: profile.finnhubIndustry, country: profile.country, web: profile.weburl, ...profileCap(U[symbol], profile, chart), exchange: profile.exchange, ipo: profile.ipo } : null,
     quote: quote?.c ? { price: quote.c, change: quote.d, changePct: quote.dp, prevClose: quote.pc, asOf: quote.t } : null,
     next: checking ? { date: checking.date, session: checking.hour as Session, quarter: checking.quarter, year: checking.year, epsE: checking.eE, revE: checking.rE, currency, status: "checking" }
       : duePending ? { date: duePending.date, session: duePending.hour as Session, quarter: duePending.quarter, year: duePending.year, epsE: duePending.eE, revE: duePending.rE, currency, status: "results-pending" }

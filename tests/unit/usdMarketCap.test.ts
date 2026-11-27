@@ -61,7 +61,7 @@ describe("universe market values are US dollars (0042)", () => {
   });
 
   it("a tracked company's sheet gives the universe's dollar value, whatever the profile says", () => {
-    expect(profileCap(UNIVERSE.SQM, { marketCapitalization: 15130410, currency: "USD" })).toEqual({ marketCap: UNIVERSE.SQM.mc, currency: "USD" });
+    expect(profileCap(UNIVERSE.SQM, { marketCapitalization: 15130410, currency: "USD" })).toEqual({ marketCap: UNIVERSE.SQM.mc, currency: "USD", capAt: (UNIVERSE.SQM as { mcAt?: string }).mcAt }); // 0073: dated, no chart to scale by
     expect(profileCap({ mc: 0 }, { marketCapitalization: 5, currency: "USD" })).toEqual({ marketCap: null, currency: "USD" });
     expect(profileCap(undefined, { marketCapitalization: 7, currency: "JPY" })).toEqual({ marketCap: 7, currency: "JPY" });
   });

@@ -1,12 +1,12 @@
 ---
 id: 0073
 title: Market caps are two weeks old (NVDA "$4.93T" at $162.85, really about $3.96T); the Nov 8 data refresh PR #73 never merged
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-14
-pr:
+pr: 212
 by: critic
 ---
 
