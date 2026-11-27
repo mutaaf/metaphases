@@ -1,12 +1,12 @@
 ---
 id: 0114
 title: One read in three skips the Nasdaq check (17 of 43 sessions blank), and a link shared on that read unfurls as "not yet confirmed"
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-25
-pr: 207
+pr: 214
 by: critic
 ---
 
@@ -72,3 +72,17 @@ Build `9416f364` (deployed 04:18 UTC; it includes #207), colo ORD, Nasdaq `ok:tr
 - From this sandbox at the same time, Nasdaq answered `2026-12-01` with 27 rows (TCOM, GTLB `time-after-hours`; NIO `time-pre-market`), so the upstream is fine.
 - The builder notes say stale copies live in the colo cache only. A quiet overnight colo (ORD, Thanksgiving) may have evicted them, which would put the read back to "no copy anywhere". Check whether the 24 h stale copy must also be in KV (`nqw:v1` keeps its fetch time already) so a cold colo after a quiet night still serves something.
 - **Bar (unchanged):** at most 1 unchecked read in 30, the first read after a 30-minute idle included, and no day unchecked longer than 30 s. Paste the 30-read output from production with `cf-ray` colos, taken at least 6 h after the deploy, so the stale path is actually exercised.
+
+## Builder notes, bounce 2 (2026-11-27)
+- **Root cause (finally):** Workers Free allows **50 subrequests per invocation, and Cache API and KV calls count** ("Calls per request: 50 … share the same quota as subrequests (`fetch()`)", developers.cloudflare.com/workers/platform/limits). Counted on the unit harness, a week read made **71–146** (79 cache matches, 29 puts, 7 KV reads on a cold week; 89 warm-but-unfolded). The window's day reads came late in the read, so in production they were the calls refused: `readJson` swallows the error and returns null, so the day read as **missing**, i.e. `unchecked`, while Nasdaq was fine. The fill's Nasdaq `fetch` was refused the same way ("Too many subrequests") and was then **remembered as a Nasdaq failure for 15 minutes**, and the KV share was written only from that fill, so it rarely got new days. That explains every symptom: the flicker (which reads were refused depended on how many calls came first), days stuck unchecked for minutes, a new window day (Dec 10) never loading at ORD while the lighter sheet request loaded it at once (`/api/ticker/COST` at 09:34 UTC, then the one-day read was checked).
+- Before (production, build `b7303adf`, colo ORD, 09:28–09:32 UTC): `2026-11-30..12-04` alternated `uncheckedDays ["2026-11-30"]` / none every third read; `2026-11-27..12-11` carried 2–4 unchecked days on 9 of 9 reads (`11-27` and `12-10` on every one); `12-10` alone stayed unchecked for 61 s+ over 4 reads.
+- Fix:
+  - `nasdaqWindow` reads the KV share **first** (one per-colo cached read holds every day) and this colo's day copies only for days the share lacks fresh; stale copies come from the share before the colo. Warm-but-unfolded, the window now costs 1–3 calls instead of ~20.
+  - The calendar reads the window, contest memos and session leads **before** the week reads start (awaited, so a KV miss can't lose out to the weeks' bursts; unit-tested on a three-week range).
+  - A day **no colo has** (fresh or stale) is fetched inside the calendar read, before the week reads (same lock, two days, range first, wait bounded by the 4 s timeout), and written to the KV share then and there. So curl readers, unfurls and quiet periods still fill new days (Dec 10 type). It costs at most one waiting read per colo per minute, and only when a day has no copy anywhere.
+  - **Stale** days (past 6 h, up to 24 h) are served as before, and refreshed by `GET /api/xcheck/fill?from&to`, an invocation of its own. The calendar answers `fill: 1` and the browser calls it (`askFill`, at most once a minute per tab). The endpoint checks the lock first (a burst costs one cached read each).
+  - Review fixes: a shared day's **caps** count past its 6 h (they're 45-day data; colos no longer copy the share into their own cache, so 0110's sizing would have lapsed). The sheet's on-demand day read takes a fresh shared copy before calling Nasdaq. A colo's own copy wins over a share entry older than an hour.
+  - A call refused for the budget is never remembered as a Nasdaq failure.
+- Nasdaq calls per minute: unchanged or fewer (same lock and two-day cap; no calls spent whose results couldn't be stored; on-demand sheet reads use the share). Finnhub: unchanged. KV writes: same caps.
+- Tests: `tests/unit/subrequestBudget0114.test.ts` runs the worker on a cache/KV/fetch that refuses the 51st call per invocation, as Cloudflare does (all 6 fail on main). The eight suites that warmed the window through calendar reads now do what the browser does with `fill` (the fill ran after the response before, too). `tests/unit/askFill0114.test.ts` covers the client's throttle.
+- Known gap, for a follow-up ticket: the rest of the calendar read still makes far more than 50 calls on a cold week (the feed's day caches, the 0024 supplement, settle/neighbour reads). Anything read late, such as other KV-shared documents (`supp:v1`, `nqcap:v1`) and the `xc:v1` write, can still be refused. It needs a per-range cache of the finished answer or batched day caches. Stale-day refreshes depend on a browser calling the fill: a curl-only period longer than 24 h after a day's last fetch would read that day unchecked again (new days are still fetched inline). A Cron Trigger would remove that dependency, but `wrangler.jsonc` is frozen: an operator call. The sheet path (`/api/ticker`, `/t/*`) sits near 50 calls on a stale share in the harness, and its own `tk:v10` cache write was the refused call there.

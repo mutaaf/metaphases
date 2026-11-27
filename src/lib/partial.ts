@@ -42,3 +42,12 @@ export function retryDelay(data: { warnings?: readonly string[]; uncheckedDays?:
 
 /** 0061: the unchecked days worth mentioning (a market holiday has nothing to compare). */
 export const checkingOf = (days: readonly string[] | undefined) => (days ?? []).filter((d) => weekday(d) && !CLOSED.has(d));
+
+/**
+ * 0114 bounce 3: Nasdaq's cross-check days are fetched in a request of their own (`/api/xcheck/fill`), because a
+ * calendar read already uses the worker's 50 subrequests. Ask when an answer is marked `fill`, at most once a minute
+ * per tab (the worker also takes one fill per data centre per minute).
+ */
+export const FILL_EVERY_MS = 60_000;
+export const shouldAskFill = (body: { fill?: 1 } | null | undefined, now: number, last: number) => !!body?.fill && now - last >= FILL_EVERY_MS;
+export const fillPath = (base: string, from: string, to: string) => `${base}/api/xcheck/fill?from=${from}&to=${to}`;
