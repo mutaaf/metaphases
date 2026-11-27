@@ -1,5 +1,7 @@
 // 0106: an off-universe sheet labelled Finnhub's dollar market cap with the reporting currency (Vipshop "CN¥6.2B"
 // for US$6.2B). The cap's currency follows the listing, the same rule the universe build uses (scripts/universe_fx.py).
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { capCurrency, profileCap } from "../../shared/marketCap";
 import { moneyIn } from "../../shared/currency";
@@ -25,6 +27,20 @@ describe("capCurrency agrees with local_cap_currency (universe_fx.py vectors)", 
   ];
   it.each(cases)("%s (%s on %s) → %s", (_t, currency, exchange, want) => {
     expect(capCurrency({ currency, exchange })).toBe(want);
+  });
+  // One rule in two languages: run every vector through the Python too. Its only difference is an unplaceable
+  // foreign exchange labelled USD, which it keeps as USD and we show as unknown.
+  it("matches scripts/universe_fx.py on every vector, including any exchange added there", () => {
+    const scripts = fileURLToPath(new URL("../../scripts/", import.meta.url));
+    const homes: Record<string, string> = JSON.parse(execFileSync("python3", ["-I", "-B", "-c", `import sys, json; sys.path.insert(0, ${JSON.stringify(scripts)}); from universe_fx import EXCHANGE_HOME; print(json.dumps(EXCHANGE_HOME))`], { encoding: "utf8" }));
+    const vectors = [...cases.map(([ticker, currency, exchange]) => ({ ticker, currency, exchange })),
+      ...Object.keys(homes).map((k) => ({ ticker: k, currency: "USD", exchange: `${k} STOCK EXCHANGE` }))];
+    const py: string[] = JSON.parse(execFileSync("python3", ["-I", "-B", "-c", `import sys, json, io, contextlib; sys.path.insert(0, ${JSON.stringify(scripts)}); from universe_fx import local_cap_currency\nv = json.loads(sys.argv[1])\nwith contextlib.redirect_stdout(io.StringIO()): out = [local_cap_currency(p) for p in v]\nprint(json.dumps(out))`, JSON.stringify(vectors)], { encoding: "utf8" }));
+    vectors.forEach((p, i) => {
+      const ts = capCurrency(p);
+      if (ts === null) expect([p.ticker, py[i]]).toEqual([p.ticker, "USD"]);
+      else expect([p.ticker, ts]).toEqual([p.ticker, py[i]]);
+    });
   });
 });
 
