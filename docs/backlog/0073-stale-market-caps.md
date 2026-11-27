@@ -1,12 +1,12 @@
 ---
 id: 0073
 title: Market caps are two weeks old (NVDA "$4.93T" at $162.85, really about $3.96T); the Nov 8 data refresh PR #73 never merged
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-14
-pr:
+pr: 213
 by: critic
 ---
 
@@ -33,3 +33,7 @@ Changing `.github/workflows/data-refresh.yml` (frozen). Intraday caps.
 
 ## Critic evidence 2026-11-16 19:00 UTC
 Worse with this week's fall: the NVDA sheet reads "$4.93T" beside "$156.40 −3.96%" (`shots/p_nvda.png`), and Biggest Reporters at 1440×900 still ranks the week by these caps ("NVDA … $4.93T", `shots/d_fab.png`). At $156.40 the cap is about $3.8T, so the header overstates it by ~$1.1T (~29%) the day before NVIDIA reports. Bar unchanged: the header cap within 5% of price × shares on the day shown.
+
+## Shipped notes (Builder 2026-11-27, #213)
+- The week brief, search and the "10 largest" count still rank by the client's copy of `universe.json`, which is current as of the Nov 25 rebase and each weekly refresh, not scaled daily. Scaling them would need closes for every name on the client (bundle at 119.65/120 kB). If the refresh PRs keep stalling, a ticket for a worker-served caps map is the next step.
+- No worker-level test drives `buildTicker` with a chart; `profileCap(u, profile, chart)` is unit-tested and the call site passes the sheet's own candles.

@@ -105,12 +105,23 @@ test("a normal trading day next to the holiday keeps its count, session groups a
 });
 
 test("the week brief names no day for a Thanksgiving row", async ({ page }) => {
+  // 0073: the brief ranks by current caps, and MRVL (−33% since Oct 30) no longer makes the week's top five, so
+  // a larger company's projection stands in: CRWD (about $214B) projected onto the holiday.
+  await page.route("**/api/calendar**", (r) => {
+    const to = new URL(r.request().url()).searchParams.get("to") ?? "";
+    if (to < "2026-11-07") return r.fulfill({ contentType: "application/json", body: fx("calendar-2026-10.json") });
+    const body = JSON.parse(fx("calendar-2026-11.json"));
+    body.events.push(...holRows, { s: "CRWD", d: HOL, h: "amc", q: 3, y: 2027, eE: 0.94, eA: null, rE: 1240000000, rA: null, t: 1, c: "Thanksgiving" });
+    r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`./?d=${HOL}`);
   await page.getByRole("button", { name: "week view" }).click();
   const brief = page.locator(".brief-head");
   if ((await brief.getAttribute("aria-expanded")) !== "true") await brief.click();
-  await expect(page.locator(".brief-co", { hasText: "MRVL" }).getByTestId("brief-unconfirmed")).toContainText("Date not confirmed");
+  const row = page.locator(".brief-co", { hasText: "CRWD" });
+  await expect(row.getByTestId("brief-unconfirmed")).toContainText("Date not confirmed");
+  await expect(row).not.toContainText(/Thu|Nov 26/);
   await noSideScroll(page);
 });
 
