@@ -4,6 +4,8 @@ import { co, curOf, epsOf, resultOf, surprise } from "../lib/data";
 import { epsJudged } from "../../shared/compare";
 import { revenueBeatRate } from "../../shared/compare";
 import { MONTHS, parse, todayISO } from "../lib/dates";
+import { retraceRange, retraceView } from "../lib/retrace";
+import { missingDays } from "../lib/partial";
 import { pct } from "../lib/format";
 import { navigate } from "../lib/router";
 import { Icon, Notice, Phase, Skeleton, Term } from "../components/bits";
@@ -11,18 +13,26 @@ import { EventRow } from "../components/Calendar";
 import { PageHero } from "../components/Hero";
 import { SeasonScoreboard } from "../components/Depth";
 
+const fmtMD = (d: string) => parse(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
 export default function RetracePage() {
   const today = todayISO();
-  const t = parse(today);
   const [offset, setOffset] = useState(0);
-  const m = new Date(t.getFullYear(), t.getMonth() - offset, 1);
-  const from = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}-01`;
-  const last = new Date(m.getFullYear(), m.getMonth() + 1, 0);
-  const to = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
-  const { data, loading, error } = useCalendar(from, to < today ? to : today);
+  const range = retraceRange(today, offset);
+  const m = range.month;
+  const { data, loading, error } = useCalendar(range.fetchFrom, range.fetchTo);
   useEffect(() => { document.title = "Retrace: how the reports really landed · Metaphases"; }, []);
 
-  const done = (data?.events ?? []).filter((e) => e.eA != null && e.t);
+  // 0014: a young month (under 25 graded) grades the last 30 days instead, so peak season is never empty.
+  // While a new range loads, the previous range's data is still in hand: don't judge this one by it.
+  const view = useMemo(() => retraceView(loading ? [] : data?.events ?? [], today, offset), [data, loading, today, offset]);
+  // 0026: name the days that didn't load, and never say "no reports yet" when some of the month is missing.
+  const missing = useMemo(() => (data && !loading ? missingDays(data.warnings ?? [], view.from, view.to) : []), [data, loading, view]);
+  const monthMissing = missing.some((d) => d >= range.from && d <= range.to);
+  const trailing = view.mode === "trailing";
+  const mName = MONTHS[m.getMonth()];
+  const span = `${fmtMD(view.from)} – ${fmtMD(view.to)}`;
+  const done = view.events;
   const by = (k: string) => done.filter((e) => resultOf(e) === k).length;
   // 0049: an EPS on another basis from its estimate (REIT FFO vs GAAP) is neither a beat nor counted.
   const epsV = done.map(epsOf);
@@ -38,31 +48,33 @@ export default function RetracePage() {
     for (const e of done) { if (resultOf(e) == null) continue; const k = co(e.s)?.sec || "Other"; (s[k] ??= { n: 0, beat: 0, surprises: [], med: null }); s[k].n++; if (resultOf(e) === "beat") s[k].beat++; const x = surprise(e); if (x != null) s[k].surprises.push(x); }
     for (const v of Object.values(s)) { const xs = v.surprises.sort((a, b) => a - b); v.med = xs.length ? xs[Math.floor(xs.length / 2)] : null; }
     return Object.entries(s).filter(([, v]) => v.n >= 2).sort((a, b) => b[1].beat / b[1].n - a[1].beat / a[1].n);
-  }, [data]);
+  }, [view]);
   const ranked = [...done].filter((e) => surprise(e) != null && Math.abs(surprise(e)!) < 500).sort((a, b) => surprise(b)! - surprise(a)!);
-  // The busiest reported day this month: where "Jump to a reported day" lands.
+  // The busiest reported day in the window: where "Jump to a reported day" lands.
   const busiest = useMemo(() => {
     const c: Record<string, number> = {};
     for (const e of done) c[e.d] = (c[e.d] ?? 0) + 1;
     return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-  }, [data]);
+  }, [view]);
   const jump = () => { if (busiest) navigate(`/?d=${busiest}&day=${busiest}`); else navigate("/"); };
 
   return (
     <div className="page">
       <PageHero
-        eyebrow={`Retrace · ${MONTHS[m.getMonth()]} ${m.getFullYear()}`}
-        title={<><em>Retrace</em> {MONTHS[m.getMonth()]}.</>}
-        dek={<>Market Digest grades its own picks against what really happened. Retrace does the same for Wall Street: every report this month, scored against its <Term k="consensus">consensus</Term>.</>}
+        eyebrow={trailing ? `Retrace · Last 30 days` : `Retrace · ${mName} ${m.getFullYear()}`}
+        title={trailing ? <><em>Retrace</em> the last 30 days.</> : <><em>Retrace</em> {mName}.</>}
+        dek={<>Market Digest grades its own picks against what really happened. Retrace does the same for Wall Street: every report {trailing ? "in the last 30 days" : offset === 0 ? "this month" : `in ${mName}`}, scored against its <Term k="consensus">consensus</Term>.</>}
         primary={{ label: busiest ? "Jump to the busiest reported day" : "Back to the calendar", onClick: jump, icon: "right" }}
         secondary={{ label: "How beats are judged", onClick: () => navigate("/learn#beat") }}
       />
       <div className="row gap">
         <button className="btn btn-box sq" onClick={() => setOffset(offset + 1)} aria-label="Previous month"><Icon name="left" /></button>
-        <span className="btn btn-box on label">{MONTHS[m.getMonth()]} {m.getFullYear()}</span>
+        <span className="btn btn-box on label">{trailing ? `Last 30 days · ${span}` : `${mName} ${m.getFullYear()}`}</span>
         <button className="btn btn-box sq" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 1))} aria-label="Next month"><Icon name="right" /></button>
       </div>
       {error && <Notice tone="error">{error}</Notice>}
+      {missing.length > 0 && !loading && <Notice tone="warn">Partial: {missing.length} trading {missing.length === 1 ? "day" : "days"} didn't load, so these counts cover only the days that did.</Notice>}
+      {trailing && !loading && <p className="muted small retrace-trailing-note" data-testid="retrace-trailing-note">{monthMissing ? `Fewer than 25 ${mName} reports have loaded` : view.monthCount === 0 ? `No ${mName} reports are in yet` : `Only ${view.monthCount} ${mName} ${view.monthCount === 1 ? "report is" : "reports are"} in so far`}, so this grades the last 30 days. The {mName} view takes over once 25 are in.</p>}
       {offset > 1 && !loading && !done.length && <Notice>Our free data window only reaches back about a month, so older results will appear as the archive grows.</Notice>}
       {loading ? <Skeleton h={200} /> : done.length === 0 ? (
         <section className="empty-cta">
@@ -82,7 +94,7 @@ export default function RetracePage() {
           </div>
           <p className="muted small retrace-basis">Beats and misses are judged against the <Term k="beat">estimate as it stood before the report</Term> wherever we have it, not one revised afterwards.</p>
           <section className="card">
-            <h4 className="eyebrow">The month in one bar</h4>
+            <h4 className="eyebrow">{trailing ? "30 days in one bar" : "The month in one bar"}</h4>
             <div className="big-strip">
               <span className="res-beat" style={{ flex: by("beat") }}>{by("beat")} beat</span>
               <span className="res-mixed" style={{ flex: by("mixed") }}>{by("mixed")} mixed</span>
