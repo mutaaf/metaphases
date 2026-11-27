@@ -179,7 +179,9 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
     : `${name}: earnings track record, quality grade and setup.`;
   // 0073: the worker's figure once the sheet loads (a tracked cap scaled to the last close); the universe's until then.
   const capText = data?.profile ? (data.profile.marketCap ? moneyIn(data.profile.marketCap * 1e6, data.profile.currency) : "") : c && c.mc > 0 ? mcap(c.mc) : "";
-  const capTitle = data?.profile?.capAt ? `Market value at the ${fmtDay(data.profile.capAt)} close` : "Market value";
+  // The chart's last bar is today's price while the market is open, so today's figure isn't called a close.
+  const capAt = data?.profile?.capAt;
+  const capTitle = !capAt ? "Market value" : capAt === todayISO() ? `Market value at today's prices (${fmtDay(capAt)})` : `Market value at the ${fmtDay(capAt)} close`;
   const doShare = () => share(`${symbol} on Metaphases`, shareText, `${location.origin}${BASE}/t/${symbol}`, () => { setCopied(true); setTimeout(() => setCopied(false), 1800); });
 
   return (

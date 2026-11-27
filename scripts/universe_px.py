@@ -22,12 +22,12 @@ def yahoo_symbol(sym):
     return sym.replace(".", "-")  # shared/shareClass.ts yahooSymbol
 
 
-def closes(sym, start, end):
+def closes(sym, start, end, tries=3):
     """[(YYYY-MM-DD, close)] from Yahoo daily bars, oldest first; [] on any failure."""
     p1 = int(datetime.datetime.combine(start, datetime.time(), datetime.timezone.utc).timestamp())
     p2 = int(datetime.datetime.combine(end + datetime.timedelta(days=1), datetime.time(), datetime.timezone.utc).timestamp())
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol(sym)}?period1={p1}&period2={p2}&interval=1d"
-    for attempt in range(3):
+    for attempt in range(tries):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=15) as r:
                 res = json.load(r)["chart"]["result"][0]
@@ -37,7 +37,9 @@ def closes(sym, start, end):
                     out.append((datetime.datetime.fromtimestamp(t, datetime.timezone.utc).date().isoformat(), round(c, 4)))
             return out
         except Exception as e:
-            print("retry", sym, e, flush=True); time.sleep(2 + attempt * 3)
+            print("retry", sym, e, flush=True)
+            if attempt + 1 < tries:
+                time.sleep(2 + attempt * 3)
     return []
 
 
@@ -46,12 +48,26 @@ def close_on_or_before(series, day):
     return hit[-1] if hit else None
 
 
+# The weekly refresh has 40 minutes and the Finnhub pass takes ~11: Yahoo must never cost it the refresh.
+GIVE_UP_AFTER = 10      # consecutive symbols with no closes: Yahoo is blocking this runner
+DEADLINE_S = 8 * 60     # whole pass
+
+
 def stamp(universe, today=None):
-    """Set mcAt to the last trading day before `today` (UTC) and px to its close, in place."""
+    """Set mcAt to the last trading day before `today` (UTC) and px to its close, in place.
+
+    Meant for the Sunday refresh: on a weekday run after 4 p.m. ET, Finnhub's cap may already include that day's
+    close, so the worker would count the day's move twice. If Yahoo stops answering (GIVE_UP_AFTER empty answers
+    in a row, or DEADLINE_S), the rest get mcAt only: the worker reads that day's close off its own chart."""
     today = today or datetime.datetime.now(datetime.timezone.utc).date()
     before = (today - datetime.timedelta(days=1)).isoformat()
+    t0, empty, gave_up = time.monotonic(), 0, False
     for i, (sym, c) in enumerate(universe.items()):
-        series = closes(sym, today - datetime.timedelta(days=12), today - datetime.timedelta(days=1))
+        if not gave_up and (empty >= GIVE_UP_AFTER or time.monotonic() - t0 > DEADLINE_S):
+            gave_up = True
+            print(f"Yahoo not answering ({empty} empty in a row); stamping mcAt only from {sym}", flush=True)
+        series = [] if gave_up else closes(sym, today - datetime.timedelta(days=12), today - datetime.timedelta(days=1), tries=2)
+        empty = 0 if series else empty + 1
         hit = close_on_or_before(series, before)
         c.pop("px", None)
         if hit:
@@ -59,7 +75,10 @@ def stamp(universe, today=None):
         else:
             # The cap still dates from the last close; Yahoo just didn't answer. The worker reads that close itself.
             c["mcAt"] = last_weekday(before)
-            print("no close", sym, flush=True)
+            if not gave_up:
+                print("no close", sym, flush=True)
+        if gave_up:
+            continue
         if i % 50 == 0:
             print("px", i, sym, flush=True)
         time.sleep(0.25)
@@ -85,7 +104,8 @@ def rebase(universe, base, overrides, today=None):
             ratio = last[1] / ref[1]
             if 1 / MAX_RATIO <= ratio <= MAX_RATIO:
                 if c.get("mcL") and c.get("fx") and c.get("fxAt"):
-                    # A converted cap (0042) keeps mc = mcL × fx: the local figure moves with the stock, at the same rate.
+                    # A converted cap (0042) keeps mc = mcL × fx. The dollar figure moves with the US listing; mcL
+                    # absorbs any currency move too, until the next build refetches it.
                     c["mcL"] = round(c["mcL"] * ratio)
                     c["mc"] = round(c["mcL"] * c["fx"])
                 else:
@@ -98,8 +118,14 @@ def rebase(universe, base, overrides, today=None):
             print("no closes, left as is", sym, flush=True); skipped += 1
             c.setdefault("mcAt", at)
             continue
+        elif not ref:
+            # Closes exist, but none on or before the cap's day (a listing newer than its base): keep that day, no px.
+            print("no close on", at, "left unscaled", sym, flush=True); skipped += 1
+            c["mcAt"] = at
+            c.pop("px", None)
+            continue
         else:
-            last = ref or last
+            last = ref
         c["mcAt"], c["px"] = last
         if i % 50 == 0:
             print("rebase", i, sym, flush=True)
