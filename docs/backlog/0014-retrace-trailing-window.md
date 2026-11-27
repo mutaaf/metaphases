@@ -1,12 +1,12 @@
 ---
 id: 0014
 title: Retrace shows the last 30 days when the month is young, so it's never empty in peak season
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: user-value
 created: 2026-11-01
-pr:
+pr: 211
 by: critic
 ---
 
