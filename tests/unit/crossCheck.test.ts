@@ -319,26 +319,27 @@ describe("/api/calendar on a cold window (0061)", () => {
     const res = await raw(NEXT_WEEK);
     const r = await res.json() as any;
     await Promise.all(waits); waits = [];
-    // 0114 bounce 3: days no colo has are fetched inside the read, early and within its subrequests (two, range first),
-    // so this read already has them; the rest are named and the browser is asked to fill.
-    expect(nqCalls.sort()).toEqual(["2026-11-16", "2026-11-17"]);
-    expect(nqPeak).toBeLessThanOrEqual(2);
-    expect(r.unchecked).toBe(8);
-    expect(r.uncheckedDays).toEqual(["2026-11-18", "2026-11-19", "2026-11-20"]);
-    expect(r.fill).toBe(1);
+    expect(r.unchecked).toBe(10);
+    expect(r.uncheckedDays).toEqual(["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"]);
+    expect(r.fill).toBe(1); // 0114 bounce 3: the browser is asked to fill, too
     expect(r.events.find((e: EarningsEvent) => e.s === "QQXB").x).toBeUndefined();
     // An unflagged answer isn't kept for 10 minutes by the browser.
     expect(Number(/max-age=(\d+)/.exec(res.headers.get("Cache-Control") ?? "")![1])).toBeLessThanOrEqual(60);
+    // The build (after the response, last in the invocation: 0114 bounce 3) spends its two days on the range asked
+    // for, not on this week's days nobody is looking at.
+    expect(nqCalls.sort()).toEqual(["2026-11-16", "2026-11-17"]);
+    expect(nqPeak).toBeLessThanOrEqual(2);
     unlock();
     const again = await call(NEXT_WEEK);
-    expect(again.uncheckedDays).toEqual(["2026-11-20"]);
+    expect(again.uncheckedDays).toEqual(["2026-11-18", "2026-11-19", "2026-11-20"]);
     expect(nqCalls.slice(2).sort()).toEqual(["2026-11-18", "2026-11-19"]); // still the range's days first
-    // QQXB's own day (Nov 18) has loaded now, so the row can be judged.
-    expect(again.events.find((e: EarningsEvent) => e.s === "QQXB")).toMatchObject({ x: "differs", xd: "2026-11-17", xh: "bmo" });
     unlock();
+    // QQXB's own day (Nov 18) has loaded now, so the row can be judged.
     const third = await call(NEXT_WEEK);
-    expect(third.uncheckedDays).toBeUndefined();
+    expect(third.events.find((e: EarningsEvent) => e.s === "QQXB")).toMatchObject({ x: "differs", xd: "2026-11-17", xh: "bmo" });
+    expect(third.uncheckedDays).toEqual(["2026-11-20"]);
   });
+
 
 
   it("a fully checked range carries no uncheckedDays and the usual cache life", async () => {

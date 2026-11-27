@@ -156,19 +156,60 @@ describe("0114 bounce 3: the cross-check inside 50 subrequests", () => {
     expect(r.fill).toBe(1); // stale days: the browser is asked to refresh them
   });
 
-  it("a cold colo's first read fetches the days no colo has inside its budget, and shares them", async () => {
-    at("CMH");
+  it("a cold colo's first read keeps its weeks: the cross-check never takes the budget the week reads need", async () => {
+    // Live 2026-11-27 10:30 UTC (#214): an inline fill and 20 day reads ahead of the week reads left a cold colo's
+    // week "Couldn't load". Another colo has filled the share, as in production; these colos have nothing cached.
+    await warmVia("CMH");
+    later(2 * 3600);
+    for (const [c, p] of [["A", RANGE], ["B", "/api/calendar?from=2026-12-07&to=2026-12-11"], ["C", "/api/calendar?from=2026-11-25&to=2026-11-27"]]) {
+      at(c);
+      const r = await run(p);
+      expect(r.warnings).toEqual([]);
+      expect(r.uncheckedDays).toBeUndefined();
+    }
+  });
+
+  it("live 10:30 shape: a cold colo's 7-day chunks, while two window days have no copy anywhere, load every week", async () => {
+    // #214 fetched those days inline, ahead of the week reads, and the week reads lost the budget ("Couldn't load").
+    await warmVia("CMH");
+    const doc = JSON.parse(kv.store.get("nqw:v1")!); delete doc.days["2026-11-30"]; delete doc.days["2026-12-02"]; kv.store.set("nqw:v1", JSON.stringify(doc));
+    for (const [c, p] of [["DFW", "/api/calendar?from=2026-11-30&to=2026-12-06"], ["IAD", "/api/calendar?from=2026-11-27&to=2026-12-03"], ["SEA", "/api/calendar?from=2026-12-07&to=2026-12-13"]]) {
+      at(c);
+      const r = await run(p);
+      expect(r.warnings, `${c} ${p}`).toEqual([]);
+      expect(r.fill).toBe(1);
+    }
+  });
+
+  it("a new window day (Dec 10 type): the read stays whole and cheap, says so, and the browser's fill gets the day", async () => {
+    await warmVia("CMH");
+    const NEW = "2026-12-03"; // a day the share and this colo have never had
+    const drop = () => {
+      const doc = JSON.parse(kv.store.get("nqw:v1")!); delete doc.days[NEW]; kv.store.set("nqw:v1", JSON.stringify(doc));
+      for (const k of [...colos.CMH.store.keys()]) if (k.includes(encodeURIComponent(NEW)) || k.includes("local") || k.includes("idx")) colos.CMH.store.delete(k);
+    };
+    drop();
+    later(61); unlockAt("CMH");
+    order = [];
     const r = await run(RANGE);
-    expect(nqCalls.CMH).toBe(2);
-    expect(kv.puts).toContain("nqw:v1");
-    expect(r.uncheckedDays?.length ?? 0).toBeLessThan(5);
+    expect(r.warnings).toEqual([]);
+    expect(r.uncheckedDays).toEqual([NEW]);
     expect(r.fill).toBe(1);
-    // the browser's fill (an invocation of its own) takes the next two, also within 50
-    later(61); peak = 0;
+    // The window costs a handful of calls, all ahead of the week reads.
+    const firstWeek = order.findIndex((u) => u.includes("cal%3Av3"));
+    const win = order.slice(0, firstWeek);
+    expect(win.filter((u) => /nq%3Ax%3A(v1|stale|idx)|nqw%3Alocal/.test(u)).length).toBeLessThanOrEqual(6);
+    expect(firstWeek).toBeLessThanOrEqual(8);
+    // The read's own after-response fill is best effort (it runs last); the browser's, an invocation of its own, lands.
+    later(61); unlockAt("CMH");
+    peak = 0;
     const f = await fill("CMH");
-    expect(f.filling.length).toBe(2);
-    expect(nqCalls.CMH).toBe(4);
+    expect(f.filling).toContain(NEW);
     expect(peak).toBeLessThanOrEqual(BUDGET);
+    expect(JSON.parse(kv.store.get("nqw:v1")!).days[NEW]).toBeTruthy();
+    later(10);
+    for (const k of [...colos.CMH.store.keys()]) if (k.includes("local")) colos.CMH.store.delete(k);
+    expect((await run(RANGE)).uncheckedDays).toBeUndefined();
   });
 
   it("a three-week read 7 h after the fill, on a colo whose share copy just expired, is still checked", async () => {
