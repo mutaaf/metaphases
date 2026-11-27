@@ -40,3 +40,17 @@ test("the sheet header gives SQM's value in dollars, not its peso figure labelle
   await expect(id).toContainText(/· \$16\.3B$/);
   await expect(id).not.toContainText(/\$15\.\d+T/);
 });
+
+test("0106: an off-universe ADR's sheet gives Finnhub's dollar cap in dollars (Vipshop $6.2B, not CN¥6.2B)", async ({ page }) => {
+  const nio = fx("ticker-NIO.json");
+  await page.route("**/api/ticker/VIPS", (r) => {
+    const d = JSON.parse(JSON.stringify(nio).replaceAll('"NIO"', '"VIPS"'));
+    // The worker's answer: a CNY-reporting company listed in New York, its cap in dollars.
+    d.profile = { ...d.profile, name: "Vipshop Holdings Ltd", marketCap: 6185.88, currency: "USD", exchange: "NEW YORK STOCK EXCHANGE, INC." };
+    r.fulfill({ contentType: "application/json", body: JSON.stringify(d) });
+  });
+  await page.goto("./?t=VIPS");
+  const id = page.locator(".sheet .sheet-id .eyebrow");
+  await expect(id).toContainText(/· \$6\.2B$/);
+  await expect(id).not.toContainText("CN¥");
+});
