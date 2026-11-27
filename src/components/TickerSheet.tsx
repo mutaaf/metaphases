@@ -185,7 +185,7 @@ export function TickerSheet({ symbol, onClose }: { symbol: string; onClose: () =
         <header className="sheet-head">
           <Tile s={symbol} size={56} force="logo" />
           <div className="sheet-id">
-            <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{c ? (c.mc > 0 ? ` · ${mcap(c.mc)}` : "") : data?.profile?.marketCap && (isUsd(estCur) || !isUsd(data.profile.currency)) ? ` · ${moneyIn(data.profile.marketCap * 1e6, data.profile.currency)}` : ""}</span>
+            <span className="eyebrow">{symbol} · {data?.profile?.industry || c?.sec || "—"}{c ? (c.mc > 0 ? ` · ${mcap(c.mc)}` : "") : data?.profile?.marketCap ? ` · ${moneyIn(data.profile.marketCap * 1e6, data.profile.currency)}` : ""}</span>
             <h2>{name}</h2>
             {everyday && <p className="sheet-does">{whatTheyDo(name, data?.profile?.industry ?? c?.ind)}</p>}
             {data?.quote ? (

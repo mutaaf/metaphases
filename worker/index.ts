@@ -1160,11 +1160,11 @@ const MIN_BEAT_RECORD = 2;
 /**
  * The finished sheet, edge-cached for 5 minutes: sheets, share pages and OG cards all read one small JSON.
  * 0043: a sheet that lost its date or history to a rate limit is cached for 30 s only, and the last good copy
- * (`tk:stale:v10:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use.
+ * (`tk:stale:v11:SYM`, 24 h) stands in for it, marked as an earlier read. `ttl` is what both cache layers use. Bumped for 0106: copies from before it carry Finnhub's raw cap label.
  */
 async function tickerEntry(symbol: string, env: Env, ctx: ExecutionContext): Promise<{ data: TickerResponse; ttl: number }> {
-  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v8:${symbol}`)}`);
-  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v10:${symbol}`)}`);
+  const key = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:v9:${symbol}`)}`);
+  const staleKey = new Request(`https://cache.metaphases.internal/${encodeURIComponent(`tk:stale:v11:${symbol}`)}`);
   const hit = await caches.default.match(key);
   if (hit) { const data = (await hit.json()) as TickerResponse; return { data, ttl: sheetTtl(data) }; }
   const built = await buildTicker(symbol, env, ctx);

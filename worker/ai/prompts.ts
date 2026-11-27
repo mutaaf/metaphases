@@ -67,7 +67,7 @@ const clip = (s: unknown, len = 80) => String(s ?? "").replace(/[\r\n]+/g, " ").
 function tickerFacts(t: Obj): string[] {
   const L: string[] = [];
   const name = clip(t.profile?.name ?? t.symbol, 60);
-  L.push(`Company: ${name} (${clip(t.symbol, 10)}), ${clip(t.profile?.industry ?? "", 40)}, market cap ${t.profile?.marketCap && (isUsd(cur3(t.next?.currency)) || !isUsd(cur3(t.profile.currency))) ? moneyIn(t.profile.marketCap * 1e6, cur3(t.profile.currency)) : "—"}.`);
+  L.push(`Company: ${name} (${clip(t.symbol, 10)}), ${clip(t.profile?.industry ?? "", 40)}, market cap ${t.profile?.marketCap ? moneyIn(t.profile.marketCap * 1e6, cur3(t.profile.currency)) : "—"}.`);
   if (t.quote) L.push(`Price $${n(t.quote.price)} (${n(t.quote.changePct)}% today).`);
   // 0039: a report that's out, or whose session passed without figures, is never described as upcoming.
   if (t.justReported) {

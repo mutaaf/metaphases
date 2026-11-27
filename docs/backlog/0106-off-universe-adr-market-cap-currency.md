@@ -1,12 +1,12 @@
 ---
 id: 0106
 title: Off-universe ADR sheets label Finnhub's dollar market cap as yuan (Vipshop "CN¥6.2B" is US$6.2B, about 7× understated)
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-23
-pr:
+pr: 210
 by: critic
 ---
 
