@@ -1,7 +1,7 @@
 ---
 id: 0114
 title: One read in three skips the Nasdaq check (17 of 43 sessions blank), and a link shared on that read unfurls as "not yet confirmed"
-status: shipped
+status: ready
 priority: P0
 size: M
 lens: data-quality
@@ -64,3 +64,11 @@ Add to the bar: **on the first read after a deploy and after a 30-minute idle, n
 - Not done here: the 30-read live script needs the deploy; the Critic re-checks on production.
 - Self-review fixes: a stale day rides on `NqWindow.stale`. It is enough to compare a row, but it is never evidence of absence (`windowCovered`, crossCheck's `unknown`). A read with a stale day neither writes nor clears the `xc:v1` memos (calendar and sheet). The sheet still fetches its next day on demand when that day is only stale. An empty answer is never kept as a stale copy. `dmh` is held too.
 - Known gaps, for a follow-up: the ICS feed doesn't apply the hold. Surfaces other than the calendar (Today, Compass, Ask) don't re-read an unchecked answer, so a held row reads Time TBD for that view. With stale copies this only happens when there is no Nasdaq copy anywhere in the last 24 h.
+
+## Critic re-check, 2026-11-27 07:00 (bounce 2: reopened. One more failure goes to the operator)
+Build `9416f364` (deployed 04:18 UTC; it includes #207), colo ORD, Nasdaq `ok:true`.
+- **What now holds:** the hold works. Across 30 reads TD read `bmo` with its company link every time, and no unchecked row showed a session that a checked read contests. An unchecked row reads "CHECKING TIME…" in the drawer, not as fact. That's the honest state the bar asked for.
+- **What still fails, the rate and the duration:** the acceptance script (30 reads of `2026-11-30..12-04`, 10 s apart, 06:51:39–06:56:39) returned `uncheckedDays` on **13 of 30** (bar: at most 1). `12-01` stayed unchecked from the first read through 06:53:13, at least **94 s** (bar: 30 s), and `11-30` came back unchecked at 06:53:44 after a checked read. Blank-`h` counts swung **1 ↔ 7** between consecutive reads (bar: within 2). A phone load of `?day=2026-12-01` at about 07:00 was unchecked again: "CHECKING TIME… · 4" held **TCOM (US$30.6B, company-announced after the close)**, GTLB, NIO and ASAN, while a load 3 minutes earlier showed "AFTER CLOSE · 8". In the same minute the TCOM sheet read "After close". So a row changes section between loads, and the drawer and the sheet disagree.
+- From this sandbox at the same time, Nasdaq answered `2026-12-01` with 27 rows (TCOM, GTLB `time-after-hours`; NIO `time-pre-market`), so the upstream is fine.
+- The builder notes say stale copies live in the colo cache only. A quiet overnight colo (ORD, Thanksgiving) may have evicted them, which would put the read back to "no copy anywhere". Check whether the 24 h stale copy must also be in KV (`nqw:v1` keeps its fetch time already) so a cold colo after a quiet night still serves something.
+- **Bar (unchanged):** at most 1 unchecked read in 30, the first read after a 30-minute idle included, and no day unchecked longer than 30 s. Paste the 30-read output from production with `cf-ray` colos, taken at least 6 h after the deploy, so the stale path is actually exercised.
