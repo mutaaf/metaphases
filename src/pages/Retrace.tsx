@@ -5,14 +5,15 @@ import { epsJudged } from "../../shared/compare";
 import { revenueBeatRate } from "../../shared/compare";
 import { MONTHS, parse, todayISO } from "../lib/dates";
 import { retraceRange, retraceView } from "../lib/retrace";
-
-const fmtMD = (d: string) => parse(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+import { missingDays } from "../lib/partial";
 import { pct } from "../lib/format";
 import { navigate } from "../lib/router";
 import { Icon, Notice, Phase, Skeleton, Term } from "../components/bits";
 import { EventRow } from "../components/Calendar";
 import { PageHero } from "../components/Hero";
 import { SeasonScoreboard } from "../components/Depth";
+
+const fmtMD = (d: string) => parse(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 export default function RetracePage() {
   const today = todayISO();
@@ -23,7 +24,11 @@ export default function RetracePage() {
   useEffect(() => { document.title = "Retrace: how the reports really landed · Metaphases"; }, []);
 
   // 0014: a young month (under 25 graded) grades the last 30 days instead, so peak season is never empty.
-  const view = useMemo(() => retraceView(data?.events ?? [], today, offset), [data, today, offset]);
+  // While a new range loads, the previous range's data is still in hand: don't judge this one by it.
+  const view = useMemo(() => retraceView(loading ? [] : data?.events ?? [], today, offset), [data, loading, today, offset]);
+  // 0026: name the days that didn't load, and never say "no reports yet" when some of the month is missing.
+  const missing = useMemo(() => (data && !loading ? missingDays(data.warnings ?? [], view.from, view.to) : []), [data, loading, view]);
+  const monthMissing = missing.some((d) => d >= range.from && d <= range.to);
   const trailing = view.mode === "trailing";
   const mName = MONTHS[m.getMonth()];
   const span = `${fmtMD(view.from)} – ${fmtMD(view.to)}`;
@@ -45,7 +50,7 @@ export default function RetracePage() {
     return Object.entries(s).filter(([, v]) => v.n >= 2).sort((a, b) => b[1].beat / b[1].n - a[1].beat / a[1].n);
   }, [view]);
   const ranked = [...done].filter((e) => surprise(e) != null && Math.abs(surprise(e)!) < 500).sort((a, b) => surprise(b)! - surprise(a)!);
-  // The busiest reported day this month: where "Jump to a reported day" lands.
+  // The busiest reported day in the window: where "Jump to a reported day" lands.
   const busiest = useMemo(() => {
     const c: Record<string, number> = {};
     for (const e of done) c[e.d] = (c[e.d] ?? 0) + 1;
@@ -68,7 +73,8 @@ export default function RetracePage() {
         <button className="btn btn-box sq" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 1))} aria-label="Next month"><Icon name="right" /></button>
       </div>
       {error && <Notice tone="error">{error}</Notice>}
-      {trailing && !loading && <p className="muted small retrace-trailing-note" data-testid="retrace-trailing-note">{view.monthCount === 0 ? `No ${mName} reports are in yet` : `Only ${view.monthCount} ${mName} ${view.monthCount === 1 ? "report is" : "reports are"} in so far`}, so this grades the last 30 days. The {mName} view takes over once 25 are in.</p>}
+      {missing.length > 0 && !loading && <Notice tone="warn">Partial: {missing.length} trading {missing.length === 1 ? "day" : "days"} didn't load, so these counts cover only the days that did.</Notice>}
+      {trailing && !loading && <p className="muted small retrace-trailing-note" data-testid="retrace-trailing-note">{monthMissing ? `Fewer than 25 ${mName} reports have loaded` : view.monthCount === 0 ? `No ${mName} reports are in yet` : `Only ${view.monthCount} ${mName} ${view.monthCount === 1 ? "report is" : "reports are"} in so far`}, so this grades the last 30 days. The {mName} view takes over once 25 are in.</p>}
       {offset > 1 && !loading && !done.length && <Notice>Our free data window only reaches back about a month, so older results will appear as the archive grows.</Notice>}
       {loading ? <Skeleton h={200} /> : done.length === 0 ? (
         <section className="empty-cta">
