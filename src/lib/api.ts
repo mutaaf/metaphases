@@ -1,7 +1,7 @@
 import type { CalendarResponse, MacroResponse, TickerResponse } from "../../shared/types";
 import { useEffect, useState } from "react";
 import { BASE } from "./router";
-import { retryDelay } from "./partial";
+import { fillPath, retryDelay, shouldAskFill } from "./partial";
 import { settleContested } from "../../shared/contestedTime";
 import { oneReportOneRow } from "../../shared/oneRow";
 
@@ -11,6 +11,15 @@ async function fetchJson(path: string) {
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(body.error ?? "We couldn't reach the market data service."), { status: r.status });
   return body;
+}
+
+/** 0114 bounce 3: ask for the window's fill when a calendar answer is marked `fill` (see `shouldAskFill`). Fire and forget: the 40 s re-read picks the days up. */
+let lastFill = -Infinity;
+function askFill(body: { fill?: 1 } | null | undefined, from: string, to: string) {
+  const now = Date.now();
+  if (!shouldAskFill(body, now, lastFill)) return;
+  lastFill = now;
+  try { fetch(fillPath(BASE, from, to), { cache: "no-store" }).catch(() => {}); } catch { /* offline */ }
 }
 
 const CAL_CHUNK_DAYS = 7;
@@ -27,13 +36,14 @@ async function fetchCalendar(path: string): Promise<CalendarResponse> {
 async function fetchCalendarRaw(path: string): Promise<CalendarResponse> {
   const u = new URL(path, location.origin);
   const from = u.searchParams.get("from")!, to = u.searchParams.get("to")!;
-  if (!from || !to || isoAdd(from, CAL_CHUNK_DAYS) > to) return fetchJson(path);
+  if (!from || !to || isoAdd(from, CAL_CHUNK_DAYS) > to) return fetchJson(path).then((b: CalendarResponse) => (askFill(b, from, to), b));
   // A background re-read (`_r`) must reach the worker, not the browser's copy of the chunk it's re-reading.
   const r = u.searchParams.get("_r");
   const chunks: [string, string][] = [];
   for (let d = from; d <= to; d = isoAdd(d, CAL_CHUNK_DAYS)) { const e = isoAdd(d, CAL_CHUNK_DAYS - 1); chunks.push([d, e < to ? e : to]); }
   const parts = await Promise.allSettled(chunks.map(([f, t]) => fetchJson(`${BASE}/api/calendar?from=${f}&to=${t}${r ? `&_r=${r}` : ""}`) as Promise<CalendarResponse>));
   if (parts.every((p) => p.status === "rejected")) throw (parts[0] as PromiseRejectedResult).reason;
+  askFill(parts.some((p) => p.status === "fulfilled" && p.value.fill) ? { fill: 1 } : null, from, to);
   const seen = new Set<string>();
   const out: CalendarResponse = { from, to, events: [], asOf: new Date().toISOString(), warnings: [] };
   parts.forEach((p, i) => {

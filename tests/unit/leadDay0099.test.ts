@@ -178,7 +178,14 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 const call = async (path: string) => {
   const r = await worker.fetch(new Request(`https://mutaafaziz.com/metaphases${path}`), env, ctx);
   await Promise.all(waits); waits = [];
-  return r.json() as Promise<any>;
+  const body = (await r.json()) as any;
+  // 0114 bounce 3: what the browser does with `fill` (askFill): the window's fill, in a request of its own.
+  if (body?.fill) {
+    const q = new URL(`https://x${path}`).searchParams;
+    await worker.fetch(new Request(`https://mutaafaziz.com/metaphases/api/xcheck/fill?from=${q.get("from")}&to=${q.get("to")}`), env, ctx);
+    await Promise.all(waits); waits = [];
+  }
+  return body;
 };
 const WEEK = "/api/calendar?from=2026-11-23&to=2026-11-27";
 const warm = async () => { let r: any; for (let i = 0; i < 6; i++) { unlock(); r = await call(WEEK); } return r; };

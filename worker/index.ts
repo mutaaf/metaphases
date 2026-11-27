@@ -433,11 +433,13 @@ const NQ_ON_DEMAND_REACH = 45;
  * per colo every 6 h, none for 15 minutes after a failure, and never throws (null = Nasdaq can't say). No
  * promise is shared across requests (a cancelled request must not strand another); the cache absorbs repeats.
  */
-async function nasdaqDayOnDemand(day: string, today: string, ctx: ExecutionContext): Promise<NqDay | null> {
+async function nasdaqDayOnDemand(day: string, today: string, ctx: ExecutionContext, env?: Env): Promise<NqDay | null> {
   // Nasdaq wipes a past day's sessions (LESSONS 2026-11-11), and far-off days rarely carry one.
   if (day < today || day > addDays(today, NQ_ON_DEMAND_REACH)) return null;
   const hit = await readJson<NqDay>(NQX_DAY(day));
   if (hit) return hit;
+  // 0114 bounce 3 review: a fresh copy another colo shared is as good as this colo's (no Nasdaq call for it).
+  if (env?.SUPPORT) { const got = sharedDays(await readWindowShared(env), [day], Date.now())[day]; if (got) return got.h; }
   const failed = (await readJson<Record<string, number>>(NQX_FAIL)) ?? {};
   if (failed[day] > Date.now()) return null;
   try {
@@ -466,67 +468,114 @@ const SESSION_PLAIN: Record<Session, string> = { bmo: "before the open", amc: "a
 const WHEN_LONG: Record<Session, string> = { bmo: "before the opening bell", amc: "after the close", dmh: "during market hours", "": "" };
 
 /**
- * The window's Nasdaq listings. The folded copy when this colo has one; otherwise the cached days (a partly
- * loaded window is still evidence for the days it has, 0059), plus, only when `build` is set, up to
- * NQX_PER_BUILD fetched ones (if this request takes the per-colo lock). Returns null when there's nothing to
- * compare against.
+ * 0114 bounce 3: a Workers Free invocation gets 50 subrequests, and Cache API and KV calls count (the limits page:
+ * "share the same quota as subrequests"). A calendar read made 70–150, so the window's day reads, which came late,
+ * failed (each a silent miss: `readJson` → null) and the fill's own Nasdaq fetch threw "Too many subrequests". That
+ * is why a read in three came back unchecked while Nasdaq was fine. A call refused for that reason is not Nasdaq's
+ * failure, so it's never remembered as one.
+ */
+const overBudget = (e: unknown) => /subrequest/i.test(String((e as Error)?.message ?? e));
+
+/**
+ * The window's Nasdaq listings. The folded copy when this colo has one; otherwise the KV share first (one cached
+ * read holds every day: 0114 bounce 3). A shared day fetched within the hour is taken as is; for the rest this colo's
+ * own copy (fetched more recently than the share is rewritten) wins, else the share's fresh one, else a stale copy (the
+ * share's, else this colo's). With `build`, days with no copy at all are fetched now (up to NQX_PER_BUILD, if this
+ * request takes the per-colo lock; the wait is bounded by NQX_BUILD_TIMEOUT), early in the request, while the
+ * invocation still has subrequests left. Stale days are refreshed by `/api/xcheck/fill`. Null: nothing to compare.
  */
 async function nasdaqWindow(today: string, ctx: ExecutionContext, build: boolean, want?: (d: string) => boolean, env?: Env): Promise<NqWindow | null> {
   const folded = await readJson<NqWindow>(NQX_IDX(today));
   if (folded) return folded;
   const days = windowDays(today);
   const loaded: Record<string, NqDay> = {};
-  let missing: string[] = [];
-  await Promise.all(days.map(async (d) => { const v = await readJson<NqDay>(NQX_DAY(d)); if (v) loaded[d] = v; else missing.push(d); }));
+  const now = Date.now();
   // 0114: a day another colo fetched (shared through KV) counts as loaded here, and isn't fetched again.
-  if (missing.length && env?.SUPPORT) {
-    const got = sharedDays(await readWindowShared(env), missing, Date.now());
-    const seed: Promise<unknown>[] = [];
-    for (const [d, v] of Object.entries(got)) {
-      loaded[d] = v.h;
-      seed.push(putJson(NQX_DAY(d), v.h, Math.max(60, Math.floor(v.life / 1000))));
-      // The same call's caps, so this colo has sized the day too (0110's gate never falls back for a seeded day).
-      if (v.c) seed.push(putJson(NQX_CAP(d), v.c, Object.keys(v.c).length ? NQX_CAP_TTL : 3600));
-    }
-    if (seed.length) ctx.waitUntil(Promise.all(seed));
-    missing = missing.filter((d) => !got[d]);
-  }
-  // 0114 bounce 1: a day with no fresh copy anywhere serves its stale one (this colo's, else the share's) while it's
-  // fetched again below. It stays in `missing`, so the refresh (same two-a-minute fill, no extra calls) still runs.
+  const shared = env?.SUPPORT ? await readWindowShared(env) : null;
+  const fresh = sharedDays(shared, days, now);
+  const recent = (d: string) => !!fresh[d] && now - (shared?.days?.[d]?.at ?? 0) < NQW_RECENT_MS;
+  for (const d of days) if (recent(d)) loaded[d] = fresh[d].h;
+  let missing: string[] = [];
+  await Promise.all(days.filter((d) => !recent(d)).map(async (d) => {
+    const v = await readJson<NqDay>(NQX_DAY(d));
+    if (v) loaded[d] = v; else if (fresh[d]) loaded[d] = fresh[d].h; else missing.push(d);
+  }));
+  missing = missing.sort();
+  // 0114 bounce 1: a day with no fresh copy anywhere serves its stale one (the share's, else this colo's) while it's
+  // fetched again. It stays in `missing`, so the refresh still runs.
   const stale: string[] = [];
   if (missing.length) {
-    await Promise.all(missing.map(async (d) => { const v = await readJson<NqDay>(NQX_STALE(d)); if (v) { loaded[d] = v; stale.push(d); } }));
-    const left = missing.filter((d) => !loaded[d]);
-    if (left.length && env?.SUPPORT) {
-      for (const [d, v] of Object.entries(staleDays(await readWindowShared(env), left, Date.now()))) { loaded[d] = v.h; stale.push(d); }
-    }
+    for (const [d, v] of Object.entries(staleDays(shared, missing, now))) { loaded[d] = v.h; stale.push(d); }
+    await Promise.all(missing.filter((d) => !loaded[d]).map(async (d) => { const v = await readJson<NqDay>(NQX_STALE(d)); if (v) { loaded[d] = v; stale.push(d); } }));
   }
-  if (build && missing.length && !(await caches.default.match(NQX_LOCK).catch(() => true))) {
-    await caches.default.put(NQX_LOCK, new Response("1", { headers: { "Cache-Control": "public, max-age=60" } })).catch(() => {});
-    const failed = (await readJson<Record<string, number>>(NQX_FAIL)) ?? {};
-    const now = Date.now();
-    // 0061: the days the request is showing come first (then nearest first), so a cold week view fills itself.
-    const first = (d: string) => (want?.(d) ? 0 : 1);
-    const take = missing.filter((d) => !(failed[d] > now)).sort((a, b) => first(a) - first(b) || a.localeCompare(b)).slice(0, NQX_PER_BUILD);
-    // 0059: the fill runs after the response (its 4 s timeout never delays the calendar); the next read has the days.
-    if (take.length) ctx.waitUntil((async () => {
-      const got = await pool(take, 2, (d) => fetchNasdaqDayFull(d, NQX_BUILD_TIMEOUT));
-      const fresh: Record<string, number> = {};
-      const share: Record<string, NqShareDay> = {};
-      await Promise.all(got.map(async (r, i) => {
-        if (r.status === "fulfilled") { await storeNqDay(take[i], r.value); share[take[i]] = { h: r.value.h, c: r.value.c, at: Date.now() }; }
-        else fresh[take[i]] = now + 15 * 60_000;
-      }));
-      if (env && Object.keys(share).length) await offerWindow(env, share, today);
-      // Re-read and merge, so another request's remembered failure survives (0047).
-      if (Object.keys(fresh).length) await putJson(NQX_FAIL, { ...((await readJson<Record<string, number>>(NQX_FAIL)) ?? {}), ...fresh }, 900);
-    })().catch(() => {}));
+  const none = missing.filter((d) => !loaded[d]);
+  if (build && none.length) {
+    const got = await fillWindow(none, today, ctx, want, env, true).catch(() => ({}) as Record<string, NqDay>);
+    for (const [d, h] of Object.entries(got)) loaded[d] = h;
   }
   if (!Object.keys(loaded).length) return null;
   const w: NqWindow = { from: today, to: windowEnd(today), loaded: Object.keys(loaded).sort(), idx: buildIndex(loaded), ...(stale.length ? { stale: stale.sort() } : {}) };
   // A window with a stale day is never folded into the hour-long index: the index skips the refresh.
   if (w.loaded.length === days.length && !stale.length) ctx.waitUntil(putJson(NQX_IDX(today), w, 3600));
   return w;
+}
+/** A shared day this young is taken without reading this colo's copy (the share is rewritten only past an hour). */
+const NQW_RECENT_MS = 3600_000;
+
+/**
+ * Fetch up to NQX_PER_BUILD of the `missing` days (one builder per colo per minute). What's fetched goes to the KV
+ * share first (every colo reads it), then to this colo's cache. `wait`: the caller needs the days now (awaited, and
+ * returned); otherwise the fill runs after the response. Returns the days it got (empty when not waited on).
+ */
+async function fillWindow(missing: string[], today: string, ctx: ExecutionContext, want?: (d: string) => boolean, env?: Env, wait = false): Promise<Record<string, NqDay>> {
+  if (await caches.default.match(NQX_LOCK).catch(() => true)) return {};
+  await caches.default.put(NQX_LOCK, new Response("1", { headers: { "Cache-Control": "public, max-age=60" } })).catch(() => {});
+  const failed = (await readJson<Record<string, number>>(NQX_FAIL)) ?? {};
+  const now = Date.now();
+  // 0061: the days the request is showing come first (then nearest first), so a cold week view fills itself.
+  const first = (d: string) => (want?.(d) ? 0 : 1);
+  const take = missing.filter((d) => !(failed[d] > now)).sort((a, b) => first(a) - first(b) || a.localeCompare(b)).slice(0, NQX_PER_BUILD);
+  if (!take.length) return {};
+  const out: Record<string, NqDay> = {};
+  const run = (async () => {
+    const got = await pool(take, 2, (d) => fetchNasdaqDayFull(d, NQX_BUILD_TIMEOUT));
+    const fails: Record<string, number> = {};
+    const share: Record<string, NqShareDay> = {};
+    got.forEach((r, i) => {
+      if (r.status === "fulfilled") { share[take[i]] = { h: r.value.h, c: r.value.c, at: Date.now() }; out[take[i]] = r.value.h; }
+      else if (!overBudget(r.reason)) fails[take[i]] = now + 15 * 60_000;
+    });
+    const writes = (async () => {
+      if (env && Object.keys(share).length) await offerWindow(env, share, today).catch(() => {});
+      await Promise.all(got.map((r, i) => (r.status === "fulfilled" ? storeNqDay(take[i], r.value) : null)));
+      // Re-read and merge, so another request's remembered failure survives (0047).
+      if (Object.keys(fails).length) await putJson(NQX_FAIL, { ...((await readJson<Record<string, number>>(NQX_FAIL)) ?? {}), ...fails }, 900);
+    })().catch(() => {});
+    // Waited on, the writes also go before the caller's own reads spend the budget (a few cache and KV calls).
+    if (wait) await writes; else ctx.waitUntil(writes);
+  })().catch(() => {});
+  // 0059: unless the caller needs the days, the fill runs after the response; the next read has them.
+  if (wait) await run; else ctx.waitUntil(run);
+  return out;
+}
+
+/**
+ * 0114 bounce 3: `GET /api/xcheck/fill` runs the window's fill in an invocation of its own, so its Nasdaq calls and
+ * writes never compete with a calendar read for the 50 subrequests. The calendar page calls it when an answer comes
+ * back unchecked, just before its re-read. Same lock, failure memory and two-day cap as before: no extra Nasdaq calls.
+ */
+async function xcheckFill(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const done = (filling: string[], missing = 0) => new Response(JSON.stringify({ missing, filling, warnings: [] }), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+  // Another fill on this colo this minute: nothing to do (one cached read, so a burst of these costs almost nothing).
+  if (await caches.default.match(NQX_LOCK).catch(() => true)) return done([]);
+  const today = iso(todayNY());
+  const from = url.searchParams.get("from") ?? "", to = url.searchParams.get("to") ?? "";
+  const ok = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const want = ok(from) && ok(to) ? (d: string) => d >= from && d <= to : undefined;
+  const w = await nasdaqWindow(today, ctx, false, undefined, env).catch(() => null);
+  const missing = windowDays(today).filter((d) => !w?.loaded.includes(d) || !!w?.stale?.includes(d));
+  const got = missing.length ? await fillWindow(missing, today, ctx, want, env, true).catch(() => ({})) : {};
+  return done(Object.keys(got).sort(), missing.length);
 }
 
 // ── 0114: the window's days every colo reads ──
@@ -686,8 +735,10 @@ async function nasdaqCaps(days: string[], today: string, env?: Env, ctx?: Execut
   const now = Date.now();
   // 0114 review: a day this colo hasn't fetched but the window share holds (fresh) comes with that call's caps: sized.
   if (env?.SUPPORT && got.some((c) => c == null)) {
-    const fromShare = sharedDays(await readWindowShared(env), want.filter((_, i) => got[i] == null), now);
-    want.forEach((d, i) => { if (got[i] == null && fromShare[d]?.c) got[i] = fromShare[d].c!; });
+    // 0114 bounce 3 review: caps are 45-day data, so a shared day's caps count past its 6 h (sessions don't); colos no
+    // longer copy the share into their own cache.
+    const doc = await readWindowShared(env);
+    want.forEach((d, i) => { const e = doc?.days?.[d]; if (got[i] == null && e && typeof e.at === "number" && e.at <= now && e.c && typeof e.c === "object") got[i] = e.c; });
   }
   // 0110 bounce: a day another colo has sized counts as sized here too (this colo's Nasdaq calls may keep failing).
   const complete = want.every((d, i) => got[i] != null || Object.keys(shared?.[d] ?? {}).length > 0 || !win.includes(d) || (failed?.[d] ?? 0) > now);
@@ -1053,13 +1104,23 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     weeks[weeks.length - 1].push(d);
   }
   const health = { failed: false };
+  // 0114 bounce 3: the cross-check's shared reads go first, before the week reads spend the invocation's 50
+  // subrequests (Cache API and KV calls count): read late, they failed silently and the days read as unchecked.
+  const today = iso(todayNY());
+  const xRange = to >= today && from <= addDays(windowEnd(today), XCHECK_REACH);
+  const inRange = (d: string) => d >= from && d <= to;
+  // Awaited before the week reads start (review: a KV miss issued later still lost out to their bursts). Only ranges
+  // overlapping the window may fetch a day no colo has (bounded wait); later ranges (the month view fires several at
+  // once) read the cache.
+  const [w, memos, leads] = xRange
+    ? await Promise.all([nasdaqWindow(today, ctx, from <= windowEnd(today), inRange, env).catch(() => null), readMemos(env).catch(() => null), readLeads(env).catch(() => null)])
+    : [null, null, null];
   const perWeek = await pool(weeks, 3, (w) => calendarWeek(w, env, ctx, health));
   const results = perWeek.flatMap((r, wi) => (r.status === "fulfilled" ? r.value : weeks[wi].map(() => ({ status: "rejected", reason: r.reason }) as PromiseSettledResult<EarningsEvent[]>)));
   const warnings: string[] = [];
   let events: EarningsEvent[] = [];
   const loaded = new Set<string>();
   results.forEach((r, i) => (r.status === "fulfilled" ? (events.push(...r.value), loaded.add(days[i])) : warnings.push(`Couldn't load ${days[i]} — showing the rest.`)));
-  const today = iso(todayNY());
   let pending = 0;
   let suppDoc: SuppDoc | null = null;
   if (touchesSupp(from, to, today)) {
@@ -1087,14 +1148,11 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
   // warnings make the client say "busy" and retry (0047). `unchecked` counts the days that couldn't be compared.
   let unchecked = 0;
   let uncheckedDays: string[] = [];
-  if (to >= today && from <= addDays(windowEnd(today), XCHECK_REACH)) {
-    // Only ranges overlapping the window may fetch; later ranges (the month view fires several at once) read the cache.
-    const inRange = (d: string) => d >= from && d <= to;
-    const w = await nasdaqWindow(today, ctx, from <= windowEnd(today), inRange, env).catch(() => null);
+  let fill = false;
+  if (xRange) {
     if (w) fixed = crossCheck(fixed, w);
     // 0083: what this read found is remembered for every colo (real evidence only), and a cold or partial read
     // gets the contests another read saw, so a flagged row stays flagged.
-    const memos = await readMemos(env);
     // 0114: a read with a stale day neither writes nor clears memos (24 h old listings aren't current evidence).
     if (!w?.stale?.length) rememberContests(env, ctx, memos, contestsIn(fixed, windowCovered(w, today)), today);
     fixed = applyMemos(fixed, memos, today, w);
@@ -1104,7 +1162,7 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     // lists what every wider range does.
     fixed = await leadInRange(fixed, from, to, today, w, memos, near.rows, suppDoc).catch(() => fixed);
     // 0104: a session the sheet settled (Nasdaq's, backed by every recent report) reads the same on the calendar.
-    fixed = applyLeads(fixed, await readLeads(env), today);
+    fixed = applyLeads(fixed, leads, today);
     unchecked = windowDays(today).length - (w?.loaded.length ?? 0);
     // 0061: the days on screen that haven't been compared yet, so the client says "still checking" and asks again,
     // instead of showing a cold read as if it had been checked.
@@ -1113,8 +1171,11 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
     // 0114 bounce 1: on a day that couldn't be checked, a feed session with no Nasdaq evidence (no contest, no
     // remembered one, no settled lead) isn't shown as fact: Time TBD until the re-read (30 s), feed's kept in `fh`.
     if (uncheckedDays.length) fixed = holdUnchecked(fixed, new Set(uncheckedDays));
+    // 0114 bounce 3: a window day missing or stale asks the reader's browser for the fill (`/api/xcheck/fill`), which
+    // runs in an invocation of its own. Same gate as the in-request fill it replaces: ranges that overlap the window.
+    fill = from <= windowEnd(today) && windowDays(today).some((d) => !done.has(d) || !!w?.stale?.includes(d));
   }
-  const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings, ...(pending ? { pending } : {}), ...(unchecked ? { unchecked } : {}), ...(uncheckedDays.length ? { uncheckedDays } : {}) };
+  const body: CalendarResponse = { from, to, events: fixed, asOf: new Date().toISOString(), warnings, ...(pending ? { pending } : {}), ...(unchecked ? { unchecked } : {}), ...(uncheckedDays.length ? { uncheckedDays } : {}), ...(fill ? { fill: 1 as const } : {}) };
   // An unchecked answer must not sit in the browser for 10 minutes: the next read is the checked one.
   return json(body, uncheckedDays.length ? 30 : 600);
 }
@@ -1260,7 +1321,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // the window already answered for that day (0114: freshly; a stale day is fetched on demand again)
   const inWin = !!nqWin && nqWin.loaded.includes(nextE?.date ?? "") && !nqWin.stale?.includes(nextE?.date ?? "");
   // 0060: also when Finnhub gives a session, so a session the two calendars disagree on is caught without waiting.
-  const nqNextDay = nextE && !nextE.source && nextE.hour !== "dmh" && !inWin ? await nasdaqDayOnDemand(nextE.date, today, ctx) : null;
+  const nqNextDay = nextE && !nextE.source && nextE.hour !== "dmh" && !inWin ? await nasdaqDayOnDemand(nextE.date, today, ctx, env) : null;
   const nqNextHour = nqNextDay?.[symbol];
   if (xcheck && nqNextDay) nqWin = withDay(nqWin, today, nextE.date, nqNextDay);
   const fhNextHour = nextE?.hour as string | undefined;
@@ -1271,7 +1332,7 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   // Only for a day still ahead and inside the calendar's window, as `companyDayFill`: on the report day the 0039 states
   // would take Nasdaq's guess as the time results are due (review of #193).
   if (nextE?.source && !nextE.hour && nextE.epsActual == null && nextE.revenueActual == null && nextE.date > today && nextE.date <= windowEnd(today)) {
-    const h = (await nasdaqDayOnDemand(nextE.date, today, ctx))?.[symbol];
+    const h = (await nasdaqDayOnDemand(nextE.date, today, ctx, env))?.[symbol];
     if (h) { nextE.hour = h; nextE.hs = "n"; }
   }
   // Past prints: Nasdaq gives the report dates (newest first).
@@ -2074,7 +2135,7 @@ async function kidsWhy(url: URL, env: Env, ctx: ExecutionContext): Promise<Respo
   // 0057: the same habit as the sheet (Finnhub's next, Nasdaq's listing for that date, Finnhub's last).
   const up = cal.filter((e) => e.date >= today).sort((x, y) => x.date.localeCompare(y.date))[0];
   const last = cal.filter((e) => e.date < today).sort((x, y) => y.date.localeCompare(x.date))[0];
-  const nqUp = up && !up.source && up.hour !== "dmh" ? (await nasdaqDayOnDemand(up.date, today, ctx))?.[s] : undefined;
+  const nqUp = up && !up.source && up.hour !== "dmh" ? (await nasdaqDayOnDemand(up.date, today, ctx, env))?.[s] : undefined;
   const nqRows = (nq?.data?.earningsSurpriseTable?.rows ?? []) as any[];
   // 0060: a session the two calendars disagree on is settled by the stock's own past moves, as on the sheet, or left unknown.
   const contested = !!up && !up.source && isContested(up.hour, nqUp);
@@ -2277,6 +2338,7 @@ export default {
       if (p === "/api/calendar") return await calendar(url, env, ctx);
       if (p === "/api/macro") return await macro(env, ctx);
       if (p === "/api/health") return await health(env, ctx);
+      if (p === "/api/xcheck/fill") return await xcheckFill(url, env, ctx);
       if (p.startsWith("/api/ai/")) { const r = await handleAi(p, req, env); if (r) return r; }
       if (p === "/api/ics") return await ics(url, env, ctx);
       if (p === "/api/quotes") return await quotes(url, env, ctx);

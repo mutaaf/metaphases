@@ -108,3 +108,38 @@ test("a fully checked week has no checking line", async ({ page }) => {
   await expect(page.locator(".notice", { hasText: "Still comparing" })).toHaveCount(0);
   await expect(page.getByText("Checking time…")).toHaveCount(0);
 });
+
+// 0114 bounce 3: the worker's calendar read never calls Nasdaq itself (it would be the 51st subrequest). An answer
+// marked `fill` makes the page ask for the window's fill in a request of its own, once, under the base path.
+test("an answer marked fill asks for the Nasdaq fill once, under the base path; a complete one never does", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-31T15:00:00-04:00") });
+  const body = JSON.parse(fx("calendar-2026-11.json"));
+  body.warnings = [];
+  let marked = true;
+  await page.route("**/api/calendar**", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(marked ? { ...body, fill: 1 } : body) }));
+  const fills: string[] = [];
+  await page.route("**/api/xcheck/fill**", (r) => { fills.push(new URL(r.request().url()).pathname); r.fulfill({ contentType: "application/json", body: '{"missing":2,"filling":[]}' }); });
+  await page.goto("./?d=2026-11-02");
+  await page.getByRole("button", { name: "week view" }).click();
+  await expect.poll(() => fills.length).toBeGreaterThan(0);
+  await page.getByRole("button", { name: /next/i }).first().click(); // another read inside the minute: no second ask
+  await page.waitForTimeout(500);
+  expect(fills.length).toBe(1);
+  expect(fills[0]).toBe("/metaphases/api/xcheck/fill");
+  await page.screenshot({ path: `test-results/0114-week-${page.viewportSize()!.width}.png` });
+  marked = false;
+});
+
+test("a complete answer (no fill mark) never asks for the fill", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-10-31T15:00:00-04:00") });
+  const body = JSON.parse(fx("calendar-2026-11.json"));
+  body.warnings = [];
+  await page.route("**/api/calendar**", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(body) }));
+  const fills: string[] = [];
+  await page.route("**/api/xcheck/fill**", (r) => { fills.push(r.request().url()); r.fulfill({ body: "{}" }); });
+  await page.goto("./?d=2026-11-02");
+  await page.getByRole("button", { name: "week view" }).click();
+  await expect(page.locator(".notice", { hasText: "Still comparing" })).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect(fills).toEqual([]);
+});

@@ -63,6 +63,8 @@ export interface CalendarResponse {
   unchecked?: number;
   /** 0061: the requested days, inside that window, not compared yet. The client shows "still checking" and asks again. */
   uncheckedDays?: string[];
+  /** 0114 bounce 3: a window day is missing or stale; the client asks `/api/xcheck/fill` (its own invocation) to fetch it. */
+  fill?: 1;
 }
 
 export type Grade = "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C+" | "C" | "C-" | "D" | "F";
