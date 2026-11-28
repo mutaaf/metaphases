@@ -25,7 +25,7 @@ import { ADS_SHARES, adsMemoEntry, adsMemoKey, fromAdsMemo, mergeAdsMemo, onAdsB
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove, usualSession } from "../shared/reaction";
-import { applyPreReport, epsVerdict, sameEpsBasis, fillMovedFigures, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, sameActual, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
+import { applyPreReport, epsVerdict, fillMovedFigures, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, sameActual, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { admitUntracked, capsGrow, capUsd, foldCaps, mergeCapDocs, nasdaqDayCaps, type CapDoc, type NqCaps } from "../shared/untrackedGate";
@@ -1604,7 +1604,8 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const h = keep(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit, undefined, sameSource), f ? f.actual : fhQuarter[i]?.actual);
     // 0120: the feed's own estimate for this report on Nasdaq's basis (URBN $1.5312 vs $1.53) vouches for Nasdaq's
     // pair, so it isn't Nasdaq's alone for 0096's test; one on another basis (CRWD $0.29 vs $0.05) doesn't.
-    const vouched = f != null && sameEpsBasis(typeof f.estimate === "number" ? f.estimate : null, Number.isFinite(nE) ? nE : null);
+    // Attempt 3: sameActual's near-zero rule too (KSS −$0.0017 vs −$0.01, both a cent from zero: one consensus).
+    const vouched = f != null && sameActual(typeof f.estimate === "number" ? f.estimate : null, Number.isFinite(nE) ? nE : null);
     if (sameSource && f?.actual == null && fhQuarter[i]?.actual == null && !vouched) nasdaqOnly.add(h);
     history.push(h);
   });
