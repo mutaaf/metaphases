@@ -1571,7 +1571,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const nasdaqOnly = new Set<Reaction>();
   // 0120: the calendar's last row is Nasdaq's report when it's within a few days (URBN: the feed's Nov 23, Nasdaq's
   // Nov 24), so a misdated feed row still lends its figures and never leaves Nasdaq's pair alone for 0096's test.
-  const isLast = (date: string) => !!lastE && Math.abs(daysApart(lastE.date, date)) <= 3;
+  // Review: only Nasdaq's newest row, and only a calendar row with a print, may match off-date (a late filer's two
+  // reports days apart never share one quarter's figures; an estimate-only row lends nothing to judge with).
+  const newestNq = recent.length ? reportedOn(recent[0]) : "";
+  const isLast = (date: string) => !!lastE && (lastE.date === date
+    || (date === newestNq && lastE.epsActual != null && Math.abs(daysApart(lastE.date, date)) <= 3));
   recent.forEach((r, i) => {
     const date = reportedOn(r);
     // One consensus per quarter: Finnhub's (the calendar's) when we have it for this quarter, else Nasdaq's.

@@ -101,5 +101,26 @@ describe("worker /api/ticker: the newest quarter is judged on Nasdaq's own pair 
     expect(aug).toMatchObject({ epsE: 0.29, epsA: 0.31 });
     expect(aug.basis).toBeUndefined();
     expect(r.history.filter((h: any) => h.basis).map((h: any) => h.date)).toEqual(["2026-06-03", "2026-03-03"]);
+  });  it("KSS with the calendar a day early (Nov 23): still the same report, a beat, 4 of 4, session from the habit", async () => {
+    calRows = [cal("KSS", "2026-11-23", "amc", 3, 2027, -0.0017, 0.32), cal("KSS", "2027-03-09", "bmo", 4, 2027, 1.1, null)];
+    surprises = [];
+    nqSurprise = kssNq();
+    const r = await get("/api/ticker/KSS");
+    const nov = r.history.find((h: any) => h.date === "2026-11-24");
+    expect(nov).toMatchObject({ epsE: -0.01, epsA: 0.32 });
+    expect(nov.basis).toBeUndefined();
+    expect(nov.session).not.toBe("amc"); // the misdated row's own session belongs to its own day
+    expect(r.history.filter((h: any) => h.date === "2026-11-23")).toEqual([]);
+    expect(r.beatRate).toEqual({ beats: 4, total: 4 });
+  });
+
+  it("review: a calendar row near an OLDER Nasdaq row (a late filer's two reports) never lends it figures", async () => {
+    // Nasdaq lists the delayed Q2 (Nov 20) but not Q3 yet; the calendar's last row is Q3 on Nov 22 with its own print.
+    calRows = [cal("LATE", "2026-11-22", "bmo", 3, 2027, 0.3, 0.6), cal("LATE", "2027-03-01", "bmo", 4, 2027, 0.5, null)];
+    surprises = [];
+    nqSurprise = [row("Oct 2026", "11/24/2026", 0.62, "0.5"), row("Jul 2026", "11/20/2026", 0.4, "0.45"), row("Apr 2026", "5/20/2026", 0.4, "0.38")];
+    const r = await get("/api/ticker/LATE");
+    expect(r.history.find((h: any) => h.date === "2026-11-20")).toMatchObject({ epsE: 0.45, epsA: 0.4 });
   });
 });
+
