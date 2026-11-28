@@ -25,7 +25,7 @@ import { ADS_SHARES, adsMemoEntry, adsMemoKey, fromAdsMemo, mergeAdsMemo, onAdsB
 import { isProjected } from "../shared/projected";
 import { buildIcs, cardSvg, quartersFrom, shapeChart, nyDate, type IcsItem } from "../shared/depth";
 import { contestedSession, isContested, pastSession, projectedSession, reactionMove, sessionHabit, typicalMove, usualSession } from "../shared/reaction";
-import { applyPreReport, epsVerdict, fillMovedFigures, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, sameActual, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
+import { applyPreReport, epsVerdict, sameEpsBasis, fillMovedFigures, isReit, judgeReaction, matchQuarters, nasdaqHistoryOffBasis, reitEstimateOffBasis, sameActual, nasdaqDayActuals, nasdaqDayEps, needsEpsBasis, periodKey, pickConsensus, sameEpsUnit, type EstSnapshot } from "../shared/compare";
 import { shareEps, yahooSymbol } from "../shared/shareClass";
 import overridesFile from "../data/date-overrides.json" with { type: "json" };
 import { admitUntracked, capsGrow, capUsd, foldCaps, mergeCapDocs, nasdaqDayCaps, type CapDoc, type NqCaps } from "../shared/untrackedGate";
@@ -1571,11 +1571,11 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
   const nasdaqOnly = new Set<Reaction>();
   // 0120: the calendar's last row is Nasdaq's report when it's within a few days (URBN: the feed's Nov 23, Nasdaq's
   // Nov 24), so a misdated feed row still lends its figures and never leaves Nasdaq's pair alone for 0096's test.
-  // Review: only Nasdaq's newest row, and only a calendar row with a print, may match off-date (a late filer's two
-  // reports days apart never share one quarter's figures; an estimate-only row lends nothing to judge with).
+  // Review: only Nasdaq's newest row may match off-date (a late filer's two reports days apart never share one
+  // quarter's figures).
   const newestNq = recent.length ? reportedOn(recent[0]) : "";
   const isLast = (date: string) => !!lastE && (lastE.date === date
-    || (date === newestNq && lastE.epsActual != null && Math.abs(daysApart(lastE.date, date)) <= 3));
+    || (date === newestNq && (lastE.epsActual != null || lastE.epsEstimate != null) && Math.abs(daysApart(lastE.date, date)) <= 3));
   recent.forEach((r, i) => {
     const date = reportedOn(r);
     // One consensus per quarter: Finnhub's (the calendar's) when we have it for this quarter, else Nasdaq's.
@@ -1595,12 +1595,17 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     const nE = typeof r.consensusForecast === "number" ? r.consensusForecast : parseFloat(r.consensusForecast);
     // 0120: Finnhub's pair that can't be judged (KSS −$0.0017 → $0.32) beside the same actual in Nasdaq's table: Nasdaq's
     // own pair (−$0.01 → $0.32, 0094's turnaround) is one table's figures, so it's judged instead of "basis differs".
-    if (pick.source === "finnhub" && sameActual(parseFloat(String(r.eps)), typeof f?.actual === "number" ? f.actual : null)
+    // Attempt 2 (live): Finnhub often has the estimate but not the actual yet, so its "pair" is its estimate against
+    // Nasdaq's actual, a mix of feeds: Nasdaq's own pair stands then too.
+    if (pick.source === "finnhub" && (f?.actual == null || sameActual(parseFloat(String(r.eps)), typeof f.actual === "number" ? f.actual : null))
       && epsVerdict({ eA: pick.epsA, eE: pick.epsE, nE: Number.isFinite(nE) ? nE : null, reit }).v === "not-comparable") pick = pickConsensus(nq, undefined);
     // 0094: Nasdaq's estimate with Nasdaq's own actual is one table's pair: a turnaround is judged, not "basis differs".
     const sameSource = pick.source === "nasdaq" && pick.epsA != null && pick.epsA === parseFloat(String(r.eps));
     const h = keep(judgeReaction({ date, session, period: r.fiscalQtrEnd, epsE: pick.epsE, epsA: pick.epsA, surprisePct: pick.surprisePct, move } as Reaction, Number.isFinite(nE) ? nE : null, reit, undefined, sameSource), f ? f.actual : fhQuarter[i]?.actual);
-    if (sameSource && f?.actual == null && fhQuarter[i]?.actual == null) nasdaqOnly.add(h);
+    // 0120: the feed's own estimate for this report on Nasdaq's basis (URBN $1.5312 vs $1.53) vouches for Nasdaq's
+    // pair, so it isn't Nasdaq's alone for 0096's test; one on another basis (CRWD $0.29 vs $0.05) doesn't.
+    const vouched = f != null && sameEpsBasis(typeof f.estimate === "number" ? f.estimate : null, Number.isFinite(nE) ? nE : null);
+    if (sameSource && f?.actual == null && fhQuarter[i]?.actual == null && !vouched) nasdaqOnly.add(h);
     history.push(h);
   });
   // 0096: Nasdaq's own pairs on a GAAP-style basis (SNOW, ZS, CRWD, ASAN) beside an adjusted next estimate: not a
