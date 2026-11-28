@@ -167,3 +167,23 @@ describe("worker /api/ticker: the feed has the estimate but not the actual yet (
     expect(r.history.find((h: any) => h.date === "2026-08-27").basis).toBe("differs");
   });
 });
+
+// 0120 attempt 3: production at 13:40 (build 2307d922): KSS's newest row was Nasdaq's −$0.01 → $0.32 but still
+// "basis differs". One older Finnhub actual is on another measure (0096's mix test fires), and the feed's −$0.0017
+// estimate failed the ratio test against −$0.01, although both are a cent from zero: the same consensus.
+describe("worker /api/ticker: a near-zero feed estimate vouches for Nasdaq's near-zero one (0120)", () => {
+  it("KSS live: feed −$0.0017 (no actual) beside Nasdaq −$0.01 → $0.32, one older Finnhub actual off: a beat", async () => {
+    calRows = [cal("KSS", "2026-11-24", "bmo", 3, 2027, -0.0017, null), cal("KSS", "2027-03-09", "bmo", 4, 2027, 1.1, null)];
+    surprises = [
+      { period: "2026-09-30", quarter: 2, year: 2027, estimate: 0.5512, actual: 1.28 },
+      { period: "2026-06-30", quarter: 1, year: 2027, estimate: -0.19, actual: -0.13 },
+      { period: "2026-03-31", quarter: 4, year: 2026, estimate: 0.86, actual: 0.8 },
+    ];
+    nqSurprise = kssNq();
+    const r = await get("/api/ticker/KSS");
+    const nov = r.history.find((h: any) => h.date === "2026-11-24");
+    expect(nov).toMatchObject({ epsE: -0.01, epsA: 0.32 });
+    expect(nov.basis).toBeUndefined();
+    expect(r.beatRate.total).toBe(4);
+  });
+});
