@@ -2,6 +2,7 @@
 // from the worker) or a failed week chunk ("Couldn't load 2026-10-10–2026-10-16 — …", from src/lib/api.ts).
 // Chunks overlap and repeat each other's warnings, so days are deduped; weekends and NYSE holidays never count.
 import { HOLIDAYS } from "../../shared/market";
+import { isGoneWarning } from "../../shared/feedHorizon";
 const CLOSED = new Set(HOLIDAYS.map((h) => h.date));
 const DAY = /(\d{4}-\d{2}-\d{2})(?:\s*[–-]\s*(\d{4}-\d{2}-\d{2}))?/;
 const next = (d: string) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10); };
@@ -20,7 +21,8 @@ export function missingDays(warnings: readonly string[], from: string, to: strin
 }
 
 /** 0047: only a real failure is worth a quiet retry. A pending count (overseas names still being checked) isn't one. */
-export const needsRetry = (data: { warnings?: readonly string[] } | null | undefined) => (data?.warnings?.length ?? 0) > 0;
+/** 0118: a day the data feed has dropped can't come back by asking again, so it alone never triggers a retry. */
+export const needsRetry = (data: { warnings?: readonly string[] } | null | undefined) => (data?.warnings ?? []).some((w) => !isGoneWarning(w));
 
 /** 0061: re-reads while the Nasdaq cross-check fills the days on screen (its builder takes 2 days per colo per minute,
  *  so a cold 10-day window takes about 5 minutes). */

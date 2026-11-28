@@ -6,6 +6,7 @@ import type { Quarter, Reaction, TickerResponse } from "../../shared/types";
 import { nyDate, peersFor, placeMarkers, seasonScore, yearAgoOf } from "../../shared/depth";
 import { useCalendar, prefetchTicker } from "../lib/api";
 import { missingDays } from "../lib/partial";
+import { coveredSince, goneDaysOf } from "../../shared/feedHorizon";
 import { co, curOf, reitOf, UNIVERSE } from "../lib/data";
 import { addDays, fmtShort, todayISO } from "../lib/dates";
 import { eps, epsIn, money, moneyIn, pct, rowEps } from "../lib/format";
@@ -186,13 +187,26 @@ export function useSeason() {
   const season = useMemo(() => (data ? seasonScore(data.events, (s) => !!UNIVERSE[s]?.sp, SP_COUNT, from, today, curOf, reitOf) : null), [data]);
   // Days of the window that didn't load: the reported share is then only a floor, and the rates cover what loaded (0026).
   const missing = useMemo(() => (data ? missingDays(data.warnings ?? [], from, today).length : 0), [data]);
-  return { season, missing, loading, error };
+  // 0118: the window's days the feed no longer has; the numbers then count reports from `since` on, and say so.
+  // Only when nothing before that day is counted (a colo's kept copy of an older day would be), or the date would
+  // claim a narrower window than the numbers use (0118 review); the "at least" floor holds either way.
+  const since = useMemo(() => {
+    if (!data) return null;
+    const s = coveredSince(goneDaysOf(data.warnings ?? []).filter((d) => d >= from && d <= today));
+    return s && !data.events.some((e) => e.eA != null && e.d >= from && e.d < s) ? s : null;
+  }, [data]);
+  const gone = useMemo(() => (data ? goneDaysOf(data.warnings ?? []).filter((d) => d >= from && d <= today).length : 0), [data]);
+  return { season, missing, since, gone, loading, error };
 }
 
 const daysWord = (n: number) => `${n} trading day${n === 1 ? "" : "s"}`;
 
 export function SeasonScoreboard({ slim }: { slim?: boolean }) {
-  const { season, missing, loading } = useSeason();
+  const { season, missing, since, gone, loading } = useSeason();
+  // With a coverage date, the days before it are already said; only other missing days still need "partial".
+  const busyFrom = since ? gone : 0;
+  // Days that didn't load for another reason (a busy service), beyond the ones before `since`.
+  const sinceNote = since ? `reports since ${fmtShort(since)} (our data feed keeps about a month)` : null;
   const floor = missing > 0 ? "at least " : "";
   if (loading && !season) return slim ? null : <Skeleton h={90} />;
   if (!season) return null;
@@ -202,7 +216,7 @@ export function SeasonScoreboard({ slim }: { slim?: boolean }) {
       <div className="season-slim">
         <span className="eyebrow">Earnings season</span>
         <span className="season-bar" aria-hidden><i style={{ width: `${season.reportedPct}%` }} /></span>
-        <span><b>{floor}{season.reportedPct}%</b> of the S&P 500 reported · <b>{season.epsBeatPct}%</b> beat on EPS · median <Term k="surprise">surprise</Term> <b>{pct(season.medianSurprise)}</b>{missing > 0 && <span className="muted season-partial"> · partial: {daysWord(missing)} didn't load</span>}</span>
+        <span><b>{floor}{season.reportedPct}%</b> of the S&P 500 reported · <b>{season.epsBeatPct}%</b> beat on EPS · median <Term k="surprise">surprise</Term> <b>{pct(season.medianSurprise)}</b>{since && <span className="muted season-partial" title={sinceNote!}> · counting since {fmtShort(since)}</span>}{missing > busyFrom && <span className="muted season-partial"> · partial: {daysWord(missing - busyFrom)} didn't load</span>}</span>
       </div>
     );
   }
@@ -215,7 +229,9 @@ export function SeasonScoreboard({ slim }: { slim?: boolean }) {
           : <p className="muted">Too early in the season: only {season.reported} index members have reported in this window.</p>
       ) : (
         <>
-          {missing > 0 && <p className="season-partial notice notice-warn">Partial: {daysWord(missing)} didn't load, so at least this many have reported and the rates cover only the reports that loaded.</p>}
+          {since
+            ? <p className="season-partial notice notice-warn">Partial: these numbers count {sinceNote}, so at least this many have reported and the rates cover only those reports.</p>
+            : missing > 0 && <p className="season-partial notice notice-warn">Partial: {daysWord(missing)} didn't load, so at least this many have reported and the rates cover only the reports that loaded.</p>}
           <div className="season-track"><i style={{ width: `${season.reportedPct}%` }} /><span>{floor}{season.reported} of {season.members} reported</span></div>
           <div className="season-stats">
             <div><span className="eyebrow">Reported</span><b>{floor && <small className="season-floor">at least </small>}{season.reportedPct}%</b></div>

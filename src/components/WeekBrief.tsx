@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { CalendarResponse, MacroResponse } from "../../shared/types";
 import { buildBrief } from "../lib/brief";
+import { GONE_WEEK_COPY, goneDaysOf } from "../../shared/feedHorizon";
 import { nameOf, UNIVERSE } from "../lib/data";
 import { MON3, parse, todayISO, WEEKDAYS } from "../lib/dates";
 import { GLOSSARY } from "../lib/glossary";
@@ -37,6 +38,9 @@ export function WeekBrief({ week, current, cal, calLoading, calError, macro, mac
   );
   const partial = b.missingDays.length > 0;
   const allMissing = partial && b.total === 0;
+  // 0118: every missing day is one the feed has dropped (too far back), not a busy service.
+  const gone = new Set(covers ? goneDaysOf(cal!.warnings) : []);
+  const allGone = allMissing && b.missingDays.every((d) => gone.has(d));
   // 0067: holiday projections aren't counted, so a week holding only those isn't "quiet": it has unconfirmed dates.
   const quiet = ready && !partial && b.total === 0 && b.unconfirmed === 0;
   const unconf = b.unconfirmed > 0 ? <span className="muted" data-testid="brief-unconfirmed-count"> · {b.unconfirmed} date{b.unconfirmed === 1 ? "" : "s"} not confirmed</span> : null;
@@ -52,6 +56,7 @@ export function WeekBrief({ week, current, cal, calLoading, calError, macro, mac
         <span className="brief-sum">
           {calError ? "Earnings didn't load"
             : !ready ? <Skeleton w={180} h={14} />
+            : allGone ? "Too far back for our data feed"
             : allMissing ? "Earnings for this week didn't load"
             : quiet ? "A quiet week"
             : b.total === 0 ? <>No confirmed reports{unconf}</>
@@ -68,6 +73,8 @@ export function WeekBrief({ week, current, cal, calLoading, calError, macro, mac
               <p className="muted small">The earnings calendar didn't load, so this brief only covers the economy.</p>
             ) : !ready ? (
               <div className="brief-skel">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={36} />)}</div>
+            ) : allGone ? (
+              <p className="muted small">{GONE_WEEK_COPY}</p>
             ) : allMissing ? (
               <p className="muted small">We couldn't load this week's earnings from our data provider. Try again in a few minutes.</p>
             ) : quiet ? (
