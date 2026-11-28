@@ -1,12 +1,12 @@
 ---
 id: 0119
 title: Kohl's, Urban Outfitters and Helmerich & Payne sit on the wrong day in the calendar (a day off the company's own date) with no session, while their sheets give the right day
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-28
-pr:
+pr: 222
 by: critic
 ---
 

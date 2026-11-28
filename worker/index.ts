@@ -42,7 +42,7 @@ import { leadIns, leadRows, leadsNasdaq } from "../shared/leadDay";
 import { buildIndex, companyDayFill, crossCheck, crossOne, keepNasdaq, nasdaqDaySessions, withDay, windowDays, windowEnd, XCHECK_REACH, type Cross, type NqDay, type NqWindow } from "../shared/crossCheck";
 import { aliasMap, commitSupp, dropUnscaled, fetchedAt, homeListing, mergeShared, mergeSupplement, refreshEntry, staleSymbols, supplementSymbols, suppRows, unfetched, SUPP_LOCK_S, type SuppDoc, type Universe } from "../shared/calendarSupplement";
 import { secureHtml } from "../shared/csp";
-import { FIGURES_CHECK_MAX, needsFiguresCheck, needsPastCheck, nqReports, phantomReport, settleFiguresRow, settlePastRow, PAST_LOOKBACK_DAYS, type NqReport } from "../shared/pastRows";
+import { FIGURES_CHECK_MAX, needsFiguresCheck, needsPastCheck, nqReports, phantomReport, reportDayRow, settleFiguresRow, settlePastRow, PAST_LOOKBACK_DAYS, type NqReport } from "../shared/pastRows";
 import { oneReportOneRow, SAME_REPORT_DAYS } from "../shared/oneRow";
 import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, CALENDAR_NEXT, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
@@ -964,6 +964,12 @@ function adsRow(e: EarningsEvent, reports: NqReport[] | null): { row: EarningsEv
 const USD_PER: Record<string, number> = Object.fromEntries(Object.values(U as Record<string, { fx?: number; mcCur?: string }>)
   .filter((v) => v.mcCur && v.fx && v.fx > 0).map((v) => [v.mcCur as string, v.fx as number]));
 
+/** 0080's phantom check, else 0119's move to the day the history dates the report (the same history read). */
+const figuresRow = (e: EarningsEvent, reports: NqReport[] | null, today: string) => {
+  const out = settleFiguresRow(e, reports, today);
+  return out === e ? reportDayRow(e, reports) : out;
+};
+
 async function settlePast(events: EarningsEvent[], today: string, ctx: ExecutionContext, fetchFresh = true, figuresMax = FIGURES_CHECK_MAX, memo?: AdsMemo): Promise<EarningsEvent[]> {
   // 0080: plus up to `figuresMax` suspect rows with figures (`nx`), biggest first, so the reads stay bounded.
   const suspects = new Set([...new Set(events.filter((e) => needsFiguresCheck(e, today)).map((e) => e.s))]
@@ -1010,7 +1016,7 @@ async function settlePast(events: EarningsEvent[], today: string, ctx: Execution
   const learned: AdsMemo = {};
   const settled = events.map((e) => {
     let out = needsPastCheck(e, today) ? settlePastRow(e, reports.get(e.s) ?? null, usd(e.s), today)
-      : suspects.has(e.s) && needsFiguresCheck(e, today) ? settleFiguresRow(e, reports.get(e.s) ?? null, today)
+      : suspects.has(e.s) && needsFiguresCheck(e, today) ? figuresRow(e, reports.get(e.s) ?? null, today)
       : e;
     // 0103: after the suspect check too, so a surviving `nx` row is on the same basis as the sheet.
     if (adsRowToCheck(out, today)) {
@@ -1061,11 +1067,13 @@ async function oneRowInRange(fixed: EarningsEvent[], from: string, to: string, t
   const all = (await Promise.all(days.map(read))).flat();
   if (seen) seen.rows = all; // 0112: the same neighbours, for leadInRange (no second read)
   // A neighbour's row counts if it's a twin of a row here, or (0076) a past row with no figures that may move here.
-  // Those cost one cache read each in settlePast, so at most MOVE_IN_MAX symbols, biggest first.
-  const movers = new Set(
-    [...new Set(all.filter((e) => !syms.has(e.s) && needsPastCheck(e, today)).map((e) => e.s))]
-      .sort((x, y) => (U[y]?.mc ?? 0) - (U[x]?.mc ?? 0)).slice(0, MOVE_IN_MAX),
-  );
+  // Those cost one cache read each in settlePast, so at most MOVE_IN_MAX symbols, biggest first. 0119: plus, in
+  // their own slots (so they never crowd 0076's out), up to PAD_FIGURES_MAX suspects with figures (`nx`), which may
+  // move here too (cache only: the pad's settlePast reads no more of them than that).
+  const bySize = (list: string[]) => list.sort((x, y) => (U[y]?.mc ?? 0) - (U[x]?.mc ?? 0));
+  const lone = bySize([...new Set(all.filter((e) => !syms.has(e.s) && needsPastCheck(e, today)).map((e) => e.s))]).slice(0, MOVE_IN_MAX);
+  const figured = bySize([...new Set(all.filter((e) => !syms.has(e.s) && !lone.includes(e.s) && needsFiguresCheck(e, today)).map((e) => e.s))]).slice(0, PAD_FIGURES_MAX);
+  const movers = new Set([...lone, ...figured]);
   const raw = all.filter((e) => syms.has(e.s) || movers.has(e.s));
   if (!raw.length) return oneReportOneRow(fixed.filter(inRange));
   const applied = flagClosed(applyToEvents(raw, OVERRIDES, padFrom, padTo, today, (s) => s in U));

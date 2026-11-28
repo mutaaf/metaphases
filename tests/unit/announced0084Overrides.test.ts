@@ -8,6 +8,8 @@ import worker from "../../worker/index";
 // its session. Helmerich & Payne (Oct 14) names only its call, 10 a.m. ET Thursday, November 19, so the day is
 // confirmed and no session is set. Finnhub's feed: BBWI Wed Nov 18 with no time; HP Thu Nov 19 after the close,
 // which can't be true when the company discusses the results at 10 a.m. that morning.
+// 0119: HP's release itself (8-K) turned out to be dated Nov 18, the evening before the call, so its entry now gives
+// Nov 18; tests/unit/pastDay0119.test.ts pins it. This file keeps BBWI.
 
 const FILE = overridesFile as unknown as DateOverrides;
 const today = "2026-11-18";
@@ -17,15 +19,13 @@ const feed = [
 ];
 const WANT: Record<string, { date: string; hour: string; quarter: number; year: number }> = {
   BBWI: { date: "2026-11-19", hour: "bmo", quarter: 3, year: 2027 },
-  HP: { date: "2026-11-19", hour: "", quarter: 4, year: 2026 },
 };
 const SYMS = Object.keys(WANT);
 const SOURCE: Record<string, string> = {
   BBWI: "https://finviz.com/news/416976/bath-body-works-to-report-third-quarter-results-on-november-19-2026",
-  HP: "https://s25.q4cdn.com/694655835/files/doc_news/Helmerich--Payne-Inc--Schedules-Fiscal-Fourth-Quarter-2026-and-Year-End-Conference-Call-and-Webcast-2026.pdf",
 };
 
-describe("0084 BBWI and HP on their announced date", () => {
+describe("0084 BBWI on its announced date", () => {
   for (const s of SYMS) {
     it(`${s}: the entry passes the gate, ${WANT[s].date} ${WANT[s].hour || "(no session)"}`, () => {
       const { hour, ...rest } = WANT[s];
@@ -106,22 +106,8 @@ describe("0084 the companies' dates through the worker", () => {
     });
   }
 
-  it("the /t/ share titles state the company's day, never \"unconfirmed\", \"results expected\" or \"after the close\"", async () => {
-    const title = async (s: string) => { const r = await get(`/api/ticker/${s}`); return tickerShareTitle(s, s, r.next, r.justReported); };
-    expect(await title("BBWI")).toBe("BBWI reports Thu, Nov 19 before the open · Metaphases");
-    const hp = await title("HP");
-    expect(hp).toMatch(/^HP reports Thu, Nov 19/);
-    expect(hp).not.toMatch(/unconfirmed|results expected|after/i);
-  });
-
-  it("HP on the evening of Nov 19 never takes the feed's \"after close\" back from the raw day row", async () => {
-    // 7:30 pm ET Nov 19: the company named no session, so the feed's amc on its untouched day cache can't return.
-    vi.setSystemTime(new Date("2026-11-20T00:30:00Z"));
-    await get("/api/calendar?from=2026-11-16&to=2026-11-20"); // warms the raw day caches, as production's are
-    const r = await get("/api/ticker/HP");
-    expect(r.next).toMatchObject({ date: "2026-11-19" });
-    expect(r.next.session).not.toBe("amc");
-    expect(tickerShareTitle("HP", "HP", r.next, r.justReported)).not.toMatch(/after/i);
-    expect(JSON.stringify(r)).not.toMatch(/after the close/i);
+  it("the /t/ share title states the company's day, never \"unconfirmed\" or \"results expected\"", async () => {
+    const r = await get("/api/ticker/BBWI");
+    expect(tickerShareTitle("BBWI", "BBWI", r.next, r.justReported)).toBe("BBWI reports Thu, Nov 19 before the open · Metaphases");
   });
 });
