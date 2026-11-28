@@ -46,6 +46,7 @@ import { FIGURES_CHECK_MAX, needsFiguresCheck, needsPastCheck, nqReports, phanto
 import { oneReportOneRow, SAME_REPORT_DAYS } from "../shared/oneRow";
 import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, CALENDAR_NEXT, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
+import { feedGoneDays, goneWarning, isGoneWarning } from "../shared/feedHorizon";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -259,8 +260,19 @@ async function putDay(day: string, events: EarningsEvent[], today: string, ctx: 
   const body = JSON.stringify(events);
   ctx.waitUntil(Promise.all([
     caches.default.put(CAL_DAY(day), new Response(body, { headers: { "Cache-Control": `public, max-age=${ttl}`, "Content-Type": "application/json" } })),
-    caches.default.put(CAL(`cal:stale:v3:${day}`), new Response(body, { headers: { "Cache-Control": "public, max-age=604800" } })),
+    caches.default.put(CAL(`cal:stale:v3:${day}`), new Response(body, { headers: { "Cache-Control": `public, max-age=${staleTtl(day, today)}` } })),
   ]));
+}
+/** 0118: a finished day's rows don't change, and Finnhub drops them after about a month, so a past day's last good copy
+ *  is kept for a season (re-written each time it is served after the feed dropped it); a live day's for a week. */
+const STALE_PAST_TTL = 90 * 86400;
+const staleTtl = (day: string, today: string) => (day < addDays(today, -3) ? STALE_PAST_TTL : 604800);
+/** 0118: the feed has dropped this past day (`feedGoneDays`). Remembered in the day's own cache entry (an empty list,
+ *  so neighbour reads see no rows, plus a header), so a re-read costs no upstream call and no extra cache read. */
+const GONE_HEADER = "X-Feed-Gone";
+class FeedGone extends Error {}
+function putGone(day: string, today: string, ctx: ExecutionContext) {
+  ctx.waitUntil(caches.default.put(CAL_DAY(day), new Response("[]", { headers: { "Cache-Control": `public, max-age=${calTtl(day, today)}`, "Content-Type": "application/json", [GONE_HEADER]: "1" } })).catch(() => {}));
 }
 
 // ── 0035: estimates as they stood before the print ─────────────────────
@@ -827,13 +839,15 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
   const missing: number[] = [];
   await Promise.all(days.map(async (d, i) => {
     const hit = await caches.default.match(CAL_DAY(d));
-    if (hit) out[i] = { status: "fulfilled", value: (await hit.json()) as EarningsEvent[] }; else missing.push(i);
+    if (hit?.headers.get(GONE_HEADER)) out[i] = { status: "rejected", reason: new FeedGone(d) };
+    else if (hit) out[i] = { status: "fulfilled", value: (await hit.json()) as EarningsEvent[] }; else missing.push(i);
   }));
   if (!missing.length) return out;
   const from = days[Math.min(...missing)], to = days[Math.max(...missing)];
   const sized = await nasdaqCaps(missing.map((i) => days[i]), today, env, ctx).catch(() => ({ caps: {} as NqCaps, complete: false }));
   const ttl = (d: string) => (sized.complete || !windowDays(today).includes(d) ? calTtl(d, today) : Math.min(CAL_TTL_UNSIZED, calTtl(d, today)));
   let byDay: Map<string, EarningsEvent[]> | null = null;
+  let gone = new Set<string>();
   let rangeError: unknown = null;
   try {
     const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${from}&to=${to}&token=${env.FINNHUB_API_KEY}`);
@@ -841,6 +855,8 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
     if (rows.length < RANGE_CAP || from === to) {
       byDay = new Map();
       for (const e of toEvents(rows, sized.caps, today)) (byDay.get(e.d) ?? byDay.set(e.d, []).get(e.d)!).push(e);
+      // 0118: a past trading day with no feed row at all has been dropped by the feed (about a month of history).
+      gone = new Set(feedGoneDays(missing.map((i) => days[i]), rows.map((r: any) => String(r.date)), today));
     }
   } catch (e) {
     // A failed range call (429 after retries, upstream down) must not fan out into per-day retries:
@@ -860,11 +876,20 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
       out[i] = stale ? { status: "fulfilled", value: (await stale.json()) as EarningsEvent[] } : { status: "rejected", reason };
     }
   };
+  // 0118: a dropped day is served from its last good copy if this colo has one, never as an empty (quiet) day.
+  const settleGone = async (i: number) => {
+    const d = days[i];
+    const stale = await caches.default.match(CAL(`cal:stale:v3:${d}`)).catch(() => undefined);
+    const rows = stale ? ((await stale.json().catch(() => [])) as EarningsEvent[]) : [];
+    if (rows.length) { putDay(d, rows, today, ctx, ttl(d)); out[i] = { status: "fulfilled", value: rows }; return; }
+    putGone(d, today, ctx);
+    out[i] = { status: "rejected", reason: new FeedGone(d) };
+  };
   if (rangeError) {
     await Promise.all(missing.map((i) => settle(i, () => Promise.reject(rangeError))));
   } else if (byDay) {
     const m = byDay;
-    await Promise.all(missing.map((i) => settle(i, async () => m.get(days[i]) ?? [])));
+    await Promise.all(missing.map((i) => (gone.has(days[i]) ? settleGone(i) : settle(i, async () => m.get(days[i]) ?? []))));
   } else {
     // Truncated busy week: day by day, at most 2 in flight (3 weeks in parallel stays ≤ 6 calls at once).
     await pool(missing, 2, (i) => settle(i, () => fetchCalendarDay(days[i], env, sized.caps)));
@@ -1125,13 +1150,14 @@ async function calendar(url: URL, env: Env, ctx: ExecutionContext): Promise<Resp
   const warnings: string[] = [];
   let events: EarningsEvent[] = [];
   const loaded = new Set<string>();
-  results.forEach((r, i) => (r.status === "fulfilled" ? (events.push(...r.value), loaded.add(days[i])) : warnings.push(`Couldn't load ${days[i]} — showing the rest.`)));
+  results.forEach((r, i) => (r.status === "fulfilled" ? (events.push(...r.value), loaded.add(days[i])) : warnings.push(r.reason instanceof FeedGone ? goneWarning(days[i]) : `Couldn't load ${days[i]} — showing the rest.`)));
   let pending = 0;
   let suppDoc: SuppDoc | null = null;
   if (touchesSupp(from, to, today)) {
     // After the range calls, never alongside them; and no new calls at all if any upstream call failed,
     // even one a stale copy covered (0024: a rate limit must not become more calls).
-    const doc = await supplement(env, ctx, today, !health.failed && warnings.length === 0);
+    // 0118: a day the feed has dropped isn't a failure (no rate limit behind it), so it doesn't stop the supplement.
+    const doc = await supplement(env, ctx, today, !health.failed && warnings.every(isGoneWarning));
     suppDoc = doc;
     events = mergeSupplement(events, doc, from, to, (d) => loaded.has(d));
     // Not fetched yet here (a cold cache): count them so an absent row never reads as "doesn't report".

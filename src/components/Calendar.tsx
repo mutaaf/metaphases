@@ -4,6 +4,7 @@ import type { EarningsEvent, MacroEvent } from "../../shared/types";
 import { EARLY_CLOSE, HOLIDAYS } from "../../shared/market";
 import { useCalendar, useMacro, prefetchTicker } from "../lib/api";
 import { checkingOf, missingDays } from "../lib/partial";
+import { GONE_DAY_COPY, goneDaysOf, isGoneWarning } from "../../shared/feedHorizon";
 import { co, epsBasisDiffers, epsOf, heldVia, nameOf, popularity, resultOf, rowCur, SECTORS, surprise, UNIVERSE } from "../lib/data";
 import { revenueSkipped, revenueVerdict } from "../../shared/compare";
 import { figuresPending, noResultYet } from "../../shared/pending";
@@ -262,7 +263,7 @@ function UnconfirmedGroup({ events, compact }: { events: EarningsEvent[]; compac
 
 // The drawer has its own shareable URL (?day=), so an empty day there gets the same
 // guidance as the grid, never a blank under "0 reporting" (0051, 0026).
-type DrawerUnknown = "loading" | "failed" | "outside";
+type DrawerUnknown = "loading" | "failed" | "outside" | "gone";
 function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: boolean, unconfirmed = false, contested = false, more = 0, kind = "popular") {
   const holiday = HOLIDAY[day];
   const dow = parse(day).getDay();
@@ -272,6 +273,8 @@ function drawerEmpty(day: string, unknown: DrawerUnknown | undefined, narrowed: 
   // A shared ?day= outside the range on screen: we haven't read it, so we don't claim anything.
   if (unknown === "outside") return { eyebrow: "Not on screen", body: <>This day isn't in the range on screen. Open the day view to see who reports.</> };
   if (unknown === "failed") return { eyebrow: "Didn't load", body: <>This day's earnings didn't load, so we can't say who reports. Try again in a moment.</> };
+  // 0118: a past day the feed has dropped can't be retried; never "none".
+  if (unknown === "gone") return { eyebrow: "Not in our feed", body: <>{GONE_DAY_COPY}</> };
   // 0072: only rows that never happened here, so nothing is said to report, and nothing contradicts them.
   if (unconfirmed) return { eyebrow: "None confirmed", body: contested
     // 0078: rows Nasdaq lists on another day: they may still come, just not (we know) today.
@@ -413,8 +416,12 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
   const covered = (d: string) => !!data && data.from <= d && d <= data.to;
   const unknownDay = (d: string) => (covered(d) ? undefined : error ? "failed" as const : "loading" as const);
   const failedDays = useMemo(() => new Set(data ? missingDays(data.warnings ?? [], data.from, data.to) : []), [data]);
+  // 0118: past days the feed no longer has (also in failedDays). Not a busy service: no retry, their own words.
+  const goneDays = useMemo(() => new Set(data ? goneDaysOf(data.warnings ?? []).filter((d) => d >= data.from && d <= data.to) : []), [data]);
+  const liveWarnings = useMemo(() => (data?.warnings ?? []).filter((w) => !isGoneWarning(w)), [data]);
+  const busyDays = useMemo(() => [...failedDays].filter((d) => !goneDays.has(d)), [failedDays, goneDays]);
   // 0061: days on screen the Nasdaq cross-check hasn't reached yet (useApi re-reads until they're in).
-  const unchecked = useMemo(() => new Set(data && !data.warnings.length ? checkingOf(data.uncheckedDays) : []), [data]);
+  const unchecked = useMemo(() => new Set(data && !liveWarnings.length ? checkingOf(data.uncheckedDays) : []), [data, liveWarnings]);
   // Still checking only while a re-read is coming; after the last one, those times are the feed's alone.
   const checkingDays = retrying ? unchecked : new Set<string>();
   const byDay = useMemo(() => {
@@ -465,7 +472,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
           <p className="dek">
             {view === "day" && !loading && data && (unknownDay(anchor) || failedDays.has(anchor)) ? (
               // 0109 review: the dek counts the anchor day now, so a day that didn't load says so, never "none".
-              unknownDay(anchor) === "loading" ? "Charting the phases…" : "This day's earnings didn't load, so we can't say who reports yet."
+              unknownDay(anchor) === "loading" ? "Charting the phases…" : goneDays.has(anchor) ? GONE_DAY_COPY : "This day's earnings didn't load, so we can't say who reports yet."
             ) : datedCount || viewCount.total ? (
               <>
                 <b>{datedCount}</b> {viewCount.total > datedCount && kind && kind !== "shown" ? `${kind} ` : ""}{datedCount === 1 ? "company" : "companies"} {view === "day" && anchor < today ? "reported" : datedCount === 1 ? "reports" : "report"} {view === "month" ? "this month" : view === "week" ? "this week" : anchor === today ? "today" : `on ${WEEKDAY_LONG[parse(anchor).getDay()]}`}{viewCount.total > datedCount && <> ({viewCount.total} in all)</>}
@@ -497,9 +504,13 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       <WeekBrief week={bWeek} current={bWeek.includes(next)} cal={data} calLoading={loading} calError={error} macro={macro.data} macroLoading={macro.loading} />
 
       {error && !loading && <Notice tone="error">{error} Your watchlist and holdings are safe. <button className="btn btn-box" onClick={retry}>Try again</button></Notice>}
-      {data && data.warnings.length > 0 && (
+      {goneDays.size > 0 && (() => {
+        const g = [...goneDays].sort();
+        return <Notice>Reports from {g.length === 1 ? fmtLong(g[0]) : `${fmtDay(g[0])} to ${fmtDay(g[g.length - 1])}`} aren't in our data feed any more: it only keeps about a month of past reports. Those days are left blank, not empty.</Notice>;
+      })()}
+      {data && liveWarnings.length > 0 && (
         <Notice tone="warn">
-          {failedDays.size === 0 ? "Part of the calendar didn't load yet — the market data service is busy." : failedDays.size === 1 ? `${fmtLong([...failedDays][0])} didn't load yet — the market data service is busy.` : `${failedDays.size} days didn't load yet — the market data service is busy.`} {retrying ? "Retrying in the background; everything else is current." : <>Everything else is current. <button className="link" onClick={retry}>Try again</button></>}
+          {busyDays.length === 0 ? "Part of the calendar didn't load yet — the market data service is busy." : busyDays.length === 1 ? `${fmtLong(busyDays[0])} didn't load yet — the market data service is busy.` : `${busyDays.length} days didn't load yet — the market data service is busy.`} {retrying ? "Retrying in the background; everything else is current." : <>Everything else is current. <button className="link" onClick={retry}>Try again</button></>}
         </Notice>
       )}
       {unchecked.size > 0 && (() => {
@@ -508,7 +519,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
           ? <Notice>Still comparing {which} dates and times with Nasdaq's calendar. A time or a <Term k="xcheck">“Nasdaq” note</Term> may fill in over the next few minutes.</Notice>
           : <Notice>We couldn't compare {which} dates and times with Nasdaq's calendar just now, so they're our data feed's alone. <button className="link" onClick={retry}>Check again</button></Notice>;
       })()}
-      {data && !data.warnings.length && (data.pending ?? 0) > 0 && (
+      {data && !liveWarnings.length && (data.pending ?? 0) > 0 && (
         <Notice>Some overseas companies' report dates are still being checked, so a few may be missing for now.</Notice>
       )}
       {prefs.filter === "watch" && store.watch.length === 0 && (
@@ -519,7 +530,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       )}
 
       {view === "day" ? (
-        <DayView day={anchor} events={byDay[anchor] ?? []} all={allByDay[anchor] ?? []} checking={checkingDays.has(anchor)} loading={unknownDay(anchor) === "loading"} failed={unknownDay(anchor) === "failed" || failedDays.has(anchor)} macro={macroByDay[anchor] ?? []} />
+        <DayView day={anchor} events={byDay[anchor] ?? []} all={allByDay[anchor] ?? []} checking={checkingDays.has(anchor)} loading={unknownDay(anchor) === "loading"} failed={unknownDay(anchor) === "failed" || failedDays.has(anchor)} gone={goneDays.has(anchor)} macro={macroByDay[anchor] ?? []} />
       ) : (
         <div className={`grid ${view}`}>
           {WEEKDAYS.map((w, i) => <div key={w} className={`wd wd-${i}`}><span>{w}</span></div>)}
@@ -534,7 +545,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
           )}
         </div>
       )}
-      {openDay && <DayDrawer day={openDay} events={byDay[openDay] ?? []} all={allByDay[openDay] ?? []} checking={checkingDays.has(openDay)} unknown={covered(openDay) ? (failedDays.has(openDay) ? "failed" : undefined) : error ? "failed" : loading ? "loading" : "outside"} macro={macroByDay[openDay] ?? []} onClose={closeDrawer} />}
+      {openDay && <DayDrawer day={openDay} events={byDay[openDay] ?? []} all={allByDay[openDay] ?? []} checking={checkingDays.has(openDay)} unknown={covered(openDay) ? (goneDays.has(openDay) ? "gone" : failedDays.has(openDay) ? "failed" : undefined) : error ? "failed" : loading ? "loading" : "outside"} macro={macroByDay[openDay] ?? []} onClose={closeDrawer} />}
     </>
   );
 }
@@ -565,7 +576,7 @@ function WeekColumn({ day, events, next, macro, failed, loaded, checking = false
   );
 }
 
-function DayView({ day, events, all = events, loading, macro, failed, checking = false }: { day: string; events: EarningsEvent[]; all?: EarningsEvent[]; loading: boolean; macro: MacroEvent[]; failed?: boolean; checking?: boolean }) {
+function DayView({ day, events, all = events, loading, macro, failed, gone, checking = false }: { day: string; events: EarningsEvent[]; all?: EarningsEvent[]; loading: boolean; macro: MacroEvent[]; failed?: boolean; gone?: boolean; checking?: boolean }) {
   const { prefs } = useStore();
   const narrowed = prefs.filter !== "everything" || !!prefs.sector;
   const wd = WEEKDAY_LONG[parse(day).getDay()];
@@ -576,7 +587,7 @@ function DayView({ day, events, all = events, loading, macro, failed, checking =
       {macro.map((m) => <Notice key={m.key}><b>{m.name}.</b> {m.blurb}</Notice>)}
       {HOLIDAY[day] && <Notice>Markets are closed for {HOLIDAY[day]}.</Notice>}
       {!events.length && !HOLIDAY[day] && (failed
-        ? <p className="empty-big">This day's earnings didn't load, so we can't say who reports. Try again in a moment.</p>
+        ? <p className="empty-big">{gone ? GONE_DAY_COPY : "This day's earnings didn't load, so we can't say who reports. Try again in a moment."}</p>
         : <p className="empty-big"><Term k="follow">{NONE_OURS}</Term> report on {wd}{narrowed ? " with these filters" : ""}.{more.length ? <> {more.length === 1 ? "One other company does" : `${more.length} other companies do`}: see “more reporting” below.</> : narrowed ? <> Try <b>Everything</b>.</> : <> Smaller companies, and some listed only overseas, may.</>}</p>)}
       {groupBySession(events).map((g) => (
         <section key={g.h} className="sess">

@@ -1,7 +1,7 @@
 ---
 id: 0118
 title: Weeks older than a month read "A quiet week" (Oct 21 had META, TSLA, IBM), and the season strip says "61% of the S&P 500 reported" as fact
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: data-quality
@@ -42,3 +42,10 @@ Vitest on the worker with a Finnhub stub that returns `[]` before a horizon date
 
 ## Out of scope
 Rebuilding older seasons (anything before the first KV snapshot or Nasdaq backfill). The 0114 cross-check.
+
+## Builder notes (2026-11-28)
+- **Worker.** `calendarWeek` now tells a dropped day from a quiet one: a trading day at least 21 days back for which Finnhub's range call returned **no row at all** (tracked or not; `feedGoneDays`, `shared/feedHorizon.ts`) is served from this colo's last good copy if it has one, otherwise answered with `Couldn't load <day> — our data feed no longer has reports from that far back.` The verdict is kept in the day's own cache entry (an empty list plus an `X-Feed-Gone` header, 6 h), so a re-read costs **no Finnhub call and no extra cache read**; the first verdict costs one stale-copy read and one cache put per dropped day. A dropped day is not a failure, so it doesn't stop the 0024 supplement.
+- **Keep past days.** A past day's last good copy (`cal:stale:v3`) now lives 90 days instead of 7 and is re-written each time it is served after the feed dropped it. That is per colo (Cache API), not KV, and there is **no Nasdaq backfill** yet: a colo that never read a day while the feed had it still says "not in our feed". KV snapshots / backfill are left for a follow-up ticket. Nasdaq calls per minute: unchanged (0 new). Finnhub: unchanged for covered days, one range call per dropped week per 6 h per colo (was the same before, as an empty day).
+- **Client.** The warning starts "Couldn't load", so `missingDays` (season floor, brief, Retrace) counts it. `needsRetry` ignores it (asking again can't bring it back). Day view, day dek and drawer say "Our data feed only keeps about a month of past reports, so we can't say who reported on this day."; the calendar shows one notice naming the dropped days, never "busy"; the brief says "Too far back for our data feed"; the season strip reads "at least N% … · counting since Oct 28" (the card spells out the coverage).
+- **Not fixed here:** the 45% vs 61% spread between loads (likely the same cause: which chunks a colo had). Re-check it once this is live.
+- Tests: `tests/unit/feedHorizon0118.test.ts` (worker through `/api/calendar` with a horizon stub, re-read cost, a covered week, a kept day), `tests/e2e/feedgone.spec.ts` (390 and 1440, brief, season strip, no retries).
