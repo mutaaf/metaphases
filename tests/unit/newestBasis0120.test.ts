@@ -124,3 +124,46 @@ describe("worker /api/ticker: the newest quarter is judged on Nasdaq's own pair 
   });
 });
 
+
+// 0120 attempt 2: production on 2026-11-28 13:03 (build 3ab02d79) still read "basis differs". Finnhub had each
+// report's estimate but not its actual yet (Nasdaq posts first), so the calendar row lent no actual.
+describe("worker /api/ticker: the feed has the estimate but not the actual yet (0120, live shape)", () => {
+  it("KSS: Finnhub −$0.0017 with no actual, Nasdaq −$0.01 → $0.32: a beat on Nasdaq's own pair, 4 of 4", async () => {
+    calRows = [cal("KSS", "2026-11-24", "bmo", 3, 2027, -0.0017, null), cal("KSS", "2027-03-09", "bmo", 4, 2027, 1.1, null)];
+    surprises = [
+      { period: "2026-09-30", quarter: 2, year: 2027, estimate: 0.5512, actual: 1.28 },
+      { period: "2026-06-30", quarter: 1, year: 2027, estimate: -0.19, actual: -0.13 },
+      { period: "2026-03-31", quarter: 4, year: 2026, estimate: 0.86, actual: 1.07 },
+    ];
+    nqSurprise = kssNq();
+    const r = await get("/api/ticker/KSS");
+    const nov = r.history.find((h: any) => h.date === "2026-11-24");
+    expect(nov).toMatchObject({ epsE: -0.01, epsA: 0.32 });
+    expect(nov.basis).toBeUndefined();
+    expect(r.beatRate).toEqual({ beats: 4, total: 4 });
+  });
+
+  it("URBN: Finnhub's Nov 23 row with $1.53 and no actual corroborates Nasdaq's $1.53 → $1.54: +0.65%, 4 of 4", async () => {
+    calRows = [cal("URBN", "2026-11-23", "", 3, 2027, 1.5312, null), cal("URBN", "2027-02-23", "amc", 4, 2027, 1.6724, null)];
+    surprises = [
+      { period: "2026-09-30", quarter: 2, year: 2027, estimate: 1.72, actual: 1.72 },
+      { period: "2026-06-30", quarter: 1, year: 2027, estimate: 1.12, actual: 1.3 },
+      { period: "2026-03-31", quarter: 4, year: 2026, estimate: 1.24, actual: 1.1 },
+    ];
+    nqSurprise = urbnNq();
+    const r = await get("/api/ticker/URBN");
+    const nov = r.history.find((h: any) => h.date === "2026-11-24");
+    expect(nov.basis).toBeUndefined();
+    expect(nov.surprisePct).toBeCloseTo(0.65, 1);
+    expect(r.beatRate.total).toBe(4);
+  });
+
+  it("a feed estimate on another basis (CRWD $0.29 vs Nasdaq's $0.05, no feed actual) doesn't vouch for Nasdaq's pair", async () => {
+    vi.setSystemTime(new Date("2026-09-01T15:00:00Z"));
+    calRows = [cal("CRWD", "2026-08-26", "amc", 2, 2027, 0.29, null), cal("CRWD", "2026-12-02", "amc", 3, 2027, 0.3176, null)];
+    surprises = [];
+    nqSurprise = [row("Jul 2026", "8/27/2026", 0.01, "0.05"), row("Apr 2026", "6/3/2026", 0.04, "0.03"), row("Jan 2026", "3/3/2026", 0.06, "0.05")];
+    const r = await get("/api/ticker/CRWD");
+    expect(r.history.find((h: any) => h.date === "2026-08-27").basis).toBe("differs");
+  });
+});
