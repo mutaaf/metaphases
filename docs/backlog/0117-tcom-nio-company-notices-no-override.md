@@ -37,6 +37,6 @@ The existing override tests cover the format. Add both symbols to whatever overr
 The unchecked-read rate itself (0114).
 
 ## Shipped (builder, 2026-11-28)
-- `TCOM` (amc, call 7:00 p.m. ET) and `NIO` (bmo, call 7:00 a.m. ET) added to `data/date-overrides.json`, quarter labels Q3 2026 as `/api/calendar` serves them. Both wire copies read on 2026-11-28.
+- `TCOM` (amc, call 7:00 p.m. ET) and `NIO` (bmo, call 7:00 a.m. ET) added to `data/date-overrides.json`, quarter labels Q3 2026 as `/api/calendar` serves them. Both wire copies read on 2026-11-27 (ET; `checked` is an ET date).
 - Sweep of the other $5B+ Dec 1–4 rows with no `o` (production read 2026-11-28 03:2x UTC): GTLB, ZS, BF.B, KR. No company notice found for any of them in a web search (ZS's last call was in late November; KR and BF.B announced last year's dates about two weeks ahead). ZS is the one still blank-session ($40B): re-sweep it.
 - Test: `tests/unit/announced0117Overrides.test.ts` (gate, `applyToRows`, share title, and `/api/calendar` over three ranges plus `/api/ticker` with Nasdaq unread).

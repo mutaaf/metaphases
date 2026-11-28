@@ -13,10 +13,10 @@ import worker from "../../worker/index";
 const FILE = overridesFile as unknown as DateOverrides;
 const today = "2026-11-28";
 const CASES = [
-  { s: "TCOM", date: "2026-12-01", h: "amc", q: 3, y: 2026, call: "7:00 p.m. ET", feedH: "amc", title: "TCOM reports Tue, Dec 1 after the close · Metaphases" },
-  { s: "NIO", date: "2026-12-01", h: "bmo", q: 3, y: 2026, call: "7:00 a.m. ET", feedH: "bmo", title: "NIO reports Tue, Dec 1 before the open · Metaphases" },
+  { s: "TCOM", date: "2026-12-01", h: "amc", q: 3, y: 2026, call: "7:00 p.m. ET", feedH: "", title: "TCOM reports Tue, Dec 1 after the close · Metaphases" },
+  { s: "NIO", date: "2026-12-01", h: "bmo", q: 3, y: 2026, call: "7:00 a.m. ET", feedH: "", title: "NIO reports Tue, Dec 1 before the open · Metaphases" },
 ] as const;
-// Finnhub's rows as production served them on 2026-11-28.
+// Finnhub's rows with the hour blank, as an unchecked read showed them on 2026-11-27 (only the override can set it).
 const feed = CASES.map((c, i) => ({ symbol: c.s, date: c.date, hour: c.feedH, quarter: c.q, year: c.y, epsEstimate: 1 + i / 10, epsActual: null, revenueEstimate: 1e9 + i, revenueActual: null }));
 
 describe("0117 company-announced dates and sessions", () => {
