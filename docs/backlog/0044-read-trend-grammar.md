@@ -1,12 +1,12 @@
 ---
 id: 0044
 title: The Read describes the trend in a real sentence ("in a recovering" → "recovering")
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: clarity
 created: 2026-11-04
-pr:
+pr: 220
 by: critic
 ---
 
