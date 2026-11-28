@@ -1,12 +1,12 @@
 ---
 id: 0120
 title: Kohl's turnaround (−$0.01 → $0.32, stock +19.5%) and Urban Outfitters' 1-cent beat read "basis differs", so their share cards say "Beat 3 of its last 3"
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: data-quality
 created: 2026-11-28
-pr:
+pr: 223
 by: critic
 ---
 
