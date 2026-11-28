@@ -52,6 +52,7 @@ const ROWS = [
   fh("QQSM", "2026-10-30", 1e6), // a tiny company: the feed has the day, none of it is shown
 ];
 let horizon = "2026-10-28";
+let extra: ReturnType<typeof fh>[] = [];
 let fhCalls = 0;
 let waits: Promise<unknown>[] = [];
 const ctx = { waitUntil: (p: Promise<unknown>) => { waits.push(p); }, passThroughOnException() {} } as any;
@@ -64,7 +65,7 @@ const call = async (path: string) => {
 const later = (s: number) => vi.setSystemTime(new Date(Date.now() + s * 1000));
 
 beforeEach(() => {
-  waits = []; fhCalls = 0; horizon = "2026-10-28";
+  waits = []; fhCalls = 0; horizon = "2026-10-28"; extra = [];
   (globalThis as any).caches = { default: new MemCache() };
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-11-27T18:00:00Z"));
@@ -77,7 +78,7 @@ beforeEach(() => {
       if (sym) return new Response(JSON.stringify({ earningsCalendar: [] }));
       fhCalls++;
       const from = url.searchParams.get("from")!, to = url.searchParams.get("to")!;
-      return new Response(JSON.stringify({ earningsCalendar: ROWS.filter((r) => r.date >= from && r.date <= to && r.date >= horizon) }));
+      return new Response(JSON.stringify({ earningsCalendar: [...ROWS, ...extra].filter((r) => r.date >= from && r.date <= to && r.date >= horizon) }));
     }
     if (url.pathname.endsWith("/stock/earnings")) return new Response("[]");
     return new Response(JSON.stringify({}), { status: 200 });
@@ -106,6 +107,14 @@ describe("0118: /api/calendar before the feed's horizon", () => {
     expect((r.events as any[]).map((e) => e.s)).toEqual(["QQVI"]);
     // Oct 26/27/29 have no feed rows at all in this stub, so they are flagged; Oct 30 has a (hidden) row.
     expect(goneDaysOf(r.warnings)).toEqual(["2026-10-26", "2026-10-27", "2026-10-29"]);
+  });
+
+  it("a week too busy for one range call (day-by-day path) flags its dropped days too (review)", async () => {
+    horizon = "2026-10-22";
+    extra = Array.from({ length: 1500 }, (_, i) => fh(`QZ${i}`, i % 2 ? "2026-10-22" : "2026-10-23", 1e6));
+    const r = await call("/api/calendar?from=2026-10-19&to=2026-10-23");
+    expect(goneDaysOf(r.warnings)).toEqual(["2026-10-19", "2026-10-20", "2026-10-21"]);
+    expect(r.warnings.every(isGoneWarning)).toBe(true);
   });
 
   it("a day read while the feed had it is kept once the feed drops it", async () => {

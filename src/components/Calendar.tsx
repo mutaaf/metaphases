@@ -506,7 +506,7 @@ export function CalendarPage({ onSearch }: { onSearch: () => void }) {
       {error && !loading && <Notice tone="error">{error} Your watchlist and holdings are safe. <button className="btn btn-box" onClick={retry}>Try again</button></Notice>}
       {goneDays.size > 0 && (() => {
         const g = [...goneDays].sort();
-        return <Notice>Reports from {g.length === 1 ? fmtLong(g[0]) : `${fmtDay(g[0])} to ${fmtDay(g[g.length - 1])}`} aren't in our data feed any more: it only keeps about a month of past reports. Those days are left blank, not empty.</Notice>;
+        return <Notice>Reports from {g.length === 1 ? fmtLong(g[0]) : `${fmtDay(g[0])} to ${fmtDay(g[g.length - 1])}`} aren't in our data feed any more: it only keeps about a month of past reports. So we leave those days blank rather than call them quiet.</Notice>;
       })()}
       {data && liveWarnings.length > 0 && (
         <Notice tone="warn">

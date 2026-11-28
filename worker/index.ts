@@ -727,8 +727,10 @@ function rememberLead(env: Env, ctx: ExecutionContext, memos: SessionLeads | nul
   })().catch(() => {}));
 }
 
-async function fetchCalendarDay(day: string, env: Env, caps: NqCaps = {}): Promise<EarningsEvent[]> {
+async function fetchCalendarDay(day: string, env: Env, caps: NqCaps = {}, today = iso(todayNY())): Promise<EarningsEvent[]> {
   const data = await getJson<{ earningsCalendar: any[] }>(`${FH}/calendar/earnings?from=${day}&to=${day}&token=${env.FINNHUB_API_KEY}`);
+  // 0118 review: a truncated week's day calls see the same horizon as the range call.
+  if (feedGoneDays([day], (data.earningsCalendar ?? []).map((r: any) => String(r.date)), today).length) throw new FeedGone(day);
   return toEvents(data.earningsCalendar, caps);
 }
 
@@ -871,6 +873,7 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
       putDay(d, ev, today, ctx, ttl(d));
       out[i] = { status: "fulfilled", value: ev };
     } catch (reason) {
+      if (reason instanceof FeedGone) return settleGone(i); // not an upstream failure (0118)
       health.failed = true;
       const stale = await caches.default.match(CAL(`cal:stale:v3:${d}`));
       out[i] = stale ? { status: "fulfilled", value: (await stale.json()) as EarningsEvent[] } : { status: "rejected", reason };
@@ -892,7 +895,8 @@ async function calendarWeek(days: string[], env: Env, ctx: ExecutionContext, hea
     await Promise.all(missing.map((i) => (gone.has(days[i]) ? settleGone(i) : settle(i, async () => m.get(days[i]) ?? []))));
   } else {
     // Truncated busy week: day by day, at most 2 in flight (3 weeks in parallel stays ≤ 6 calls at once).
-    await pool(missing, 2, (i) => settle(i, () => fetchCalendarDay(days[i], env, sized.caps)));
+    // 0118 review: a day call that finds the day dropped goes the same way as the range call's dropped days.
+    await pool(missing, 2, (i) => settle(i, () => fetchCalendarDay(days[i], env, sized.caps, today)));
   }
   return out;
 }

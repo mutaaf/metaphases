@@ -1,7 +1,7 @@
 import type { CalendarResponse, MacroResponse, TickerResponse } from "../../shared/types";
 import { useEffect, useState } from "react";
 import { BASE } from "./router";
-import { fillPath, retryDelay, shouldAskFill } from "./partial";
+import { fillPath, needsRetry, retryDelay, shouldAskFill } from "./partial";
 import { settleContested } from "../../shared/contestedTime";
 import { oneReportOneRow } from "../../shared/oneRow";
 
@@ -68,7 +68,7 @@ function get<T>(path: string): Promise<T> {
     p.catch(() => mem.delete(path));
     // 0061: a partial or not-yet-checked answer isn't kept for the tab's life, or a revisit would replay it.
     // 0083: nor is a sheet still comparing its date with Nasdaq's calendar (`next.status: "checking"`).
-    p.then((d) => { const v = d as { warnings?: unknown[]; uncheckedDays?: unknown[]; next?: { status?: string } | null } | null; if (v?.warnings?.length || v?.uncheckedDays?.length || v?.next?.status === "checking") mem.delete(path); }, () => {});
+    p.then((d) => { const v = d as { warnings?: unknown[]; uncheckedDays?: unknown[]; next?: { status?: string } | null } | null; if (needsRetry(v as { warnings?: string[] } | null) || v?.uncheckedDays?.length || v?.next?.status === "checking") mem.delete(path); }, () => {});
     mem.set(path, p);
   }
   return mem.get(path) as Promise<T>;

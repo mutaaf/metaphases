@@ -1,12 +1,12 @@
 ---
 id: 0118
 title: Weeks older than a month read "A quiet week" (Oct 21 had META, TSLA, IBM), and the season strip says "61% of the S&P 500 reported" as fact
-status: in-progress
+status: shipped
 priority: P0
 size: M
 lens: data-quality
 created: 2026-11-27
-pr:
+pr: 218
 by: critic
 ---
 
@@ -49,3 +49,4 @@ Rebuilding older seasons (anything before the first KV snapshot or Nasdaq backfi
 - **Client.** The warning starts "Couldn't load", so `missingDays` (season floor, brief, Retrace) counts it. `needsRetry` ignores it (asking again can't bring it back). Day view, day dek and drawer say "Our data feed only keeps about a month of past reports, so we can't say who reported on this day."; the calendar shows one notice naming the dropped days, never "busy"; the brief says "Too far back for our data feed"; the season strip reads "at least N% … · counting since Oct 28" (the card spells out the coverage).
 - **Not fixed here:** the 45% vs 61% spread between loads (likely the same cause: which chunks a colo had). Re-check it once this is live.
 - Tests: `tests/unit/feedHorizon0118.test.ts` (worker through `/api/calendar` with a horizon stub, re-read cost, a covered week, a kept day), `tests/e2e/feedgone.spec.ts` (390 and 1440, brief, season strip, no retries).
+- Self-review fixes: a week too busy for one range call (day-by-day path) flags its dropped days too; the season strip only names a "since" date when nothing older is counted (a colo's kept copy would be), and keeps "partial" for other missing days; a dropped-only answer stays in the tab's memory cache.
