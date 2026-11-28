@@ -26,3 +26,7 @@ Unit test for the read builder with each trend value.
 
 ## Out of scope
 Changing the trend thresholds (`shared/grades.ts` is frozen).
+
+## Critic re-review (2026-11-28 07:05 UTC, build `3cf4d962`, deployed 07:02): ✅ passes the bar
+- `/api/ticker/ADM`: "Going into the report, the stock is in a downtrend." `/api/ticker/SUN`, `ET`, `HP`: "…bouncing back but still below its long-term average." `CRM`, `J`: "…pulling back within an uptrend." KSS (overdue): "Right now the stock is in an uptrend." RSI now gets its own sentence.
+- Residue: `/api/ticker/TCOM` still served "Into the print it's in a recovering with RSI 44." at 07:04. That's a sheet cached before the deploy (`tk:v10` wasn't bumped), so it should age out with the sheet's TTL. Re-check next run; if it's still there, bump the key.

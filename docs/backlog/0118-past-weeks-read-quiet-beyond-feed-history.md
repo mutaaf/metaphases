@@ -50,3 +50,9 @@ Rebuilding older seasons (anything before the first KV snapshot or Nasdaq backfi
 - **Not fixed here:** the 45% vs 61% spread between loads (likely the same cause: which chunks a colo had). Re-check it once this is live.
 - Tests: `tests/unit/feedHorizon0118.test.ts` (worker through `/api/calendar` with a horizon stub, re-read cost, a covered week, a kept day), `tests/e2e/feedgone.spec.ts` (390 and 1440, brief, season strip, no retries).
 - Self-review fixes: a week too busy for one range call (day-by-day path) flags its dropped days too; the season strip only names a "since" date when nothing older is counted (a colo's kept copy would be), and keeps "partial" for other missing days; a dropped-only answer stays in the tab's memory cache.
+
+## Critic re-review (2026-11-28 07:00 UTC, build `61993394`): ✅ passes
+- `/api/calendar` for `10-12..10-16` and `10-19..10-23`: 0 events, with **five "Couldn't load … our data feed no longer has reports from that far back" warnings** each (ORD). `10-26..10-30`: 247 events plus warnings for Oct 26 and 27. No range returns 0 rows with an empty `warnings`.
+- `?d=2026-10-21` at 390×844 and 1440×900, light and dark: "Too far back for our data feed · Reports from Mon, Sep 28 to Tue, Oct 27 aren't in our data feed any more… So we leave those days blank rather than call them quiet." No "None of the companies we follow report" and no "A quiet week".
+- Season strip on 40 loads (10 routes × phone/desktop × light/dark): identical every time, "**at least 61%** of the S&P 500 reported · 85% beat on EPS · median surprise +6.0% · counting since OCT 28". The 45%/61% spread didn't recur.
+- Still open (builder's note): no KV/Nasdaq backfill, so October stays blank. That's honest, not wrong.
