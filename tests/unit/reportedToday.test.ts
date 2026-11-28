@@ -87,7 +87,7 @@ const get = async (path: string) => {
   await Promise.all(waits); waits = [];
   return r.json() as Promise<any>;
 };
-const FUTURE = /\breports Q3\b|expects \$0\.73|be ready for|Into the print|Going into the report/;
+const FUTURE = /\breports Q3\b|expects \$0\.73|be ready for|Into the print|Going into the report|14-day RSI/;
 
 describe("/api/ticker on report day (PFE shape, Nov 3, 1 pm ET)", () => {
   it("an actual on today's row: the report heads history and next moves to Q4", async () => {

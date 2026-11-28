@@ -16,6 +16,7 @@ test.describe("first visit", () => {
     await expect(sheet.locator(".sheet-does")).toContainText("computer chips");
     await expect(sheet.getByText("Setup into the print", { exact: true })).toBeHidden();
     await expect(sheet.locator(".read")).not.toContainText("RSI");
+    await expect(sheet.locator(".read")).toContainText("Going into the report, the stock is pulling back within an uptrend."); // 0044: the trend sentence survives Everyday
     await sheet.getByRole("button", { name: /show trader details/i }).click();
     await expect(sheet.getByText("Setup into the print", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("metaphases:v1") || "{}").prefs.lens)).toBe("everyday");

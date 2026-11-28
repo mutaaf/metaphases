@@ -47,7 +47,7 @@ import { oneReportOneRow, SAME_REPORT_DAYS } from "../shared/oneRow";
 import { INSIGHTS_TAG, isKidsPath } from "../shared/insights";
 import { borrowHistory, CALENDAR_NEXT, isDegraded, sheetTtl, staleUsable, standIn, SHEET_DEGRADED_TTL, SHEET_STALE_TTL, SHEET_TTL, type StaleSheet } from "../shared/sheetCache";
 import { feedGoneDays, goneWarning, isGoneWarning } from "../shared/feedHorizon";
-import { trendLine } from "../shared/trend";
+import { rsiLine, trendLine } from "../shared/trend";
 
 interface Env {
   FINNHUB_API_KEY: string;
@@ -1759,8 +1759,9 @@ async function buildTicker(symbol: string, env: Env, ctx: ExecutionContext): Pro
     ? `The two calendars disagree on the time, so past moves are measured on the day the stock has usually moved: ${habit === "bmo" ? "the report day, as for a report before the open" : "the day after, as for a report after the close"}.`
     : "The two calendars disagree on the time, and the stock's past moves don't settle it, so we can't tell which day the market reacted.");
   if (expectedMove != null) read.push(`The stock has moved about ±${expectedMove.toFixed(1)}% on a typical report${out ? "." : " — that's the size of swing to be ready for."}`);
-  const trendRead = setup.grade && !out ? trendLine(setup.trend, setup.rsi, !!upNext) : null;
-  if (trendRead) read.push(trendRead);
+  // 0044: an overdue quarter (pending) may already have reported, so it isn't "going into the report".
+  const trendRead = setup.grade && !out ? trendLine(setup.trend, !!upNext && !pending) : null;
+  if (trendRead) { read.push(trendRead); const r = rsiLine(setup.rsi); if (r) read.push(r); }
   if (compass.grade) read.push(`As a long-term holding it grades ${compass.grade} on Compass quality.`);
 
 
