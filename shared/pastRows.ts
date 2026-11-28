@@ -12,7 +12,9 @@
 // tell which day is right, with one exception: history BEFORE the row (ROKU: row Nov 3, history Nov 2). Nasdaq never
 // dates a report before it was out, so whatever the row's session, the report was out by the history's day (the
 // "reverse" in `nearDay` is this case: the feed, not Nasdaq, put an evening report on the next morning). History
-// one day AFTER the row stays ambiguous (the next-morning habit) and the row keeps its day. Further off (2 to 10
+// one day AFTER an after-close row stays ambiguous (the next-morning habit) and the row keeps its day; 0119: one day
+// after a row with no session (or a before-open one) moves it, since the feed dated it early (KSS, URBN: Nov 23 for
+// Nov 24). Had it been an evening report, the market reacted on Nasdaq's day anyway, so it's never measured wrong. Further off (2 to 10
 // trading days, and at most MOVE_MAX_DAYS calendar days) the history's report must be for the quarter the row stands
 // for (its fiscal quarter ended within PERIOD_LAG_MAX_DAYS before the row); a report for the quarter before never
 // moves it. A row never lands on a weekend or market holiday. A moved row's session is
@@ -95,6 +97,7 @@ export function settlePastRow(e: EarningsEvent, reports: NqReport[] | null, usd:
   let to: string | null = null;
   if (hit) {
     if (hit.date < e.d && !e.o) to = hit.date; // history before the row: out by then, whatever the session
+    else if (hit.date > e.d && !e.o && e.h !== "amc") to = hit.date; // 0119: a day early with no evening session
   } else if (!e.o) {
     const far = reports.find((r) => { const g = tradingGap(r.date, e.d); return g >= 2 && g <= MOVE_MAX_TRADING_DAYS && daysApart(r.date, e.d) <= MOVE_MAX_DAYS && samePeriod(r, e.d); });
     if (far) { hit = far; to = far.date; }
@@ -150,4 +153,21 @@ export function settleFiguresRow(e: EarningsEvent, reports: NqReport[] | null, t
   if (!phantomReport(e.d, reports, today, e.o)) return e;
   const { nA: _nA, nE: _nE, nx: _nx, ...rest } = e; // the actual's companions go with it; the estimates stay
   return { ...rest, eA: null, rA: null, od: true, pf: 1 };
+}
+
+/**
+ * 0119: a past row WITH figures that Nasdaq's day calendar didn't list on the feed's day (`nx`, a 0080 suspect) and that
+ * isn't a phantom: when the company's history dates the report one trading day away, the row moves to that day (KSS:
+ * feed Mon Nov 23, history and the company's 8-K Tue Nov 24). Same rule as settlePastRow's near-day move: history
+ * before the row moves it whatever the session; history after moves it unless the feed says "after the close" (Nasdaq's
+ * next-morning habit, QQAM). Never a company-dated row, never onto a weekend or holiday. Figures stay the feed's; the
+ * session is blanked (the history gives a day, not a time) and the feed's day is kept as `fd`.
+ */
+export function reportDayRow(e: EarningsEvent, reports: NqReport[] | null): EarningsEvent {
+  if (e.o || !reports || !reports.length) return e;
+  const hit = reports.find((r) => nearDay(r.date, e.d));
+  if (!hit || hit.date === e.d) return e;
+  if (hit.date > e.d && e.h === "amc") return e;
+  if (!tradingDay(hit.date)) return e;
+  return { ...e, d: hit.date, h: "", fd: e.d, nd: 1 };
 }

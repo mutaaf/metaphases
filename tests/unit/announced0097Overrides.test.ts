@@ -18,7 +18,8 @@ const feed = [
   // Estimates in yuan per share. Re-review (bounce 1): the row takes Nasdaq's own dollars-per-ADR pair, both figures
   // from one source on one basis, with the row's currency set to dollars and the yuan revenue estimate dropped.
   { symbol: "PDD", date: "2026-11-16", hour: "bmo", quarter: 3, year: 2026, epsEstimate: 19.213, epsActual: null, revenueEstimate: 117133197205, revenueActual: null },
-  // Release the evening before the company's date (call Nov 19, 10 a.m. ET): Nasdaq lists it on Nov 18 only.
+  // Release the evening before its call (Nov 19, 10 a.m. ET): Nasdaq lists it on Nov 18 only. 0119: the company's
+  // 8-K is dated Nov 18, so its entry now gives Nov 18 and the row is judged there, on that day's pair.
   { symbol: "HP", date: "2026-11-19", hour: "amc", quarter: 4, year: 2026, epsEstimate: 0.2755, epsActual: null, revenueEstimate: 1105702188, revenueActual: null },
   // Feed row already on the company's day, judged on its snapshot: untouched.
   { symbol: "WMT", date: "2026-11-19", hour: "bmo", quarter: 3, year: 2027, epsEstimate: 0.6421, epsActual: 0.65, revenueEstimate: 189143823120, revenueActual: 188835000000 },
@@ -37,7 +38,7 @@ const NQ18 = [
   { symbol: "HP", eps: "$0.36", surprise: "63.64", epsForecast: "$0.22" },
   { symbol: "TGT", eps: "$2.15", surprise: "4.88", epsForecast: "$2.05" },
 ];
-const WANT: Record<string, [number, number]> = { ROST: [1.85, 1.91], WSM: [2.18, 2.19], GAP: [0.76, 0.82], BBWI: [0.12, 0.26], HP: [0.22, 0.36] };
+const WANT: Record<string, [number, number]> = { ROST: [1.85, 1.91], WSM: [2.18, 2.19], GAP: [0.76, 0.82], BBWI: [0.12, 0.26] };
 
 describe("0097 fillMovedFigures", () => {
   const nq = { e: { ROST: 1.85, PDD: 2.61 }, a: { ROST: 1.91, PDD: 2.99 } };
@@ -175,6 +176,9 @@ describe("0097 moved rows get the company's day's Nasdaq figures", () => {
       expect(epsVerdict(pdd[0]).v).toBe("beat");
       const wmt = r.events.find((e: any) => e.s === "WMT");
       expect(wmt).toMatchObject({ d: "2026-11-19", eA: 0.65 });
+      const hp = r.events.filter((e: any) => e.s === "HP");
+      if (from > "2026-11-18") expect(hp).toEqual([]);
+      else expect(hp).toEqual([expect.objectContaining({ d: "2026-11-18", eE: 0.22, eA: 0.36, pr: "n" })]);
     });
   }
 
@@ -186,7 +190,7 @@ describe("0097 moved rows get the company's day's Nasdaq figures", () => {
     const early = await get("/api/calendar?from=2026-11-16&to=2026-11-22");
     // Listed on Nov 19 but not judged yet: they wait for Nov 19, never borrow another day's figures.
     for (const s of ["ROST", "GAP"]) expect(early.events.find((e: any) => e.s === s), s).toMatchObject({ d: "2026-11-19", eA: null });
-    expect(early.events.find((e: any) => e.s === "HP")).toMatchObject({ d: "2026-11-19", eE: 0.22, eA: 0.36, pr: "n" });
+    expect(early.events.find((e: any) => e.s === "HP")).toMatchObject({ d: "2026-11-18", eE: 0.22, eA: 0.36, pr: "n" });
     expect(early.events.find((e: any) => e.s === "WSM")).toMatchObject({ eE: 2.18, eA: 2.19, pr: "n" });
     const cache = (globalThis as any).caches.default as MemCache;
     const key = [...cache.store.keys()].find((k) => k.includes("nq%3Acal%3Av3%3A2026-11-19"));
